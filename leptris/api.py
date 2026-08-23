@@ -65,7 +65,7 @@ def tostring(
     c_encoding = None if encoding in (None, "unicode") else encoding
     options, _keepalive = serialize_options(c_encoding, pretty_print, xml_declaration)
     if elem is not None:
-        ptr = _ffi.lib.leptris_element_serialize(elem._ptr, options)
+        ptr = _ffi.lib.leptris_element_serialize(elem._cd(), options)
     else:
         ptr = _ffi.lib.leptris_document_serialize(doc._ptr, options)
     if ptr == ffi.NULL:
@@ -110,7 +110,7 @@ def c14n(
         if target.document.closed:
             raise LeptrisError("operation on a closed document")
         ptr = _ffi.lib.leptris_c14n_canonicalize_subtree_ex(
-            target._ptr, versions[version], mode, prefixes, int(with_comments)
+            target._cd(), versions[version], mode, prefixes, int(with_comments)
         )
     else:
         raise TypeError("expected an Element or Document")
