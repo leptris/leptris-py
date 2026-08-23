@@ -51,6 +51,12 @@ jobs:
           echo "LEPTRIS_LIB_PATH=$PWD/$LIB" >> "$GITHUB_ENV"
           echo "Built: $LIB"
 
+      - name: FFI mirror drift gate
+        shell: bash
+        run: |
+          LIBLEPTRIS_VERSION=$(cat libleptris-version.txt)
+          python scripts/check_ffi_mirrors.py tmp/libleptris
+
       - name: Install and test the binding
         shell: bash
         run: |
