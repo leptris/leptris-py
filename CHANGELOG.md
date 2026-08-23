@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.3.0 — 2026-08-23
 
 Breaking: the API was redesigned to mirror lxml — the Ruby binding
 mirrors Nokogiri, so the Python binding mirrors lxml. The package is
@@ -30,6 +30,9 @@ deprecated.
 - packaging: PEP 639 SPDX license, classifiers, project URLs,
   `py.typed`; requires-python raised to 3.9 (3.8 is EOL and current
   setuptools no longer supports it)
+- versioning: from 1.3.0 the package follows its own semver;
+  `libleptris-version.txt` (1.2.0) pins the library release the
+  binding is built and tested against
 
 ## 1.2.0 — 2026-08-23
 
