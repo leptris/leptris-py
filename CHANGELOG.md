@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.1 — 2026-08-23
+
+- adds the manylinux aarch64 wheel: 1.6.0's build silently skipped
+  it (cross-arch emulation not configured); the release workflow now
+  builds it natively on an `ubuntu-24.04-arm` runner
+
 ## 1.6.0 — 2026-08-23
 
 C-accelerated Element allocation (`leptris._leptrisaccel`, abi3):
