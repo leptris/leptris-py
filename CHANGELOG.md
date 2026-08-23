@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.5.0 — 2026-08-23
+
+Adopts libleptris 1.3.0 (now the pinned build in CI):
+
+- `Element.sourceline` — 1-based source line (lxml parity), via
+  `leptris_node_line`
+- child iteration uses `leptris_element_children` bulk fill from 4
+  children up (2x on wide elements, measured)
+- nodeset materialization via `ffi.unpack` + `map` (13-18% off the
+  wrapper loop): `//book` 16.2 → 14.8 µs vs lxml 12, union 33.6 →
+  31.1 vs 27.9, traversal 58 → 50.7 vs 19.9
+- XPath errors prefer the document-scoped
+  `leptris_document_last_error` (immune to concurrent operations on
+  other documents); requires libleptris >= 1.3.0
+
 ## 1.4.1 — 2026-08-23
 
 - `iter()` / `iterdescendants()` now delegate the subtree walk to the
