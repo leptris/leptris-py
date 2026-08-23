@@ -65,6 +65,23 @@ def tostring(
     c_encoding = None if encoding in (None, "unicode") else encoding
     options, _keepalive = serialize_options(c_encoding, pretty_print, xml_declaration)
     if elem is not None:
+        from .element import _accel
+
+        raw = getattr(elem, "_raw", None)
+        if (
+            _accel is not None
+            and raw is not None
+            and c_encoding is None
+            and xml_declaration in (None, False)
+        ):
+            data = _accel.serialize_elem(
+                raw, 2 if pretty_print else 0, 0
+            )
+            if data is None:
+                raise LeptrisError("serialization failed")
+            if encoding == "unicode":
+                return data.decode("utf-8")
+            return data
         ptr = _ffi.lib.leptris_element_serialize(elem._cd(), options)
     else:
         ptr = _ffi.lib.leptris_document_serialize(doc._ptr, options)

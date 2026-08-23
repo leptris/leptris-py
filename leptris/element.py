@@ -305,11 +305,56 @@ class _PureElement:
     # -- queries ---------------------------------------------------------
 
     def xpath(self, expression: str, *, namespaces=None, variables=None):
+        if variables is None:
+            raw = getattr(self, "_raw", None)
+            if _accel is not None and raw is not None:
+                from . import _ffi
+
+                if namespaces:
+                    flat = [v for pair in namespaces.items() for v in pair]
+                    items = _accel.nodeset_ns(
+                        self._document._raw_addr,
+                        raw,
+                        expression,
+                        self._document,
+                        flat,
+                    )
+                else:
+                    items = _accel.nodeset(
+                        self._document._raw_addr,
+                        raw,
+                        expression,
+                        self._document,
+                    )
+                if items is not None:
+                    return items
         return self._document.xpath(
             expression, context=self, namespaces=namespaces, variables=variables
         )
 
     def findall(self, path: str, namespaces=None) -> list:
+        if "{" in path or namespaces:
+            from .xpath import expand_clark_names
+
+            expression, extra = expand_clark_names(path, namespaces)
+            merged = dict(namespaces) if namespaces else {}
+            merged.update(extra)
+            if merged:
+                raw = getattr(self, "_raw", None)
+                if _accel is not None and raw is not None:
+                    from . import _ffi
+
+                    flat = [v for pair in merged.items() for v in pair]
+                    items = _accel.nodeset_ns(
+                        self._document._raw_addr,
+                        raw,
+                        expression,
+                        self._document,
+                        flat,
+                    )
+                    if items is not None:
+                        return items
+            return self.xpath(expression, namespaces=merged or None)
         if namespaces is None and "{" not in path and _QNAME_OK.match(path):
             # plain path: straight to the all-C evaluator
             raw = getattr(self, "_raw", None)
@@ -317,7 +362,7 @@ class _PureElement:
                 from . import _ffi
 
                 items = _accel.nodeset(
-                    int(_ffi.ffi.cast("uintptr_t", self._document._ptr)),
+                    self._document._raw_addr,
                     raw,
                     path,
                     self._document,
@@ -333,6 +378,20 @@ class _PureElement:
         return self.xpath(expression, namespaces=merged or None)
 
     def find(self, path: str, namespaces=None) -> Optional["Element"]:
+        if (
+            namespaces is None
+            and "{" not in path
+            and "/" not in path
+            and _QNAME_OK.match(path)
+        ):
+            raw = getattr(self, "_raw", None)
+            if _accel is not None and raw is not None:
+                found = _accel.find_first(raw, path, self._document)
+                if found is not None:
+                    return found
+                return None
+            results = self.findall(f"{path}[1]")
+            return results[0] if results else None
         results = self.findall(path, namespaces)
         return results[0] if results else None
 
@@ -340,7 +399,8 @@ class _PureElement:
         found = self.find(path, namespaces)
         if found is None:
             return default
-        return found.text if found.text is not None else default
+        text = found.text
+        return text if text is not None else default
 
     def _cd(self):
         """cffi handle for this element, created lazily when the C
@@ -375,7 +435,9 @@ if _accel is not None:
     # types update their slots); _PureElement remains the reference
     # implementation and the pure-mode fallback.
     _accelerated = {
-        "tag", "text", "attrib", "get", "getparent", "getnext",
+        "tag", "text", "tail", "attrib", "get", "getparent", "getnext",
+        "getprevious", "keys", "items", "values", "itertext",
+        "namespace", "prefix", "sourceline",
         "__len__", "__getitem__", "_ptr", "_document",
     }
     for _name, _value in _PureElement.__dict__.items():
@@ -386,11 +448,14 @@ if _accel is not None:
             continue
         setattr(Element, _name, _value)
 
+
     def _accel_init(self, _ptr, document):
         self._ptr = _ptr
         self._document = document
         self._raw = int(_ffi.ffi.cast("uintptr_t", _ptr))
 
+    _accel_itertext_c = Element.itertext
+    Element.itertext = lambda self: iter(_accel_itertext_c(self))
     Element.__init__ = _accel_init
 
     _ffi.ffi  # ensure loaded
@@ -402,6 +467,7 @@ if _accel is not None:
                 "leptris_element_name", "leptris_element_namespace",
                 "leptris_element_attribute", "leptris_element_child",
                 "leptris_element_child_count", "leptris_element_as_node",
+                "leptris_element_first_child_any",
                 "leptris_node_first_child", "leptris_node_next_sibling",
                 "leptris_node_get_type", "leptris_text_node_get_content",
                 "leptris_cdata_node_get_content",
@@ -419,6 +485,29 @@ if _accel is not None:
                 "leptris_free_string",
             )
         },
+        ns_set_new=int(
+            _ffi.ffi.cast("uintptr_t", _lib.leptris_xpath_ns_set_new)
+        ),
+        ns_set_free=int(
+            _ffi.ffi.cast("uintptr_t", _lib.leptris_xpath_ns_set_free)
+        ),
+        ns_set_add=int(
+            _ffi.ffi.cast("uintptr_t", _lib.leptris_xpath_ns_set_add)
+        ),
+        xpath_eval_ns=int(
+            _ffi.ffi.cast("uintptr_t", _lib.leptris_xpath_eval_ns)
+        ),
+        element_serialize=int(
+            _ffi.ffi.cast("uintptr_t", _lib.leptris_element_serialize)
+        ),
+        element_prefix_fn=int(
+            _ffi.ffi.cast("uintptr_t", _lib.leptris_element_prefix)
+        ),
+        element_previous_sibling_any_fn=int(
+            _ffi.ffi.cast(
+                "uintptr_t", _lib.leptris_element_previous_sibling_any
+            )
+        ),
         error_class=LeptrisError,
     )
 

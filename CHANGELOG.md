@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.8.0 — 2026-08-24
+
+Full-surface accessor sweep: every remaining Python+cffi path moved
+into the accelerator. Previously-behind operations, before -> after
+(vs lxml, macOS arm64, py3.10):
+
+- `tail` 74x behind -> 83 ns, faster
+- `keys`/`values`/`items` 18-22x -> faster
+- slice indexing 15x -> faster
+- `itertext` 13x -> 3.9x faster
+- `find` 12x -> 0.48 us vs 0.91 (C child-chain first-match walk, no
+  XPath); `findtext` faster
+- `prefix`/`namespace`/`sourceline` 8-10x -> faster
+- `getprevious` -> tie; namespaced `xpath` -> faster (C ns-set eval
+  with the document address cached at parse)
+- element serialization routes through C with NULL options (the
+  engine's options-struct path is slower even for defaults)
+
+Known engine-bound residuals (filed upstream): element-level
+serialization carries a ~18 us constant cost vs document
+serialization at a tenth of it; namespaced bulk findall remains
+~2x behind lxml's compiled ElementPath.
+
 ## 1.7.0 — 2026-08-24
 
 C-level hot accessors in the accelerator (libleptris function

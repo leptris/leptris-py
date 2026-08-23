@@ -42,7 +42,7 @@ def serialize_options(
 
 
 class Document:
-    __slots__ = ("_ptr", "_freed", "_accel_registry")
+    __slots__ = ("_ptr", "_freed", "_accel_registry", "_raw_addr")
 
     def __init__(self, _ptr):
         self._ptr = _ptr
@@ -52,6 +52,7 @@ class Document:
             self._accel_registry = _accel.new_registry()
         except (ImportError, AttributeError):
             self._accel_registry = None
+        self._raw_addr = int(_ffi.ffi.cast("uintptr_t", _ptr))
 
     @classmethod
     def parse(cls, xml) -> "Document":

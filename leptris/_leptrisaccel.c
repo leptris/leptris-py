@@ -72,6 +72,9 @@ static struct {
     int (*node_get_type)(void *);
     const char *(*text_node_get_content)(void *);
     const char *(*cdata_node_get_content)(void *);
+    void *(*element_first_child_any)(void *);
+    const char *(*element_prefix_fn)(void *);
+    void *(*element_previous_sibling_any_fn)(void *);
     void *(*element_first_attribute)(void *);
     void *(*attribute_next)(void *);
     const char *(*attribute_get_name)(void *);
@@ -88,6 +91,11 @@ static struct {
     int (*xpath_result_boolean)(void *);
     char *(*xpath_result_string)(void *);
     void (*free_string)(char *);
+    void *(*ns_set_new)(void);
+    void (*ns_set_free)(void *);
+    int (*ns_set_add)(void *, const char *, const char *);
+    void *(*xpath_eval_ns)(void *, void *, const char *, void *);
+    char *(*element_serialize)(void *, void *);
 } Fns;
 
 static int bound = 0;
@@ -432,6 +440,29 @@ elem_mp_subscript(AccelElement *self, PyObject *key)
             return elem_sq_item_inner(self, index);
         PyErr_Clear();
     }
+    if (bound && self->raw != NULL && PySlice_Check(key)) {
+        Py_ssize_t count = (Py_ssize_t)Fns.element_child_count(self->raw);
+        Py_ssize_t start, stop, step, length;
+        if (PySlice_GetIndicesEx(key, count, &start, &stop, &step, &length) < 0)
+            return NULL;
+        PyObject *out = PyList_New(length);
+        if (out == NULL)
+            return NULL;
+        for (Py_ssize_t i = 0; i < length; i++) {
+            Py_ssize_t idx = start + i * step;
+            void *child = Fns.element_child(self->raw, (size_t)idx);
+            PyObject *el = element_from_parts_reg(
+                child, Py_None,
+                self->document != NULL ? self->document : Py_None,
+                self->registry);
+            if (el == NULL || PyList_SetItem(out, i, el) < 0) {
+                Py_XDECREF(el);
+                Py_DECREF(out);
+                return NULL;
+            }
+        }
+        return out;
+    }
     /* slices and anything else: Python implementation */
     PyObject *method = PyObject_GetAttrString(
         (PyObject *)Py_TYPE(self), "_py_getitem");
@@ -499,6 +530,91 @@ elem_get_method(AccelElement *self, PyObject *args)
     return PyUnicode_DecodeUTF8(value, strlen(value), "strict");
 }
 
+static PyObject *
+text_run_after(AccelElement *self, void *first_node) /* self unused */
+{
+    void *node = first_node;
+    PyObject *parts = PyList_New(0);
+    if (parts == NULL)
+        return NULL;
+    while (node != NULL) {
+        int t = Fns.node_get_type(node);
+        if (t != 1 && t != 3)
+            break;
+        const char *value = (t == 1) ? Fns.text_node_get_content(node)
+                                     : Fns.cdata_node_get_content(node);
+        PyObject *piece = (value != NULL)
+            ? PyUnicode_DecodeUTF8(value, strlen(value), "strict")
+            : PyUnicode_FromString("");
+        if (piece == NULL || PyList_Append(parts, piece) < 0) {
+            Py_XDECREF(piece);
+            Py_DECREF(parts);
+            return NULL;
+        }
+        Py_DECREF(piece);
+        node = Fns.node_next_sibling(node);
+    }
+    Py_ssize_t count = PyList_Size(parts);
+    if (count == 0) {
+        Py_DECREF(parts);
+        Py_RETURN_NONE;
+    }
+    if (count == 1) {
+        PyObject *only = PyList_GetItem(parts, 0);
+        Py_INCREF(only);
+        Py_DECREF(parts);
+        return only;
+    }
+    PyObject *joined = PyUnicode_Join(PyUnicode_FromString(""), parts);
+    Py_DECREF(parts);
+    return joined;
+}
+
+static PyObject *
+elem_get_tail(AccelElement *self, void *closure)
+{
+    if (check_poisoned(self) < 0)
+        return NULL;
+    if (!bound || self->raw == NULL)
+        Py_RETURN_NONE;
+    void *node = Fns.node_next_sibling(Fns.element_as_node(self->raw));
+    int type = (node != NULL) ? Fns.node_get_type(node) : 0;
+    if (type != 1 && type != 3)
+        Py_RETURN_NONE;
+    return text_run_after(self, node);
+}
+
+static PyObject *
+elem_get_namespace(AccelElement *self, void *closure)
+{
+    if (check_poisoned(self) < 0)
+        return NULL;
+    if (!bound || self->raw == NULL)
+        Py_RETURN_NONE;
+    return str_or_none(Fns.element_namespace(self->raw));
+}
+
+static PyObject *
+elem_get_prefix(AccelElement *self, void *closure)
+{
+    if (check_poisoned(self) < 0)
+        return NULL;
+    if (!bound || self->raw == NULL)
+        Py_RETURN_NONE;
+    return str_or_none(Fns.element_prefix_fn(self->raw));
+}
+
+static PyObject *
+elem_get_sourceline(AccelElement *self, void *closure)
+{
+    if (check_poisoned(self) < 0)
+        return NULL;
+    if (!bound || self->raw == NULL)
+        Py_RETURN_NONE;
+    return PyLong_FromLong(
+        (long)Fns.node_line(Fns.element_as_node(self->raw)));
+}
+
 static PyGetSetDef element_getsets[] = {
     {"_ptr", (getter)elem_get_ptr, (setter)elem_set_ptr,
      "cffi handle for the wrapped LeptrisElement.", NULL},
@@ -509,8 +625,159 @@ static PyGetSetDef element_getsets[] = {
     {"tag", (getter)elem_get_tag, NULL, "Element name (Clark notation).", NULL},
     {"text", (getter)elem_get_text, NULL, "First-run text content.", NULL},
     {"attrib", (getter)elem_get_attrib, NULL, "Attributes as a dict.", NULL},
+    {"tail", (getter)elem_get_tail, NULL, "Trailing text run.", NULL},
+    {"namespace", (getter)elem_get_namespace, NULL, "Namespace URI.", NULL},
+    {"prefix", (getter)elem_get_prefix, NULL, "Namespace prefix.", NULL},
+    {"sourceline", (getter)elem_get_sourceline, NULL, "Source line.", NULL},
     {NULL}
 };
+
+static PyObject *
+elem_getprevious(AccelElement *self, PyObject *unused)
+{
+    if (check_poisoned(self) < 0)
+        return NULL;
+    if (!bound || self->raw == NULL)
+        Py_RETURN_NONE;
+    return wrap_sibling(self, Fns.element_previous_sibling_any_fn(self->raw));
+}
+
+typedef struct { int want; PyObject *keys; PyObject *vals; PyObject *pairs; } AttrSink;
+
+static int
+attr_walk(AccelElement *self, AttrSink *sink)
+{
+    void *attr = Fns.element_first_attribute(self->raw);
+    while (attr != NULL) {
+        const char *name = Fns.attribute_get_name(attr);
+        const char *value = Fns.attribute_get_value(self->raw, attr);
+        if (name == NULL)
+            name = "";
+        if (value == NULL)
+            value = "";
+        PyObject *key = PyUnicode_DecodeUTF8(name, strlen(name), "strict");
+        if (key == NULL)
+            return -1;
+        PyObject *val = NULL;
+        if (sink->vals != NULL || sink->pairs != NULL) {
+            val = PyUnicode_DecodeUTF8(value, strlen(value), "strict");
+            if (val == NULL) {
+                Py_DECREF(key);
+                return -1;
+            }
+        }
+        int failed = 0;
+        if (sink->keys != NULL)
+            failed = PyList_Append(sink->keys, key) < 0;
+        if (!failed && sink->vals != NULL)
+            failed = PyList_Append(sink->vals, val) < 0;
+        if (!failed && sink->pairs != NULL) {
+            PyObject *pair = PyTuple_Pack(2, key, val);
+            if (pair == NULL || PyList_Append(sink->pairs, pair) < 0)
+                failed = 1;
+            Py_XDECREF(pair);
+        }
+        Py_DECREF(key);
+        Py_XDECREF(val);
+        if (failed)
+            return -1;
+        attr = Fns.attribute_next(attr);
+    }
+    return 0;
+}
+
+static PyObject *
+attr_list_method(AccelElement *self, int want)
+{
+    if (check_poisoned(self) < 0)
+        return NULL;
+    if (!bound || self->raw == NULL)
+        return PyList_New(0);
+    AttrSink sink = {want, NULL, NULL, NULL};
+    if (want == 0) {
+        sink.keys = PyList_New(0);
+        if (sink.keys == NULL) return NULL;
+    } else if (want == 1) {
+        sink.vals = PyList_New(0);
+        if (sink.vals == NULL) return NULL;
+    } else {
+        sink.pairs = PyList_New(0);
+        if (sink.pairs == NULL) return NULL;
+    }
+    if (attr_walk(self, &sink) < 0) {
+        Py_XDECREF(sink.keys);
+        Py_XDECREF(sink.vals);
+        Py_XDECREF(sink.pairs);
+        return NULL;
+    }
+    if (want == 0) return sink.keys;
+    if (want == 1) return sink.vals;
+    return sink.pairs;
+}
+
+static PyObject *
+elem_keys(AccelElement *self, PyObject *unused)
+{
+    return attr_list_method(self, 0);
+}
+
+static PyObject *
+elem_values(AccelElement *self, PyObject *unused)
+{
+    return attr_list_method(self, 1);
+}
+
+static PyObject *
+elem_items(AccelElement *self, PyObject *unused)
+{
+    return attr_list_method(self, 2);
+}
+
+/* Document-order text runs of the subtree, merged per run. */
+static int
+itertext_walk(void *element, PyObject *out)
+{
+    void *node = Fns.node_first_child(Fns.element_as_node(element));
+    while (node != NULL) {
+        int type = Fns.node_get_type(node);
+        if (type == 1 || type == 3) {
+            PyObject *run = text_run_after(NULL, node);
+            if (run == NULL || PyList_Append(out, run) < 0) {
+                Py_XDECREF(run);
+                return -1;
+            }
+            Py_DECREF(run);
+            while (node != NULL) { /* skip the consumed run */
+                int t = Fns.node_get_type(node);
+                if (t != 1 && t != 3)
+                    break;
+                node = Fns.node_next_sibling(node);
+            }
+        } else {
+            if (type == 0 && itertext_walk(node, out) < 0)
+                return -1;
+            node = Fns.node_next_sibling(node);
+        }
+    }
+    return 0;
+}
+
+static PyObject *
+elem_itertext(AccelElement *self, PyObject *unused)
+{
+    if (check_poisoned(self) < 0)
+        return NULL;
+    if (!bound || self->raw == NULL)
+        return PyList_New(0);
+    PyObject *out = PyList_New(0);
+    if (out == NULL)
+        return NULL;
+    if (itertext_walk(self->raw, out) < 0) {
+        Py_DECREF(out);
+        return NULL;
+    }
+    return out;
+}
 
 static PyMethodDef element_methods[] = {
     {"getparent", (PyCFunction)elem_getparent, METH_NOARGS,
@@ -519,6 +786,16 @@ static PyMethodDef element_methods[] = {
      "Next element sibling or None."},
     {"get", (PyCFunction)elem_get_method, METH_VARARGS,
      "get(name, default=None) -> attribute value."},
+    {"getprevious", (PyCFunction)elem_getprevious, METH_NOARGS,
+     "Previous element sibling or None."},
+    {"keys", (PyCFunction)elem_keys, METH_NOARGS,
+     "Attribute names in document order."},
+    {"items", (PyCFunction)elem_items, METH_NOARGS,
+     "(name, value) pairs in document order."},
+    {"values", (PyCFunction)elem_values, METH_NOARGS,
+     "Attribute values in document order."},
+    {"itertext", (PyCFunction)elem_itertext, METH_NOARGS,
+     "Merged text runs of the subtree, document order."},
     {NULL}
 };
 
@@ -648,29 +925,35 @@ accel_bind(PyObject *module, PyObject *args, PyObject *kwargs)
         "element_name", "element_namespace", "element_attribute",
         "element_child", "element_child_count", "element_as_node",
         "node_first_child", "node_next_sibling", "node_get_type",
-        "text_node_get_content", "cdata_node_get_content", "element_first_attribute",
+        "text_node_get_content", "cdata_node_get_content", "element_first_child_any",
+        "element_prefix_fn", "element_previous_sibling_any_fn", "element_first_attribute",
         "attribute_next", "attribute_get_name", "attribute_get_value",
         "element_parent", "element_next_sibling_any", "node_line",
         "xpath_eval", "xpath_result_type", "xpath_result_count",
         "xpath_result_get_nodes", "xpath_result_free", "xpath_result_number",
         "xpath_result_boolean", "xpath_result_string", "free_string",
+        "ns_set_new", "ns_set_free", "ns_set_add",
+        "xpath_eval_ns", "element_serialize",
         "error_class", NULL};
                 PyObject *value_element_name = NULL, *value_element_namespace = NULL,
              *value_element_attribute = NULL, *value_element_child = NULL,
              *value_element_child_count = NULL, *value_element_as_node = NULL,
              *value_node_first_child = NULL, *value_node_next_sibling = NULL,
              *value_node_get_type = NULL, *value_text_node_get_content = NULL,
-             *value_cdata_node_get_content = NULL, *value_element_first_attribute = NULL,
-             *value_attribute_next = NULL, *value_attribute_get_name = NULL,
-             *value_attribute_get_value = NULL, *value_element_parent = NULL,
-             *value_element_next_sibling_any = NULL, *value_node_line = NULL,
-             *value_xpath_eval = NULL, *value_xpath_result_type = NULL,
-             *value_xpath_result_count = NULL, *value_xpath_result_get_nodes = NULL,
+             *value_cdata_node_get_content = NULL, *value_element_first_child_any = NULL,
+             *value_element_prefix_fn = NULL, *value_element_previous_sibling_any_fn =
+             NULL, *value_element_first_attribute = NULL, *value_attribute_next = NULL,
+             *value_attribute_get_name = NULL, *value_attribute_get_value = NULL,
+             *value_element_parent = NULL, *value_element_next_sibling_any = NULL,
+             *value_node_line = NULL, *value_xpath_eval = NULL, *value_xpath_result_type =
+             NULL, *value_xpath_result_count = NULL, *value_xpath_result_get_nodes = NULL,
              *value_xpath_result_free = NULL, *value_xpath_result_number = NULL,
              *value_xpath_result_boolean = NULL, *value_xpath_result_string = NULL,
-             *value_free_string = NULL, *value_error_class = NULL;
+             *value_free_string = NULL, *value_ns_set_new = NULL, *value_ns_set_free =
+             NULL, *value_ns_set_add = NULL, *value_xpath_eval_ns = NULL,
+             *value_element_serialize = NULL, *value_error_class = NULL;
     if (!PyArg_ParseTupleAndKeywords(
-            args, kwargs, "|$OOOOOOOOOOOOOOOOOOOOOOOOOOOO", kwlist,
+            args, kwargs, "|$OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO", kwlist,
 &value_element_name,
 &value_element_namespace,
 &value_element_attribute,
@@ -682,6 +965,9 @@ accel_bind(PyObject *module, PyObject *args, PyObject *kwargs)
 &value_node_get_type,
 &value_text_node_get_content,
 &value_cdata_node_get_content,
+&value_element_first_child_any,
+&value_element_prefix_fn,
+&value_element_previous_sibling_any_fn,
 &value_element_first_attribute,
 &value_attribute_next,
 &value_attribute_get_name,
@@ -698,6 +984,11 @@ accel_bind(PyObject *module, PyObject *args, PyObject *kwargs)
 &value_xpath_result_boolean,
 &value_xpath_result_string,
 &value_free_string,
+&value_ns_set_new,
+&value_ns_set_free,
+&value_ns_set_add,
+&value_xpath_eval_ns,
+&value_element_serialize,
             &value_error_class))
         return NULL;
 #define BIND_FN(name) \
@@ -717,6 +1008,9 @@ accel_bind(PyObject *module, PyObject *args, PyObject *kwargs)
     BIND_FN(node_get_type)
     BIND_FN(text_node_get_content)
     BIND_FN(cdata_node_get_content)
+    BIND_FN(element_first_child_any)
+    BIND_FN(element_prefix_fn)
+    BIND_FN(element_previous_sibling_any_fn)
     BIND_FN(element_first_attribute)
     BIND_FN(attribute_next)
     BIND_FN(attribute_get_name)
@@ -733,6 +1027,11 @@ accel_bind(PyObject *module, PyObject *args, PyObject *kwargs)
     BIND_FN(xpath_result_boolean)
     BIND_FN(xpath_result_string)
     BIND_FN(free_string)
+    BIND_FN(ns_set_new)
+    BIND_FN(ns_set_free)
+    BIND_FN(ns_set_add)
+    BIND_FN(xpath_eval_ns)
+    BIND_FN(element_serialize)
 #undef BIND_FN
     if (value_error_class != NULL && value_error_class != Py_None) {
         Py_XDECREF(LeptrisErrorType);
@@ -743,40 +1042,30 @@ accel_bind(PyObject *module, PyObject *args, PyObject *kwargs)
     Py_RETURN_NONE;
 }
 
+/* Shared tail of the C evaluation paths: scalars converted, all-
+ * element nodesets materialized, anything else -> None (Python path).
+ * Consumes result. */
 static PyObject *
-accel_nodeset(PyObject *module, PyObject *args)
+finish_result(void *result, PyObject *document)
 {
-    PyObject *document_ptr;   /* cffi LeptrisDocument handle */
-    PyObject *context_obj;    /* raw context address int or None */
-    PyObject *expression;     /* str */
-    PyObject *document;       /* owning Document object */
-    if (!PyArg_ParseTuple(args, "OOOO", &document_ptr, &context_obj,
-                          &expression, &document))
-        return NULL;
-    if (!bound)
-        Py_RETURN_NONE;
-    PyObject *encoded = PyUnicode_AsUTF8String(expression);
-    if (encoded == NULL)
-        return NULL;
-    const char *expr = PyBytes_AsString(encoded);
-    void *ctx = NULL;
-    if (context_obj != Py_None && PyLong_Check(context_obj))
-        ctx = PyLong_AsVoidPtr(context_obj);
-    /* document raw address: take it from the cdata via Python-provided
-     * int in document_ptr if it is an int, else bail to slow path */
-    if (!PyLong_Check(document_ptr)) {
-        Py_DECREF(encoded);
-        Py_RETURN_NONE;
-    }
-    void *doc_raw = PyLong_AsVoidPtr(document_ptr);
-    void *result = Fns.xpath_eval(doc_raw, ctx, expr);
-    Py_DECREF(encoded);
-    if (result == NULL)
-        Py_RETURN_NONE; /* evaluation failed: Python path raises */
-    if (Fns.xpath_result_type(result) != 0) {
-        /* scalar (boolean/number/string): the Python path converts */
+    int rtype = Fns.xpath_result_type(result);
+    if (rtype != 0) {
+        PyObject *scalar = NULL;
+        if (rtype == 2)
+            scalar = PyFloat_FromDouble(Fns.xpath_result_number(result));
+        else if (rtype == 1)
+            scalar = PyBool_FromLong(Fns.xpath_result_boolean(result));
+        else if (rtype == 3) {
+            char *s = Fns.xpath_result_string(result);
+            if (s == NULL)
+                scalar = PyUnicode_FromString("");
+            else {
+                scalar = PyUnicode_DecodeUTF8(s, strlen(s), "strict");
+                Fns.free_string(s);
+            }
+        }
         Fns.xpath_result_free(result);
-        Py_RETURN_NONE;
+        return scalar;
     }
     size_t count = Fns.xpath_result_count(result);
     PyObject *out = PyList_New(0);
@@ -809,11 +1098,160 @@ accel_nodeset(PyObject *module, PyObject *args)
     }
     PyMem_Free(elems);
     if (copied != count) {
-        /* mixed nodeset: the Python path handles non-element slots */
         Py_DECREF(out);
         Py_RETURN_NONE;
     }
     return out;
+}
+
+static PyObject *
+accel_nodeset(PyObject *module, PyObject *args)
+{
+    PyObject *document_ptr, *context_obj, *expression, *document;
+    if (!PyArg_ParseTuple(args, "OOOO", &document_ptr, &context_obj,
+                          &expression, &document))
+        return NULL;
+    if (!bound)
+        Py_RETURN_NONE;
+    PyObject *encoded = PyUnicode_AsUTF8String(expression);
+    if (encoded == NULL)
+        return NULL;
+    const char *expr = PyBytes_AsString(encoded);
+    void *ctx = NULL;
+    if (context_obj != Py_None && PyLong_Check(context_obj))
+        ctx = PyLong_AsVoidPtr(context_obj);
+    if (!PyLong_Check(document_ptr)) {
+        Py_DECREF(encoded);
+        Py_RETURN_NONE;
+    }
+    void *doc_raw = PyLong_AsVoidPtr(document_ptr);
+    void *result = Fns.xpath_eval(doc_raw, ctx, expr);
+    Py_DECREF(encoded);
+    if (result == NULL)
+        Py_RETURN_NONE;
+    return finish_result(result, document);
+}
+
+static PyObject *
+accel_nodeset_ns(PyObject *module, PyObject *args)
+{
+    PyObject *document_ptr, *context_obj, *expression, *document, *bindings;
+    /* bindings: flat [prefix, uri, prefix, uri, ...] */
+    if (!PyArg_ParseTuple(args, "OOOOO", &document_ptr, &context_obj,
+                          &expression, &document, &bindings))
+        return NULL;
+    if (!bound || !PyLong_Check(document_ptr))
+        Py_RETURN_NONE;
+    PyObject *fast = PySequence_Fast(bindings, "bindings must be a sequence");
+    if (fast == NULL)
+        return NULL;
+    Py_ssize_t n = PySequence_Size(fast);
+    void *ns_set = Fns.ns_set_new();
+    if (ns_set == NULL) {
+        Py_DECREF(fast);
+        Py_RETURN_NONE;
+    }
+    int ok = 1;
+    int is_list = PyList_Check(fast);
+    for (Py_ssize_t i = 0; i + 1 < n && ok; i += 2) {
+        PyObject *prefix = PyUnicode_AsUTF8String(
+            is_list ? PyList_GetItem(fast, i) : PyTuple_GetItem(fast, i));
+        PyObject *uri = PyUnicode_AsUTF8String(
+            is_list ? PyList_GetItem(fast, i + 1)
+                    : PyTuple_GetItem(fast, i + 1));
+        if (prefix == NULL || uri == NULL) {
+            Py_XDECREF(prefix);
+            Py_XDECREF(uri);
+            ok = 0;
+            break;
+        }
+        if (Fns.ns_set_add(ns_set, PyBytes_AsString(prefix),
+                           PyBytes_AsString(uri)) != 0)
+            ok = 0;
+        Py_DECREF(prefix);
+        Py_DECREF(uri);
+    }
+    Py_DECREF(fast);
+    if (!ok) {
+        Fns.ns_set_free(ns_set);
+        Py_RETURN_NONE;
+    }
+    PyObject *encoded = PyUnicode_AsUTF8String(expression);
+    if (encoded == NULL) {
+        Fns.ns_set_free(ns_set);
+        return NULL;
+    }
+    void *ctx = NULL;
+    if (context_obj != Py_None && PyLong_Check(context_obj))
+        ctx = PyLong_AsVoidPtr(context_obj);
+    void *doc_raw = PyLong_AsVoidPtr(document_ptr);
+    void *result = Fns.xpath_eval_ns(
+        doc_raw, ctx, PyBytes_AsString(encoded), ns_set);
+    Py_DECREF(encoded);
+    Fns.ns_set_free(ns_set);
+    if (result == NULL)
+        Py_RETURN_NONE;
+    return finish_result(result, document);
+}
+
+static PyObject *
+accel_serialize_elem(PyObject *module, PyObject *args)
+{
+    unsigned long long address;
+    int indent, declaration;
+    if (!PyArg_ParseTuple(args, "Kii", &address, &indent, &declaration))
+        return NULL;
+    if (!bound)
+        Py_RETURN_NONE;
+    /* The engine's non-NULL options path is measurably slower even
+     * for defaults - pass NULL unless something is requested. */
+    void *options = NULL;
+    struct { int indent; int xml_declaration; const char *encoding; } opts;
+    if (indent != 0 || declaration != 0) {
+        opts.indent = indent;
+        opts.xml_declaration = declaration;
+        opts.encoding = NULL;
+        options = &opts;
+    }
+    char *out = Fns.element_serialize((void *)(uintptr_t)address, options);
+    if (out == NULL)
+        Py_RETURN_NONE;
+    size_t len = strlen(out);
+    PyObject *bytes = PyBytes_FromStringAndSize(out, (Py_ssize_t)len);
+    Fns.free_string(out);
+    return bytes;
+}
+
+/* First element child whose name matches, via the element sibling
+ * chain (no XPath). Sentinel: None -> not found; needs the document
+ * object to attach ownership. */
+static PyObject *
+accel_find_first(PyObject *module, PyObject *args)
+{
+    unsigned long long address;
+    PyObject *name, *document;
+    if (!PyArg_ParseTuple(args, "KUO", &address, &name, &document))
+        return NULL;
+    if (!bound)
+        Py_RETURN_NONE;
+    PyObject *encoded = PyUnicode_AsUTF8String(name);
+    if (encoded == NULL)
+        return NULL;
+    const char *want = PyBytes_AsString(encoded);
+    size_t want_len = strlen(want);
+    void *child = Fns.element_first_child_any((void *)(uintptr_t)address);
+    while (child != NULL) {
+        const char *candidate = Fns.element_name(child);
+        if (candidate != NULL && strcmp(candidate, want) == 0
+            && strlen(candidate) == want_len) {
+            Py_DECREF(encoded);
+            return element_from_parts_reg(
+                child, Py_None, document, registry_of(document));
+        }
+        child = Fns.element_next_sibling_any(child);
+    }
+    Py_DECREF(encoded);
+    Py_RETURN_NONE;
 }
 
 static PyObject *
@@ -871,7 +1309,13 @@ static PyMethodDef accel_methods[] = {
     {"bind", (PyCFunction)accel_bind, METH_VARARGS | METH_KEYWORDS,
      "bind(**fn_addresses) -> None"},
     {"nodeset", accel_nodeset, METH_VARARGS,
-     "nodeset(document_address, context_address, expression, document) -> list | None"},
+     "nodeset(document_address, context_address, expression, document) -> list | scalar | None"},
+    {"nodeset_ns", accel_nodeset_ns, METH_VARARGS,
+     "nodeset_ns(document_address, context_address, expression, document, bindings) -> list | scalar | None"},
+    {"find_first", accel_find_first, METH_VARARGS,
+     "find_first(address, name, document) -> Element | None"},
+    {"serialize_elem", accel_serialize_elem, METH_VARARGS,
+     "serialize_elem(address, indent, declaration) -> bytes | None"},
     {"new_registry", (PyCFunction)accel_new_registry, METH_NOARGS,
      "new_registry() -> capsule tracking live elements of a document"},
     {"invalidate", (PyCFunction)accel_invalidate, METH_O,
