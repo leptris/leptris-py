@@ -1,0 +1,105 @@
+# PyPI release path for pyleptris. Trusted publishing (no stored
+# credentials): configure on pypi.org → project pyleptris → Settings →
+# Trusted Publisher → owner leptris, repository pyleptris, workflow
+# .github/workflows/publish.yml, environment pypi.
+#
+# Triggers:
+#   - workflow_dispatch (manual: ships the version in pyproject.toml)
+#   - workflow_call from leptris/leptris's release flow (publish: true),
+#     which is how every libleptris release also ships the wheel.
+#
+# NOTE: github.event_name propagates from the CALLER through
+# workflow_call — the release tag job runs on pull_request closed —
+# so gates key on inputs.publish, never on event_name == 'workflow_call'.
+
+name: Build and publish pyleptris
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      publish:
+        description: 'Publish the wheel to PyPI (trusted publisher)'
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write
+
+jobs:
+  test:
+    name: pyleptris tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Build libleptris from the pinned release tarball
+        shell: bash
+        run: |
+          set -e
+          LIBLEPTRIS_VERSION=$(cat libleptris-version.txt)
+          mkdir -p tmp/libleptris && cd tmp/libleptris
+          curl -sL "https://api.github.com/repos/leptris/leptris/tarball/v${LIBLEPTRIS_VERSION}" | tar xz --strip-components=1
+          cmake -B build -S . \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLEPTRIS_BUILD_SHARED=ON -DLEPTRIS_BUILD_STATIC=OFF \
+            -DBUILD_TESTING=OFF -DLEPTRIS_BUILD_CLI=OFF \
+            -DLEPTRIS_BUILD_BENCHMARKS=OFF \
+            -DLEPTRIS_ENABLE_UTF8PROC=OFF -DLEPTRIS_ENABLE_ICONV=OFF
+          cmake --build build --config Release
+          LIB=$(find build -type f -o -type l 2>/dev/null | grep -iE '(lib)?leptris\.(dylib|so|dll)$' | head -1)
+          LIBDIR=$(cd "$(dirname "$LIB")" && pwd)
+          echo "LEPTRIS_LIB_PATH=$LIBDIR" >> "$GITHUB_ENV"
+
+      - name: Run the test suite
+        shell: bash
+        run: |
+          python -m pip install pytest cffi
+          python -m pytest tests/ -q
+        env:
+          LEPTRIS_LIB_PATH: ${{ env.LEPTRIS_LIB_PATH }}
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade build
+          python -m build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pyleptris-dist
+          path: dist/*
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    if: inputs.publish == true || github.event_name == 'workflow_dispatch'
+    environment:
+      name: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pyleptris-dist
+          path: dist/
+
+      - name: Publish to PyPI (trusted publisher)
+        uses: pypa/gh-action-pypi-publish@release/v1

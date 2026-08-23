@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: pytest (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Build libleptris from the pinned release tarball
+        shell: bash
+        run: |
+          set -e
+          LIBLEPTRIS_VERSION=$(cat libleptris-version.txt)
+          mkdir -p tmp/libleptris && cd tmp/libleptris
+          curl -sL "https://api.github.com/repos/leptris/leptris/tarball/v${LIBLEPTRIS_VERSION}" | tar xz --strip-components=1
+          cmake -B build -S . \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLEPTRIS_BUILD_SHARED=ON -DLEPTRIS_BUILD_STATIC=OFF \
+            -DBUILD_TESTING=OFF -DLEPTRIS_BUILD_CLI=OFF \
+            -DLEPTRIS_BUILD_BENCHMARKS=OFF \
+            -DLEPTRIS_ENABLE_UTF8PROC=OFF -DLEPTRIS_ENABLE_ICONV=OFF
+          cmake --build build --config Release
+          LIB=$(find build -type f -o -type l 2>/dev/null | grep -iE '(lib)?leptris\.(dylib|so|dll)$' | head -1)
+          if [ -z "$LIB" ]; then
+            echo "ERROR: libleptris shared library not found"
+            exit 1
+          fi
+          LIBDIR=$(cd "$(dirname "$LIB")" && pwd)
+          echo "LEPTRIS_LIB_PATH=$LIBDIR" >> "$GITHUB_ENV"
+          echo "Built: $LIB"
+
+      - name: Install and test the binding
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .[test]
+          echo "using lib at: $LEPTRIS_LIB_PATH"
+          python -m pytest tests/ -q
