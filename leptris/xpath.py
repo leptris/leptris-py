@@ -51,7 +51,7 @@ class XPath:
     ):
         ffi = _ffi.ffi
         if namespaces is None and variables is None:
-            from . import _leptrisaccel as _accel
+            from .element import _accel
 
             if _accel is not None and not document.closed:
                 # All-C fast path: eval, batch fill and element
