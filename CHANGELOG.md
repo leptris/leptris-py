@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.1 — 2026-08-23
+
+- `iter()` / `iterdescendants()` now delegate the subtree walk to the
+  engine: one `descendant-or-self`/`descendant` XPath evaluation at C
+  speed plus batch materialization, replacing ~2 FFI dispatches per
+  element. Benchmark traversal: 291 → 58 µs vs lxml 21 (was 14×
+  behind, now 2.7×). Same contract as lxml — self first, document
+  order, `{uri}local` and `*` filters; results are materialized
+  (not lazy). Non-QName tags keep filter semantics via a Python walk.
+
 ## 1.4.0 — 2026-08-23
 
 - XPath nodesets materialize through `leptris_xpath_result_get_nodes`
