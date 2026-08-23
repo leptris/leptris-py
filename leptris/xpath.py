@@ -139,19 +139,18 @@ class XPath:
     def _nodeset(document, result) -> list:
         from .element import Element
 
-        count = _ffi.lib.leptris_xpath_result_count(result)
+        lib = _ffi.lib
+        ffi = _ffi.ffi
+        count = lib.leptris_xpath_result_count(result)
         items = []
+        append = items.append
+        # Fast path: result_get returns NULL exactly for non-element
+        # slots, so the per-index kind query is only paid on fallback.
         for index in range(count):
-            kind = _ffi.lib.leptris_xpath_result_node_kind(result, index)
-            if kind == _ffi.XPATH_NODE_ELEMENT:
-                items.append(
-                    Element(_ffi.lib.leptris_xpath_result_get(result, index), document)
-                )
+            ptr = lib.leptris_xpath_result_get(result, index)
+            if ptr != ffi.NULL:
+                append(Element(ptr, document))
             else:
-                value = _ffi.lib.leptris_xpath_result_node_value(result, index)
-                items.append(
-                    _ffi.ffi.string(value).decode("utf-8")
-                    if value != _ffi.ffi.NULL
-                    else ""
-                )
+                value = lib.leptris_xpath_result_node_value(result, index)
+                append(ffi.string(value).decode("utf-8") if value != ffi.NULL else "")
         return items

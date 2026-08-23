@@ -27,6 +27,8 @@ _TextNodes = (_ffi.NODE_TEXT, _ffi.NODE_CDATA)
 class _AttribMap(Mapping):
     """Read-only dict view of an element's attributes."""
 
+    __slots__ = ("_element",)
+
     def __init__(self, element: "Element"):
         self._element = element
 
@@ -55,6 +57,8 @@ class _AttribMap(Mapping):
 
 
 class Element:
+    __slots__ = ("_ptr", "_document")
+
     def __init__(self, _ptr, document):
         self._ptr = _ptr
         self._document = document
@@ -180,37 +184,16 @@ class Element:
             return None
         return Element(ptr, self._document)
 
-    def _next_element_from(self, node):
-        while node != _ffi.ffi.NULL:
-            elem = _ffi.lib.leptris_node_as_element(node)
-            if elem != _ffi.ffi.NULL:
-                return Element(elem, self._document)
-            node = _ffi.lib.leptris_node_next_sibling(node)
-        return None
-
-    def _previous_element_from(self, node):
-        while node != _ffi.ffi.NULL:
-            elem = _ffi.lib.leptris_node_as_element(node)
-            if elem != _ffi.ffi.NULL:
-                return Element(elem, self._document)
-            node = _ffi.lib.leptris_node_previous_sibling(node)
-        return None
-
     def getnext(self) -> Optional["Element"]:
-        # The node-level sibling chain interleaves text nodes, so skip
-        # ahead to the next element (lxml getnext semantics).
+        # Element-level sibling chain skips text nodes (lxml getnext).
         self._check_alive()
-        node = _ffi.lib.leptris_node_next_sibling(
-            _ffi.lib.leptris_element_as_node(self._ptr)
-        )
-        return self._next_element_from(node)
+        ptr = _ffi.lib.leptris_element_next_sibling_any(self._ptr)
+        return None if ptr == _ffi.ffi.NULL else Element(ptr, self._document)
 
     def getprevious(self) -> Optional["Element"]:
         self._check_alive()
-        node = _ffi.lib.leptris_node_previous_sibling(
-            _ffi.lib.leptris_element_as_node(self._ptr)
-        )
-        return self._previous_element_from(node)
+        ptr = _ffi.lib.leptris_element_previous_sibling_any(self._ptr)
+        return None if ptr == _ffi.ffi.NULL else Element(ptr, self._document)
 
     def _child_at(self, index: int) -> "Element":
         ptr = _ffi.lib.leptris_element_child(self._ptr, index)
@@ -235,14 +218,11 @@ class Element:
 
     def __iter__(self) -> Iterator["Element"]:
         self._check_alive()
-        node = _ffi.lib.leptris_node_first_child(
-            _ffi.lib.leptris_element_as_node(self._ptr)
-        )
-        while node != _ffi.ffi.NULL:
-            elem = _ffi.lib.leptris_node_as_element(node)
-            if elem != _ffi.ffi.NULL:
-                yield Element(elem, self._document)
-            node = _ffi.lib.leptris_node_next_sibling(node)
+        lib = _ffi.lib
+        child = lib.leptris_element_first_child_any(self._ptr)
+        while child != _ffi.ffi.NULL:
+            yield Element(child, self._document)
+            child = lib.leptris_element_next_sibling_any(child)
 
     def iter(self, tag: Optional[str] = None) -> Iterator["Element"]:
         if tag is None or self.tag == tag:

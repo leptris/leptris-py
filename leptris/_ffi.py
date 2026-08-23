@@ -74,6 +74,7 @@ ffi.cdef(
     LeptrisElement leptris_element_parent(LeptrisElement elem);
     const char* leptris_element_attribute(LeptrisElement elem, const char* name);
     LeptrisElement leptris_element_next_sibling_any(LeptrisElement elem);
+    LeptrisElement leptris_element_previous_sibling_any(LeptrisElement elem);
     LeptrisAttribute leptris_element_first_attribute(LeptrisElement elem);
     LeptrisAttribute leptris_attribute_next(LeptrisAttribute attr);
     const char* leptris_attribute_get_name(LeptrisAttribute attr);
