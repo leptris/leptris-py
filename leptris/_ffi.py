@@ -107,6 +107,8 @@ ffi.cdef(
     char*    leptris_xpath_result_string(LeptrisXPathResult result);
     size_t   leptris_xpath_result_count(LeptrisXPathResult result);
     LeptrisElement leptris_xpath_result_get(LeptrisXPathResult result, size_t index);
+    size_t   leptris_xpath_result_get_nodes(LeptrisXPathResult result, LeptrisElement* out_nodes, size_t max_count);
+    const char* leptris_version(void);
     int      leptris_xpath_result_node_kind(LeptrisXPathResult result, size_t index);
     LeptrisNodeRef leptris_xpath_result_get_node(LeptrisXPathResult result, size_t index);
     const char* leptris_xpath_result_node_name(LeptrisXPathResult result, size_t index);

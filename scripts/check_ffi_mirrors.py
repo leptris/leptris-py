@@ -56,6 +56,9 @@ REQUIRED_CORE = [
     "leptris_xpath_result_free",
     "leptris_xpath_result_count",
     "leptris_xpath_result_get",
+    "leptris_xpath_result_get_nodes",
+    # runtime metadata
+    "leptris_version",
     # errors
     "leptris_error_message",
     # strings

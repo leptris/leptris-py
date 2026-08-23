@@ -82,7 +82,7 @@ with sax.StreamingParser(handler) as parser:  # push, constant memory
 | `elem.xpath(expr, namespaces=…)` | same | plus `variables={…}` (leptris extension) |
 | `etree.c14n` / `etree.XInclude` | `c14n(…)` / `doc.process_xinclude()` | |
 | `etree.XMLSyntaxError` | `ParseError` | XPath failures raise `XPathError`; both subclass `LeptrisError` |
-| `etree.Element`, `SubElement`, `append`, `set`, `remove` | **absent** | libleptris is a read-only parser; build trees elsewhere |
+| `etree.Element`, `SubElement`, `append`, `set`, `remove` | **not exposed** | libleptris has partial mutation upstream (node content setters, `set_root`, `remove_children`) — not surfaced here; build trees elsewhere |
 | `etree.iterparse` | **absent** | use `leptris.sax.StreamingParser` (callback-based, constant memory) |
 | smart strings | plain `str` | XPath string/attribute results |
 | `elem.nsmap` | **absent** | use `elem.namespace` / `elem.prefix` and `xpath(namespaces=…)` |

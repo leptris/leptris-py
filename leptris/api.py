@@ -10,6 +10,14 @@ from .element import Element
 from .error import LeptrisError
 
 
+def libleptris_version() -> str:
+    """Runtime version string of the loaded libleptris."""
+    value = _ffi.lib.leptris_version()
+    if value == _ffi.ffi.NULL:
+        return ""
+    return _ffi.ffi.string(value).decode("utf-8")
+
+
 def fromstring(xml) -> Element:
     """Parse XML from a str or bytes; returns the root Element."""
     return Document.parse(xml).getroot()
