@@ -42,6 +42,8 @@ def serialize_options(
 
 
 class Document:
+    __slots__ = ("_ptr", "_freed")
+
     def __init__(self, _ptr):
         self._ptr = _ptr
         self._freed = False

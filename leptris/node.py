@@ -14,6 +14,8 @@ from .error import LeptrisError
 
 
 class Node:
+    __slots__ = ("_ptr", "_document")
+
     def __init__(self, _ptr, document):
         self._ptr = _ptr
         self._document = document

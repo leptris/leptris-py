@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.3.1 — 2026-08-23
+
+Performance — binding wrapper overhead only, no API changes
+(macOS arm64, py3.10, lxml 6.0.2; benchmark matrix before → after):
+
+- XPath nodeset materialization: `//book` (100 results)
+  47.9 → 30.4 µs, `//book[price > 50]` (49) 30.8 → 20.1 µs,
+  `//author | //title` (200) 105.1 → 63.4 µs —
+  `result_get`-first fast path (returns NULL exactly for non-element
+  slots, so the kind query is only paid on fallback) and `__slots__`
+- traversal 532 → 291 µs (−45%) — element-level sibling chains
+  (`first_child_any`/`next_sibling_any`) skip text nodes; halved FFI
+  calls per step
+- `getnext`/`getprevious` are now single FFI calls
+  (`leptris_element_previous_sibling_any` newly bound)
+- `__slots__` on `Document`/`Element`/`Node`/attrib view: cheaper
+  construction, no per-instance dict
+
+Remaining gap to lxml on nodeset materialization (~0.29 µs/element)
+and traversal needs C-side batch accessors — tracked upstream.
+
 ## 1.3.0 — 2026-08-23
 
 Breaking: the API was redesigned to mirror lxml — the Ruby binding
