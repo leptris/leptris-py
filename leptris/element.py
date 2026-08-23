@@ -59,7 +59,10 @@ class _AttribMap(Mapping):
     __hash__ = None  # type: ignore[assignment]
 
 
-class Element:
+class _PureElement:
+    """Element as a plain Python class (fallback when the C
+    accelerator is unavailable — same behavior, slower allocation)."""
+
     __slots__ = ("_ptr", "_document")
 
     def __init__(self, _ptr, document):
@@ -193,24 +196,24 @@ class Element:
         ptr = _ffi.lib.leptris_element_parent(self._ptr)
         if ptr == _ffi.ffi.NULL:
             return None
-        return Element(ptr, self._document)
+        return _make(ptr, self._document)
 
     def getnext(self) -> Optional["Element"]:
         # Element-level sibling chain skips text nodes (lxml getnext).
         self._check_alive()
         ptr = _ffi.lib.leptris_element_next_sibling_any(self._ptr)
-        return None if ptr == _ffi.ffi.NULL else Element(ptr, self._document)
+        return None if ptr == _ffi.ffi.NULL else _make(ptr, self._document)
 
     def getprevious(self) -> Optional["Element"]:
         self._check_alive()
         ptr = _ffi.lib.leptris_element_previous_sibling_any(self._ptr)
-        return None if ptr == _ffi.ffi.NULL else Element(ptr, self._document)
+        return None if ptr == _ffi.ffi.NULL else _make(ptr, self._document)
 
     def _child_at(self, index: int) -> "Element":
         ptr = _ffi.lib.leptris_element_child(self._ptr, index)
         if ptr == _ffi.ffi.NULL:
             raise IndexError("child index out of range")
-        return Element(ptr, self._document)
+        return _make(ptr, self._document)
 
     def __getitem__(self, index: Union[int, slice]) -> Union["Element", List["Element"]]:
         self._check_alive()
@@ -236,7 +239,7 @@ class Element:
             buffer = _ffi.ffi.new("LeptrisElement[]", count)
             lib.leptris_element_children(self._ptr, buffer, count)
             return iter(
-                list(map(Element, _ffi.ffi.unpack(buffer, count), repeat(self._document)))
+                _materialize(_ffi.ffi.unpack(buffer, count), self._document)
             )
         return self._iter_chain()
 
@@ -244,7 +247,7 @@ class Element:
         lib = _ffi.lib
         child = lib.leptris_element_first_child_any(self._ptr)
         while child != _ffi.ffi.NULL:
-            yield Element(child, self._document)
+            yield _make(child, self._document)
             child = lib.leptris_element_next_sibling_any(child)
 
     def iter(self, tag: Optional[str] = None) -> Iterator["Element"]:
@@ -322,3 +325,49 @@ class Element:
 
     def __repr__(self) -> str:
         return f"<Element {self.tag!r} at {id(self):#x}>"
+
+
+import os as _os
+
+if _os.environ.get("LEPTRIS_PURE"):
+    # Explicit pure mode (CI exercises the fallback path this way).
+    _accel = None
+else:
+    try:
+        from . import _leptrisaccel as _accel
+    except ImportError:
+        _accel = None
+
+if _accel is not None:
+    Element = _accel.Element
+    # The whole API surface lives in Python; the C heap type only
+    # contributes allocation. Dunders attach post-creation (heap
+    # types update their slots); _PureElement remains the reference
+    # implementation and the pure-mode fallback.
+    for _name, _value in _PureElement.__dict__.items():
+        if _name in ("__slots__", "__module__", "__dict__", "__weakref__",
+                     "__init__", "__doc__", "__qualname__",
+                     "_ptr", "_document"):
+            # _ptr/_document are __slots__ member descriptors on the
+            # pure class; the C type provides its own getsets.
+            continue
+        setattr(Element, _name, _value)
+
+    def _accel_init(self, _ptr, document):
+        self._ptr = _ptr
+        self._document = document
+
+    Element.__init__ = _accel_init
+
+    def _make(_ptr, document):
+        return _accel.create(_ptr, document)
+
+    def _materialize(ptrs, document):
+        return _accel.materialize(ptrs, document)
+
+else:
+    Element = _PureElement
+    _make = Element
+
+    def _materialize(ptrs, document):
+        return [Element(ptr, document) for ptr in ptrs]

@@ -69,7 +69,18 @@ jobs:
 
   build:
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            cibw: "cp39-abi3-manylinux_x86_64 cp39-abi3-manylinux_aarch64"
+            sdist: true
+          - os: macos-latest
+            cibw: "cp39-abi3-macosx_arm64 cp39-abi3-macosx_x86_64"
+          - os: windows-latest
+            cibw: "cp39-abi3-win_amd64"
     steps:
       - uses: actions/checkout@v4
 
@@ -77,15 +88,23 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Build sdist and wheel
+      - name: Build wheels (cibuildwheel)
+        uses: pypa/cibuildwheel@v2.23.3
+        env:
+          CIBW_BUILD: ${{ matrix.cibw }}
+        with:
+          output-dir: wheelhouse
+
+      - name: Build sdist
+        if: matrix.sdist
         run: |
           python -m pip install --upgrade build
-          python -m build
+          python -m build --sdist --outdir wheelhouse
 
       - uses: actions/upload-artifact@v4
         with:
-          name: leptris-dist
-          path: dist/*
+          name: leptris-dist-${{ matrix.os }}
+          path: wheelhouse/*
 
   publish:
     needs: build
@@ -96,7 +115,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: leptris-dist
+          pattern: leptris-dist-*
+          merge-multiple: true
           path: dist/
 
       - name: Publish to PyPI (trusted publisher)
