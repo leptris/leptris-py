@@ -109,6 +109,24 @@ class TestChildren:
         root = fromstring("<r>text<a/>more<b/></r>")
         assert [child.tag for child in root] == ["a", "b"]
 
+    def test_iteration_wide_element(self):
+        # >3 children takes the bulk element_children path.
+        root = fromstring("<r>" + "".join(f"<c{i}/>" for i in range(6)) + "</r>")
+        assert [child.tag for child in root] == [f"c{i}" for i in range(6)]
+
+    def test_iteration_wide_skips_text(self):
+        root = fromstring(
+            "<r>" + "".join(f"t{i}<c{i}/>" for i in range(5)) + "</r>"
+        )
+        assert [child.tag for child in root] == [f"c{i}" for i in range(5)]
+
+    def test_sourceline(self):
+        root = fromstring("<r>\n  <a/>\n  <b>\n    <c/>\n  </b>\n</r>\n")
+        assert root.sourceline == 1
+        assert root[0].sourceline == 2
+        assert root[1].sourceline == 3
+        assert root[1][0].sourceline == 4
+
 
 class TestSiblings:
     def test_getnext_getprevious(self, catalog):

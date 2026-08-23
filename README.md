@@ -15,6 +15,7 @@ loader path.
 
 - Python 3.9+
 - `cffi` (installed automatically)
+- libleptris **1.3.0+** as a shared library
 - libleptris as a shared library (`libleptris.dylib` / `.so` /
   `.dll`) on the loader path, or pointed to by `LEPTRIS_LIB_PATH`
   (which must name the library **file** — the loader `dlopen`s it
@@ -88,7 +89,7 @@ with sax.StreamingParser(handler) as parser:  # push, constant memory
 | `elem.nsmap` | **absent** | use `elem.namespace` / `elem.prefix` and `xpath(namespaces=…)` |
 | `etree.XPath` compiled objects | **absent** | upstream ask: compiled-expression C API |
 | parser options (`resolve_entities`, …) | **absent** | libleptris 1.2.0 has no per-parse options |
-| `elem.sourceline` | **absent** | upstream ask: node positions |
+| `elem.sourceline` | same | requires libleptris 1.3.0+ |
 | undeclared XPath prefix | raises in lxml | evaluates to an empty nodeset here |
 
 ## Layout

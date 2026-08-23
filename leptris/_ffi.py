@@ -81,6 +81,8 @@ ffi.cdef(
     const char* leptris_attribute_get_value(LeptrisElement elem, LeptrisAttribute attr);
     size_t leptris_element_attribute_count(LeptrisElement elem);
     size_t leptris_element_child_count(LeptrisElement elem);
+    size_t leptris_element_children(LeptrisElement elem, LeptrisElement* out_children, size_t max_count);
+    int    leptris_node_line(LeptrisNodeRef node);
     char* leptris_element_serialize(LeptrisElement elem, LeptrisSerializeOptions* options);
 
     const char* leptris_text_node_get_content(LeptrisNodeRef node);
@@ -96,6 +98,7 @@ ffi.cdef(
 
     const char* leptris_error_message(int status);
     const char* leptris_last_error(void);
+    const char* leptris_document_last_error(LeptrisDocument doc);
 
     LeptrisXPathResult leptris_xpath_eval(LeptrisDocument doc, LeptrisElement context, const char* expression);
     LeptrisXPathResult leptris_xpath_eval_ns(LeptrisDocument doc, LeptrisElement context, const char* expression, LeptrisXPathNsSet ns);

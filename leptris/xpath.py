@@ -101,10 +101,12 @@ class XPath:
             else:
                 result = _ffi.lib.leptris_xpath_eval(document._ptr, ctx, encoded)
             if result == ffi.NULL:
-                # leptris_document_last_error is the document-scoped
-                # variant, but libleptris 1.2.0 does not export it;
-                # the thread-local message covers the same failure.
-                message = _ffi.lib.leptris_last_error()
+                # Document-scoped message (immune to concurrent
+                # operations on other documents); thread-local is the
+                # fallback for libleptris 1.2.0, which did not export it.
+                message = _ffi.lib.leptris_document_last_error(document._ptr)
+                if message == ffi.NULL:
+                    message = _ffi.lib.leptris_last_error()
                 detail = (
                     ffi.string(message).decode("utf-8", "replace")
                     if message != ffi.NULL
@@ -151,7 +153,9 @@ class XPath:
         buffer = ffi.new("LeptrisElement[]", count)
         copied = lib.leptris_xpath_result_get_nodes(result, buffer, count)
         if copied == count:
-            return [Element(buffer[i], document) for i in range(count)]
+            from itertools import repeat
+
+            return list(map(Element, ffi.unpack(buffer, count), repeat(document)))
         items = []
         append = items.append
         for index in range(count):

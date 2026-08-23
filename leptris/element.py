@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
+from itertools import repeat
 from typing import Iterator, List, Optional, Union
 
 from . import _ffi
@@ -179,6 +180,14 @@ class Element:
 
     # -- tree navigation -------------------------------------------------
 
+    @property
+    def sourceline(self) -> int:
+        """1-based source line of the element's start tag (lxml parity)."""
+        self._check_alive()
+        return _ffi.lib.leptris_node_line(
+            _ffi.lib.leptris_element_as_node(self._ptr)
+        )
+
     def getparent(self) -> Optional["Element"]:
         self._check_alive()
         ptr = _ffi.lib.leptris_element_parent(self._ptr)
@@ -220,6 +229,18 @@ class Element:
 
     def __iter__(self) -> Iterator["Element"]:
         self._check_alive()
+        lib = _ffi.lib
+        count = lib.leptris_element_child_count(self._ptr)
+        if count > 3:
+            # Bulk fill wins from ~4 children up (measured crossover).
+            buffer = _ffi.ffi.new("LeptrisElement[]", count)
+            lib.leptris_element_children(self._ptr, buffer, count)
+            return iter(
+                list(map(Element, _ffi.ffi.unpack(buffer, count), repeat(self._document)))
+            )
+        return self._iter_chain()
+
+    def _iter_chain(self) -> Iterator["Element"]:
         lib = _ffi.lib
         child = lib.leptris_element_first_child_any(self._ptr)
         while child != _ffi.ffi.NULL:
