@@ -42,11 +42,16 @@ def serialize_options(
 
 
 class Document:
-    __slots__ = ("_ptr", "_freed")
+    __slots__ = ("_ptr", "_freed", "_accel_registry")
 
     def __init__(self, _ptr):
         self._ptr = _ptr
         self._freed = False
+        try:
+            from . import _leptrisaccel as _accel
+            self._accel_registry = _accel.new_registry()
+        except ImportError:
+            self._accel_registry = None
 
     @classmethod
     def parse(cls, xml) -> "Document":
@@ -130,6 +135,10 @@ class Document:
 
     def close(self) -> None:
         if not self._freed:
+            registry = getattr(self, "_accel_registry", None)
+            if registry is not None:
+                from . import _leptrisaccel as _accel
+                _accel.invalidate(registry)
             _ffi.lib.leptris_document_free(self._ptr)
             self._freed = True
             self._ptr = _ffi.ffi.NULL

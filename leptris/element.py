@@ -23,6 +23,7 @@ from .error import LeptrisError
 _CLARK = re.compile(r"\{([^}]*)\}")
 
 _QNAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_.\-]*$")
+_QNAME_OK = re.compile(r"^[A-Za-z_][A-Za-z0-9_.\-]*(::.*)?$")
 
 _TextNodes = (_ffi.NODE_TEXT, _ffi.NODE_CDATA)
 
@@ -82,8 +83,8 @@ class _PureElement:
     @property
     def tag(self) -> str:
         self._check_alive()
-        name = _ffi.ffi.string(_ffi.lib.leptris_element_name(self._ptr)).decode("utf-8")
-        ns = _ffi.lib.leptris_element_namespace(self._ptr)
+        name = _ffi.ffi.string(_ffi.lib.leptris_element_name(self._cd())).decode("utf-8")
+        ns = _ffi.lib.leptris_element_namespace(self._cd())
         if ns == _ffi.ffi.NULL:
             return name
         return "{%s}%s" % (_ffi.ffi.string(ns).decode("utf-8"), name)
@@ -91,7 +92,7 @@ class _PureElement:
     @property
     def namespace(self) -> Optional[str]:
         self._check_alive()
-        value = _ffi.lib.leptris_element_namespace(self._ptr)
+        value = _ffi.lib.leptris_element_namespace(self._cd())
         if value == _ffi.ffi.NULL:
             return None
         return _ffi.ffi.string(value).decode("utf-8")
@@ -99,7 +100,7 @@ class _PureElement:
     @property
     def prefix(self) -> Optional[str]:
         self._check_alive()
-        value = _ffi.lib.leptris_element_prefix(self._ptr)
+        value = _ffi.lib.leptris_element_prefix(self._cd())
         if value == _ffi.ffi.NULL:
             return None
         return _ffi.ffi.string(value).decode("utf-8")
@@ -147,7 +148,7 @@ class _PureElement:
     def get(self, name: str, default=None):
         self._check_alive()
         value = _ffi.lib.leptris_element_attribute(
-            self._ptr, name.encode("utf-8")
+            self._cd(), name.encode("utf-8")
         )
         if value == _ffi.ffi.NULL:
             return default
@@ -158,7 +159,7 @@ class _PureElement:
         return _AttribMap(self)
 
     def _iter_attributes(self):
-        attr = _ffi.lib.leptris_element_first_attribute(self._ptr)
+        attr = _ffi.lib.leptris_element_first_attribute(self._cd())
         while attr != _ffi.ffi.NULL:
             name = _ffi.ffi.string(
                 _ffi.lib.leptris_attribute_get_name(attr)
@@ -188,7 +189,7 @@ class _PureElement:
         """1-based source line of the element's start tag (lxml parity)."""
         self._check_alive()
         return _ffi.lib.leptris_node_line(
-            _ffi.lib.leptris_element_as_node(self._ptr)
+            _ffi.lib.leptris_element_as_node(self._cd())
         )
 
     def getparent(self) -> Optional["Element"]:
@@ -206,18 +207,21 @@ class _PureElement:
 
     def getprevious(self) -> Optional["Element"]:
         self._check_alive()
-        ptr = _ffi.lib.leptris_element_previous_sibling_any(self._ptr)
+        ptr = _ffi.lib.leptris_element_previous_sibling_any(self._cd())
         return None if ptr == _ffi.ffi.NULL else _make(ptr, self._document)
 
     def _child_at(self, index: int) -> "Element":
-        ptr = _ffi.lib.leptris_element_child(self._ptr, index)
+        ptr = _ffi.lib.leptris_element_child(self._cd(), index)
         if ptr == _ffi.ffi.NULL:
             raise IndexError("child index out of range")
         return _make(ptr, self._document)
 
-    def __getitem__(self, index: Union[int, slice]) -> Union["Element", List["Element"]]:
+    def _py_getitem(self, index):
+        # C fast path handles plain ints when the accelerator is
+        # bound; this covers slices (and is the whole implementation
+        # in pure mode).
         self._check_alive()
-        count = _ffi.lib.leptris_element_child_count(self._ptr)
+        count = _ffi.lib.leptris_element_child_count(self._cd())
         if isinstance(index, slice):
             return [self._child_at(i) for i in range(*index.indices(count))]
         if index < 0:
@@ -225,6 +229,8 @@ class _PureElement:
         if not 0 <= index < count:
             raise IndexError("child index out of range")
         return self._child_at(index)
+
+    __getitem__ = _py_getitem
 
     def __len__(self) -> int:
         self._check_alive()
@@ -237,15 +243,13 @@ class _PureElement:
         if count > 3:
             # Bulk fill wins from ~4 children up (measured crossover).
             buffer = _ffi.ffi.new("LeptrisElement[]", count)
-            lib.leptris_element_children(self._ptr, buffer, count)
-            return iter(
-                _materialize(_ffi.ffi.unpack(buffer, count), self._document)
-            )
+            lib.leptris_element_children(self._cd(), buffer, count)
+            return iter(_materialize(buffer, self._document))
         return self._iter_chain()
 
     def _iter_chain(self) -> Iterator["Element"]:
         lib = _ffi.lib
-        child = lib.leptris_element_first_child_any(self._ptr)
+        child = lib.leptris_element_first_child_any(self._cd())
         while child != _ffi.ffi.NULL:
             yield _make(child, self._document)
             child = lib.leptris_element_next_sibling_any(child)
@@ -296,7 +300,7 @@ class _PureElement:
     def to_node(self) -> "Node":
         from .node import Node
 
-        return Node(_ffi.lib.leptris_element_as_node(self._ptr), self._document)
+        return Node(_ffi.lib.leptris_element_as_node(self._cd()), self._document)
 
     # -- queries ---------------------------------------------------------
 
@@ -306,6 +310,23 @@ class _PureElement:
         )
 
     def findall(self, path: str, namespaces=None) -> list:
+        if namespaces is None and "{" not in path and _QNAME_OK.match(path):
+            # plain path: straight to the all-C evaluator
+            from . import _leptrisaccel as _accel
+
+            raw = getattr(self, "_raw", None)
+            if _accel is not None and raw is not None:
+                from . import _ffi
+
+                items = _accel.nodeset(
+                    int(_ffi.ffi.cast("uintptr_t", self._document._ptr)),
+                    raw,
+                    path,
+                    self._document,
+                )
+                if items is not None:
+                    return items
+            return self.xpath(path)
         from .xpath import expand_clark_names
 
         expression, extra = expand_clark_names(path, namespaces)
@@ -322,6 +343,15 @@ class _PureElement:
         if found is None:
             return default
         return found.text if found.text is not None else default
+
+    def _cd(self):
+        """cffi handle for this element, created lazily when the C
+        fast paths produced it without one."""
+        ptr = self._ptr
+        if ptr is None:
+            ptr = _ffi.ffi.cast("LeptrisElement", self._raw)
+            self._ptr = ptr
+        return ptr
 
     def __repr__(self) -> str:
         return f"<Element {self.tag!r} at {id(self):#x}>"
@@ -340,34 +370,79 @@ else:
 
 if _accel is not None:
     Element = _accel.Element
-    # The whole API surface lives in Python; the C heap type only
-    # contributes allocation. Dunders attach post-creation (heap
+    # The whole API surface lives in Python; the C heap type
+    # contributes allocation plus the hot accessors (tag, text,
+    # attrib, get, len, int indexing, getparent/getnext) which bind
+    # to libleptris directly. Dunders attach post-creation (heap
     # types update their slots); _PureElement remains the reference
     # implementation and the pure-mode fallback.
+    _accelerated = {
+        "tag", "text", "attrib", "get", "getparent", "getnext",
+        "__len__", "__getitem__", "_ptr", "_document",
+    }
     for _name, _value in _PureElement.__dict__.items():
-        if _name in ("__slots__", "__module__", "__dict__", "__weakref__",
-                     "__init__", "__doc__", "__qualname__",
-                     "_ptr", "_document"):
-            # _ptr/_document are __slots__ member descriptors on the
-            # pure class; the C type provides its own getsets.
+        if _name in _accelerated or _name in (
+            "__slots__", "__module__", "__dict__", "__weakref__",
+            "__init__", "__doc__", "__qualname__",
+        ):
             continue
         setattr(Element, _name, _value)
 
     def _accel_init(self, _ptr, document):
         self._ptr = _ptr
         self._document = document
+        self._raw = int(_ffi.ffi.cast("uintptr_t", _ptr))
 
     Element.__init__ = _accel_init
 
-    def _make(_ptr, document):
-        return _accel.create(_ptr, document)
+    _ffi.ffi  # ensure loaded
+    _lib = _ffi.lib
+    _accel.bind(
+        **{
+            name[8:]: int(_ffi.ffi.cast("uintptr_t", getattr(_lib, name)))
+            for name in (
+                "leptris_element_name", "leptris_element_namespace",
+                "leptris_element_attribute", "leptris_element_child",
+                "leptris_element_child_count", "leptris_element_as_node",
+                "leptris_node_first_child", "leptris_node_next_sibling",
+                "leptris_node_get_type", "leptris_text_node_get_content",
+                "leptris_cdata_node_get_content",
+                "leptris_element_first_attribute",
+                "leptris_attribute_next", "leptris_attribute_get_name",
+                "leptris_attribute_get_value", "leptris_element_parent",
+                "leptris_element_next_sibling_any", "leptris_node_line",
+                "leptris_xpath_eval", "leptris_xpath_result_type",
+                "leptris_xpath_result_count",
+                "leptris_xpath_result_get_nodes",
+                "leptris_xpath_result_free",
+                "leptris_xpath_result_number",
+                "leptris_xpath_result_boolean",
+                "leptris_xpath_result_string",
+                "leptris_free_string",
+            )
+        },
+        error_class=LeptrisError,
+    )
 
-    def _materialize(ptrs, document):
-        return _accel.materialize(ptrs, document)
+    def _make(_ptr, document):
+        return _accel.create(
+            int(_ffi.ffi.cast("uintptr_t", _ptr)), _ptr, document
+        )
+
+    def _materialize(buffer, document):
+        count = len(buffer)
+        return _accel.materialize(
+            _ffi.ffi.unpack(buffer, count),
+            document,
+            _ffi.ffi.unpack(_ffi.ffi.cast("uintptr_t*", buffer), count),
+        )
 
 else:
     Element = _PureElement
     _make = Element
 
-    def _materialize(ptrs, document):
-        return [Element(ptr, document) for ptr in ptrs]
+    def _materialize(buffer, document):
+        return [
+            Element(ptr, document)
+            for ptr in _ffi.ffi.unpack(buffer, len(buffer))
+        ]
