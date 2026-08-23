@@ -50,7 +50,7 @@ class XPath:
         variables: Optional[dict] = None,
     ):
         ffi = _ffi.ffi
-        if namespaces is None and variables is None:
+        if variables is None:
             from .element import _accel
 
             if _accel is not None and not document.closed:
@@ -58,7 +58,7 @@ class XPath:
                 # construction in one call. Returns None when the
                 # expression failed or the nodeset is mixed — the
                 # Python path below handles both faithfully.
-                doc_raw = int(ffi.cast("uintptr_t", document._ptr))
+                doc_raw = document._raw_addr
                 ctx = None
                 if context_element is not None:
                     raw = getattr(context_element, "_raw", None)
@@ -69,7 +69,16 @@ class XPath:
                             "uintptr_t", context_element._ptr
                         ))
                     )
-                items = _accel.nodeset(doc_raw, ctx, expression, document)
+                if namespaces:
+                    flat = []
+                    for prefix, uri in namespaces.items():
+                        flat.append(prefix)
+                        flat.append(uri)
+                    items = _accel.nodeset_ns(
+                        doc_raw, ctx, expression, document, flat
+                    )
+                else:
+                    items = _accel.nodeset(doc_raw, ctx, expression, document)
                 if items is not None:
                     return items
         ns_set = ffi.NULL
