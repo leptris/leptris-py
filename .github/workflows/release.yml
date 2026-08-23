@@ -1,11 +1,11 @@
 # PyPI release path for leptris. Trusted publishing (no stored
 # credentials): configure on pypi.org → project leptris → Settings →
-# Trusted Publisher → owner leptris, repository leptris, workflow
-# .github/workflows/publish.yml, environment pypi.
+# Trusted Publisher → owner leptris, repository leptris-py, workflow
+# .github/workflows/release.yml, no environment.
 #
 # Triggers:
 #   - workflow_dispatch (manual: ships the version in pyproject.toml)
-#   - workflow_call from leptris/leptris-py's release flow (publish: true),
+#   - workflow_call from leptris/leptris's release flow (publish: true),
 #     which is how every libleptris release also ships the wheel.
 #
 # NOTE: github.event_name propagates from the CALLER through
@@ -91,8 +91,6 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: inputs.publish == true || github.event_name == 'workflow_dispatch'
-    environment:
-      name: pypi
     permissions:
       id-token: write
     steps:

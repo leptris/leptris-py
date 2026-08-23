@@ -66,11 +66,11 @@ leptris 1.1.0.
 
 ## Publishing
 
-Releases publish to PyPI via `.github/workflows/python-publish.yml`
+Releases publish to PyPI via `.github/workflows/release.yml`
 on `v*` tags, using PyPI **trusted publishing** (no stored
 credentials). One-time setup on pypi.org: project settings →
-Publishing → add trusted publisher for the `leptris/leptris-py` repo,
-that workflow file, environment `pypi`. Until then, the wheel built
+Publishing → add trusted publisher for the `leptris/leptris-py`
+repo, the `release.yml` workflow, no environment. Until then, the wheel built
 by CI is downloadable from the run's artifacts and installable
 directly.
 
