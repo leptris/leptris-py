@@ -153,9 +153,9 @@ class XPath:
         buffer = ffi.new("LeptrisElement[]", count)
         copied = lib.leptris_xpath_result_get_nodes(result, buffer, count)
         if copied == count:
-            from itertools import repeat
+            from .element import _materialize
 
-            return list(map(Element, ffi.unpack(buffer, count), repeat(document)))
+            return _materialize(ffi.unpack(buffer, count), document)
         items = []
         append = items.append
         for index in range(count):

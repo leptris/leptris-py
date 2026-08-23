@@ -77,9 +77,9 @@ class Document:
         ptr = _ffi.lib.leptris_document_root(self._ptr)
         if ptr == _ffi.ffi.NULL:
             return None
-        from .element import Element
+        from .element import _make
 
-        return Element(ptr, self)
+        return _make(ptr, self)
 
     def getroot(self) -> Optional["Element"]:
         return self.root

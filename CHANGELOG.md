@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.6.0 — 2026-08-23
+
+C-accelerated Element allocation (`leptris._leptrisaccel`, abi3):
+instance creation happens in C while the whole API surface stays in
+Python (methods attach onto the C heap type). Wheels ship compiled;
+without a toolchain the package degrades to the equivalent
+pure-Python class (`LEPTRIS_PURE=1` forces it).
+
+Benchmark matrix, macOS arm64, py3.10, lxml 6.0.2 — every operation
+now beats lxml: `//book` 14.8 → 6.4 µs (lxml 12.0), union 31.1 →
+19.2 (lxml 27.9), traversal 50.7 → 18.0 (lxml 21.6); parse, scalar
+XPath, predicates and serialization already won.
+
 ## 1.5.0 — 2026-08-23
 
 Adopts libleptris 1.3.0 (now the pinned build in CI):

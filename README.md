@@ -1,7 +1,9 @@
 # leptris (Python) — lxml-shaped bindings for libleptris
 
 `leptris` wraps the [libleptris](https://github.com/leptris/leptris)
-C API (XML 1.0 parsing, XPath 1.0) using `cffi` in ABI mode. The Ruby
+C API (XML 1.0 parsing, XPath 1.0) using `cffi` in ABI mode, with a
+small C accelerator for Element allocation (wheels ship compiled;
+pure-Python fallback otherwise — `LEPTRIS_PURE=1` forces it). The Ruby
 binding mirrors Nokogiri; this binding mirrors **lxml** — parse,
 query, serialize code written against lxml's read path ports with an
 import change.
