@@ -1,8 +1,8 @@
-"""pyleptris — Python bindings for libleptris.
+"""leptris — Python bindings for libleptris.
 
 Usage:
 
-    from pyleptris import Document
+    from leptris import Document
 
     doc = Document.parse("<root><item>hi</item></root>")
     print(doc.root.name)

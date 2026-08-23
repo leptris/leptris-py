@@ -106,4 +106,4 @@ class Element:
         return self.child_elements()
 
     def __repr__(self):
-        return f"<pyleptris.Element {self.name!r}>"
+        return f"<leptris.Element {self.name!r}>"

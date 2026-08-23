@@ -3,7 +3,7 @@ requires = ["setuptools", "cffi"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pyleptris"
+name = "leptris"
 version = "1.2.0"
 description = "Python bindings for libleptris — fast XML 1.0 parsing and XPath 1.0"
 readme = "README.md"
@@ -16,4 +16,4 @@ dependencies = ["cffi"]
 test = ["pytest"]
 
 [tool.setuptools]
-packages = ["pyleptris"]
+packages = ["leptris"]

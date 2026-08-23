@@ -104,11 +104,11 @@ def parse_ruby(root):
 def parse_python_from_repo(brepo):
     """cdef declarations -> name -> arity (handles multiline params).
 
-    pyleptris's own copy of the drift gate: `brepo` is THIS repo
-    (pyleptris/_ffi.py is the mirror), argv[1] is the libleptris
+    leptris-py's own copy of the drift gate: `brepo` is THIS repo
+    (leptris/_ffi.py is the mirror), argv[1] is the libleptris
     tarball checkout carrying the public headers.
     """
-    ffi = brepo / "pyleptris" / "_ffi.py"
+    ffi = brepo / "leptris" / "_ffi.py"
     if not ffi.exists():
         return {}
     text = strip_comments(ffi.read_text())

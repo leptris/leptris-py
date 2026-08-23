@@ -1,4 +1,4 @@
-"""Error type for pyleptris."""
+"""Error type for leptris."""
 
 
 class LeptrisError(Exception):

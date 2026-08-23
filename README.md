@@ -1,8 +1,8 @@
-# pyleptris — Python bindings for libleptris
+# leptris (Python) — bindings for libleptris
 
-`pyleptris` wraps the [libleptris](https://github.com/leptris/leptris)
+`leptris` wraps the [libleptris](https://github.com/leptris/leptris-py)
 C API (XML 1.0 parsing, XPath 1.0) using `cffi` in ABI mode — the
-`cdef` in `pyleptris/_ffi.py` mirrors libleptris's public headers.
+`cdef` in `leptris/_ffi.py` mirrors libleptris's public headers.
 
 The pinned libleptris version lives in `libleptris-version.txt`
 (lockstep releases); CI builds it from the release tarball. The
@@ -26,7 +26,7 @@ export LEPTRIS_LIB_PATH=$PWD/build/src/libleptris.dylib
 ## Quick start
 
 ```python
-from pyleptris import Document
+from leptris import Document
 
 doc = Document.parse("<library><book id='1'>Ulysses</book></library>")
 
@@ -44,9 +44,9 @@ doc.close()   # or: with Document.parse(xml) as doc: ...
 
 ## Layout
 
-- `pyleptris/_ffi.py` — cdef + shared-library loading (single source
+- `leptris/_ffi.py` — cdef + shared-library loading (single source
   of the C surface, mirroring the Ruby binding's `lib/leptris.rb`)
-- `pyleptris/document.py`, `element.py`, `node.py`, `xpath.py`,
+- `leptris/document.py`, `element.py`, `node.py`, `xpath.py`,
   `error.py` — typed wrappers
 - `tests/` — pytest suite (run: `pytest` with `LEPTRIS_LIB_PATH` set)
 
@@ -62,14 +62,14 @@ a refcounting safety net, not a contract.
 ## Versioning
 
 The package version tracks libleptris (lockstep): library 1.1.0 ↔
-pyleptris 1.1.0.
+leptris 1.1.0.
 
 ## Publishing
 
 Releases publish to PyPI via `.github/workflows/python-publish.yml`
 on `v*` tags, using PyPI **trusted publishing** (no stored
 credentials). One-time setup on pypi.org: project settings →
-Publishing → add trusted publisher for the `leptris/leptris` repo,
+Publishing → add trusted publisher for the `leptris/leptris-py` repo,
 that workflow file, environment `pypi`. Until then, the wheel built
 by CI is downloadable from the run's artifacts and installable
 directly.
