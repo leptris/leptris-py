@@ -2,11 +2,10 @@
 
 `leptris` wraps the [libleptris](https://github.com/leptris/leptris)
 C API (XML 1.0 parsing, XPath 1.0) using `cffi` in ABI mode, with a
-small C accelerator for Element allocation (wheels ship compiled;
-pure-Python fallback otherwise — `LEPTRIS_PURE=1` forces it). The Ruby
-binding mirrors Nokogiri; this binding mirrors **lxml** — parse,
-query, serialize code written against lxml's read path ports with an
-import change.
+C accelerator for Element allocation and the hot accessors (`tag`,
+`text`, `attrib`, `get`, indexing, sibling navigation and plain-path
+XPath evaluation) — wheels ship compiled; the pure-Python fallback
+covers toolchain-less installs (`LEPTRIS_PURE=1` forces it).
 
 The pinned libleptris version lives in `libleptris-version.txt`
 (lockstep releases); CI builds it from the release tarball. The

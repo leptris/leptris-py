@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.7.0 — 2026-08-24
+
+C-level hot accessors in the accelerator (libleptris function
+addresses bound once; no FFI per access):
+
+- `tag`/`text`/`attrib`/`get`/`len`/`elem[i]`/`getparent`/`getnext`
+  run in C — 50-100 ns each, at or faster than lxml (previously
+  5-35x behind through cffi)
+- `attrib` is a cached read-only dict snapshot; `tag` and the
+  parent/next-sibling wrappers are cached per element (documents
+  are immutable)
+- use-after-close safety moved from a per-access check (~60 ns) to
+  lxml-style invalidation: a per-document registry poisons element
+  pointers in one pass at `Document.close()`
+- all-C evaluation path for plain XPath/findall: eval, batch fill
+  and element construction in one call, scalars converted in C —
+  `//book` 6.4 -> 4.0 µs, traversal 18 -> 12.7 µs vs lxml 11.7/19.5
+- accessor benchmark vs lxml: tag ties, and get/text/len/index/
+  attrib/getnext/findall/iter are all faster; getparent is within
+  10 ns
+
 ## 1.6.1 — 2026-08-23
 
 - adds the manylinux aarch64 wheel: 1.6.0's build silently skipped

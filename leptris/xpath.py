@@ -50,6 +50,28 @@ class XPath:
         variables: Optional[dict] = None,
     ):
         ffi = _ffi.ffi
+        if namespaces is None and variables is None:
+            from . import _leptrisaccel as _accel
+
+            if _accel is not None and not document.closed:
+                # All-C fast path: eval, batch fill and element
+                # construction in one call. Returns None when the
+                # expression failed or the nodeset is mixed — the
+                # Python path below handles both faithfully.
+                doc_raw = int(ffi.cast("uintptr_t", document._ptr))
+                ctx = None
+                if context_element is not None:
+                    raw = getattr(context_element, "_raw", None)
+                    ctx = (
+                        raw
+                        if raw is not None and raw is not False
+                        else int(ffi.cast(
+                            "uintptr_t", context_element._ptr
+                        ))
+                    )
+                items = _accel.nodeset(doc_raw, ctx, expression, document)
+                if items is not None:
+                    return items
         ns_set = ffi.NULL
         var_set = ffi.NULL
         result = ffi.NULL
@@ -88,7 +110,7 @@ class XPath:
                     if rc != 0:
                         raise XPathError(f"could not bind variable {name!r}")
 
-            ctx = context_element._ptr if context_element is not None else ffi.NULL
+            ctx = context_element._cd() if context_element is not None else ffi.NULL
             encoded = expression.encode("utf-8")
             if var_set != ffi.NULL:
                 result = _ffi.lib.leptris_xpath_eval_with_vars_context(
@@ -155,13 +177,15 @@ class XPath:
         if copied == count:
             from .element import _materialize
 
-            return _materialize(ffi.unpack(buffer, count), document)
+            return _materialize(buffer, document)
+        from .element import _make
+
         items = []
         append = items.append
         for index in range(count):
             ptr = lib.leptris_xpath_result_get(result, index)
             if ptr != ffi.NULL:
-                append(Element(ptr, document))
+                append(_make(ptr, document))
             else:
                 value = lib.leptris_xpath_result_node_value(result, index)
                 append(ffi.string(value).decode("utf-8") if value != ffi.NULL else "")
