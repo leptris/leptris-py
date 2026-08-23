@@ -81,4 +81,4 @@ class Node:
         return Element(ptr, self._document)
 
     def __repr__(self):
-        return f"<pyleptris.Node type={self.type}>"
+        return f"<leptris.Node type={self.type}>"

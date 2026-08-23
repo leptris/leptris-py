@@ -1,6 +1,6 @@
 import pytest
 
-from pyleptris import Document, LeptrisError
+from leptris import Document, LeptrisError
 
 XML = """<?xml version="1.0"?>
 <library>

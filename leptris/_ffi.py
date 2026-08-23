@@ -1,4 +1,4 @@
-"""C bridge for pyleptris.
+"""C bridge for leptris.
 
 cffi ABI mode: the cdef below mirrors the public headers
 (src/include/leptris/). All handles are opaque pointers; strings
