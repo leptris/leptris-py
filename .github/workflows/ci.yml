@@ -47,8 +47,8 @@ jobs:
             echo "ERROR: libleptris shared library not found"
             exit 1
           fi
-          LIBDIR=$(cd "$(dirname "$LIB")" && pwd)
-          echo "LEPTRIS_LIB_PATH=$LIBDIR" >> "$GITHUB_ENV"
+          # _ffi.py's loader dlopens the FILE named by LEPTRIS_LIB_PATH.
+          echo "LEPTRIS_LIB_PATH=$PWD/$LIB" >> "$GITHUB_ENV"
           echo "Built: $LIB"
 
       - name: Install and test the binding

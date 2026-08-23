@@ -56,8 +56,8 @@ jobs:
             -DLEPTRIS_ENABLE_UTF8PROC=OFF -DLEPTRIS_ENABLE_ICONV=OFF
           cmake --build build --config Release
           LIB=$(find build -type f -o -type l 2>/dev/null | grep -iE '(lib)?leptris\.(dylib|so|dll)$' | head -1)
-          LIBDIR=$(cd "$(dirname "$LIB")" && pwd)
-          echo "LEPTRIS_LIB_PATH=$LIBDIR" >> "$GITHUB_ENV"
+          # _ffi.py's loader dlopens the FILE named by LEPTRIS_LIB_PATH.
+          echo "LEPTRIS_LIB_PATH=$PWD/$LIB" >> "$GITHUB_ENV"
 
       - name: Run the test suite
         shell: bash
