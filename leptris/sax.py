@@ -167,8 +167,10 @@ class StreamingParser:
 
     def __init__(self, handler: SAXHandler, *, streaming: bool = True):
         self._handler = handler
-        struct, self._keepalive = _wrap(handler)
-        self._parser = _ffi.lib.leptris_sax_parser_create(struct, _ffi.ffi.NULL)
+        # The C parser stores the handler POINTER (parser.c), so both
+        # the struct and every callback must outlive it.
+        self._struct, self._keepalive = _wrap(handler)
+        self._parser = _ffi.lib.leptris_sax_parser_create(self._struct, _ffi.ffi.NULL)
         if self._parser == _ffi.ffi.NULL:
             raise ParseError("could not create SAX parser")
         if streaming:
