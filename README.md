@@ -1,6 +1,6 @@
 # leptris (Python) — bindings for libleptris
 
-`leptris` wraps the [libleptris](https://github.com/leptris/leptris-py)
+`leptris` wraps the [libleptris](https://github.com/leptris/leptris)
 C API (XML 1.0 parsing, XPath 1.0) using `cffi` in ABI mode — the
 `cdef` in `leptris/_ffi.py` mirrors libleptris's public headers.
 
@@ -66,13 +66,11 @@ leptris 1.1.0.
 
 ## Publishing
 
-Releases publish to PyPI via `.github/workflows/release.yml`
-on `v*` tags, using PyPI **trusted publishing** (no stored
-credentials). One-time setup on pypi.org: project settings →
-Publishing → add trusted publisher for the `leptris/leptris-py`
-repo, the `release.yml` workflow, no environment. Until then, the wheel built
-by CI is downloadable from the run's artifacts and installable
-directly.
+Releases publish to PyPI via `.github/workflows/release.yml`,
+using PyPI **trusted publishing** (no stored credentials). The
+workflow runs on manual dispatch (ships the version in
+`pyproject.toml`) and is called by the libleptris release flow
+(`publish: true`), so every libleptris release ships the wheel.
 
 ## Local development
 
