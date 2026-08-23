@@ -176,10 +176,30 @@ class TestIterators:
         root = fromstring("<x><y><z/></y><w/></x>")
         assert [e.tag for e in root.iter()] == ["x", "y", "z", "w"]
 
+    def test_iter_from_mid_tree_context(self):
+        root = fromstring("<x><y><z1/><w/></y><z2/></x>")
+        y = root[0]
+        assert [e.tag for e in y.iter()] == ["y", "z1", "w"]
+        assert [e.tag for e in y.iterdescendants()] == ["z1", "w"]
+
     def test_iter_tag_filter(self):
         root = fromstring("<x><y><z/></y><w/></x>")
         assert [e.tag for e in root.iter("z")] == ["z"]
         assert list(root.iter("none")) == []
+
+    def test_iter_wildcard(self):
+        root = fromstring("<x><y/></x>")
+        assert [e.tag for e in root.iter("*")] == ["x", "y"]
+
+    def test_iter_clark_filter(self):
+        root = fromstring("<x:root xmlns:x='urn:x'><x:a/><b/></x:root>")
+        assert [e.tag for e in root.iter("{urn:x}a")] == ["{urn:x}a"]
+        assert list(root.iterdescendants("{urn:x}root")) == []
+
+    def test_iter_non_qname_tag_matches_nothing(self):
+        root = fromstring("<x><y/></x>")
+        assert list(root.iter("not a name")) == []
+        assert list(root.iterdescendants("not a name")) == []
 
     def test_iterdescendants_excludes_self(self):
         root = fromstring("<x><y><z/></y><w/></x>")
