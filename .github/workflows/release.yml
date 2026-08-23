@@ -75,12 +75,13 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            cibw: "cp39-abi3-manylinux_x86_64 cp39-abi3-manylinux_aarch64"
+            cibw: "cp39-manylinux_x86_64 cp39-manylinux_aarch64"
             sdist: true
           - os: macos-latest
-            cibw: "cp39-abi3-macosx_arm64 cp39-abi3-macosx_x86_64"
+            cibw: "cp39-macosx*"
+            archs: "x86_64 arm64"
           - os: windows-latest
-            cibw: "cp39-abi3-win_amd64"
+            cibw: "cp39-win_amd64"
     steps:
       - uses: actions/checkout@v4
 
@@ -92,6 +93,7 @@ jobs:
         uses: pypa/cibuildwheel@v2.23.3
         env:
           CIBW_BUILD: ${{ matrix.cibw }}
+          CIBW_ARCHS_MACOS: ${{ matrix.archs }}
         with:
           output-dir: wheelhouse
 
