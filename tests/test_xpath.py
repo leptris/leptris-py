@@ -55,6 +55,27 @@ class TestNodesets:
     def test_attribute_selection_returns_strings(self, books):
         assert books.xpath("//book/@id") == ["1", "2"]
 
+    def test_mixed_nodeset_preserves_order_and_types(self):
+        root = fromstring("<r><a id='1'>x</a><a id='2'>y</a></r>")
+        result = root.xpath("//a | //a/@id")
+        # Batch fast path covers all-element nodesets; mixed ones fall
+        # back per-index — elements stay Elements, document order
+        # preserved.
+        assert len(result) == 4
+        assert [type(item).__name__ for item in result] == [
+            "Element", "str", "Element", "str",
+        ]
+        assert result[0].text == "x" and result[2].text == "y"
+
+    @pytest.mark.xfail(
+        strict=False,
+        reason="upstream leptris/leptris#514: attribute nodes lose "
+               "name/value inside mixed (union) nodesets",
+    )
+    def test_mixed_nodeset_attribute_values(self):
+        root = fromstring("<r><a id='1'>x</a><a id='2'>y</a></r>")
+        assert root.xpath("//a | //a/@id")[1] == "1"
+
     def test_union_deduplicates(self, books):
         assert len(books.xpath("//book | //book")) == 2
 

@@ -93,3 +93,10 @@ class TestDocument:
             root.tag
         with pytest.raises(LeptrisError):
             doc.xpath("//r")
+
+
+def test_libleptris_version():
+    from leptris import libleptris_version
+
+    assert isinstance(libleptris_version(), str)
+    assert libleptris_version() != ""

@@ -142,10 +142,18 @@ class XPath:
         lib = _ffi.lib
         ffi = _ffi.ffi
         count = lib.leptris_xpath_result_count(result)
+        if count == 0:
+            return []
+        # Fast path: one batch call fills the array when every node in
+        # the result is an element; mixed nodesets return copied <
+        # count and take the per-index path (strings for non-element
+        # slots, which result_get reports as NULL).
+        buffer = ffi.new("LeptrisElement[]", count)
+        copied = lib.leptris_xpath_result_get_nodes(result, buffer, count)
+        if copied == count:
+            return [Element(buffer[i], document) for i in range(count)]
         items = []
         append = items.append
-        # Fast path: result_get returns NULL exactly for non-element
-        # slots, so the per-index kind query is only paid on fallback.
         for index in range(count):
             ptr = lib.leptris_xpath_result_get(result, index)
             if ptr != ffi.NULL:

@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.4.0 — 2026-08-23
+
+- XPath nodesets materialize through `leptris_xpath_result_get_nodes`
+  (one batch FFI call when every result node is an element; per-index
+  fallback for mixed nodesets): `//book` (100 results) 30.4 → 16.4 µs
+  vs lxml 11.8, `//author | //title` (200) 63.4 → 34.4 µs vs lxml
+  27.1 (macOS arm64, py3.10, lxml 6.0.2)
+- `leptris.libleptris_version()` — runtime version string of the
+  loaded library; the benchmark matrix prints it alongside the pin.
+  Note: libleptris 1.2.0 reports "0.26.8" (leptris/leptris#510)
+- README: mutation row corrected — libleptris has partial mutation
+  upstream (node content setters, `set_root`, `append_child`,
+  `remove_children`), not surfaced in this binding yet
+- Known upstream issue leptris/leptris#514: attribute nodes inside
+  mixed (union) nodesets lose name/value (xfail test tracks it)
+
 ## 1.3.1 — 2026-08-23
 
 Performance — binding wrapper overhead only, no API changes

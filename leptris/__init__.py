@@ -12,10 +12,10 @@ Requires libleptris on the library search path (or LEPTRIS_LIB_PATH).
 
 from __future__ import annotations
 
-__version__ = "1.3.1"
+__version__ = "1.4.0"
 
 from . import sax
-from .api import XML, c14n, fromstring, parse, tostring
+from .api import XML, c14n, fromstring, libleptris_version, parse, tostring
 from .document import Document
 from .element import Element
 from .error import LeptrisError, ParseError, XPathError
@@ -31,6 +31,7 @@ __all__ = [
     "XML",
     "c14n",
     "fromstring",
+    "libleptris_version",
     "parse",
     "tostring",
     "sax",

@@ -47,12 +47,17 @@ N_SERIALIZE = 1_000
 
 def _leptris_libs():
     import leptris
+    from leptris import libleptris_version
 
     pinned = "unknown"
     pin_file = Path(__file__).resolve().parent.parent / "libleptris-version.txt"
     if pin_file.exists():
         pinned = pin_file.read_text().strip()
-    return {"leptris": leptris.__version__, "libleptris": pinned}
+    return {
+        "leptris": leptris.__version__,
+        "libleptris": libleptris_version() or "unknown",
+        "libleptris pin": pinned,
+    }
 
 
 def _make_benchmarks():
