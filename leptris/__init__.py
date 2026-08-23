@@ -1,21 +1,37 @@
-"""leptris — Python bindings for libleptris.
+"""leptris — Python bindings for libleptris, shaped like lxml.
 
 Usage:
 
-    from leptris import Document
+    from leptris import fromstring
 
-    doc = Document.parse("<root><item>hi</item></root>")
-    print(doc.root.name)
+    root = fromstring("<root><item>hi</item></root>")
+    print(root.tag)
 
 Requires libleptris on the library search path (or LEPTRIS_LIB_PATH).
 """
 
+from __future__ import annotations
+
 __version__ = "1.2.0"
 
+from . import sax
+from .api import XML, c14n, fromstring, parse, tostring
 from .document import Document
 from .element import Element
-from .error import LeptrisError
+from .error import LeptrisError, ParseError, XPathError
 from .node import Node
-from .xpath import XPath
 
-__all__ = ["Document", "Element", "Node", "XPath", "LeptrisError"]
+__all__ = [
+    "Document",
+    "Element",
+    "Node",
+    "LeptrisError",
+    "ParseError",
+    "XPathError",
+    "XML",
+    "c14n",
+    "fromstring",
+    "parse",
+    "tostring",
+    "sax",
+]

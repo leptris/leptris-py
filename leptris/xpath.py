@@ -1,42 +1,157 @@
-"""XPath — evaluates XPath 1.0 expressions.
+"""XPath — XPath 1.0 evaluation with namespaces and variables.
 
-Results are typed: nodeset results yield Element lists; scalar
-results convert to native Python types.
+Scalar results convert to native Python types. Nodeset results
+yield Element lists; attribute and text node selections yield
+plain strings (lxml returns its "smart" strings for those).
 """
 
+from __future__ import annotations
+
+import re
+from typing import Dict, Optional, Tuple
+
 from . import _ffi
-from .error import LeptrisError
+from .error import XPathError
+
+_CLARK = re.compile(r"\{([^}]*)\}")
+
+
+def expand_clark_names(
+    path: str, namespaces: Optional[Dict[str, str]] = None
+) -> Tuple[str, Dict[str, str]]:
+    """Translate {uri}local names into prefixed names, generating
+    prefixes for URIs the caller did not bind.
+
+    Returns (expression, {prefix: uri} for generated prefixes).
+    """
+    extra: Dict[str, str] = {}
+    declared = namespaces or {}
+
+    def replacement(match: "re.Match[str]") -> str:
+        uri = match.group(1)
+        for prefix, bound in declared.items():
+            if bound == uri:
+                return prefix + ":"
+        prefix = f"ns{len(extra)}"
+        extra[prefix] = uri
+        return prefix + ":"
+
+    return _CLARK.sub(replacement, path), extra
 
 
 class XPath:
     @staticmethod
-    def evaluate(document, context_element, expression):
-        ctx = context_element._ptr if context_element is not None else _ffi.ffi.NULL
-        result = _ffi.lib.leptris_xpath_eval(document._ptr, ctx, expression.encode("utf-8"))
-        if result == _ffi.ffi.NULL:
-            raise LeptrisError(f"XPath evaluation failed: {expression!r}")
-
+    def evaluate(
+        document,
+        context_element,
+        expression: str,
+        *,
+        namespaces: Optional[Dict[str, str]] = None,
+        variables: Optional[dict] = None,
+    ):
+        ffi = _ffi.ffi
+        ns_set = ffi.NULL
+        var_set = ffi.NULL
+        result = ffi.NULL
         try:
+            if namespaces:
+                ns_set = _ffi.lib.leptris_xpath_ns_set_new()
+                if ns_set == ffi.NULL:
+                    raise XPathError("could not create namespace set")
+                for prefix, uri in namespaces.items():
+                    rc = _ffi.lib.leptris_xpath_ns_set_add(
+                        ns_set, prefix.encode("utf-8"), uri.encode("utf-8")
+                    )
+                    if rc != 0:
+                        raise XPathError(f"invalid namespace binding {prefix!r}")
+            if variables:
+                var_set = _ffi.lib.leptris_xpath_variable_set_new()
+                if var_set == ffi.NULL:
+                    raise XPathError("could not create variable set")
+                for name, value in variables.items():
+                    if isinstance(value, bool):
+                        rc = _ffi.lib.leptris_xpath_variable_set_boolean(
+                            var_set, name.encode("utf-8"), int(value)
+                        )
+                    elif isinstance(value, (int, float)):
+                        rc = _ffi.lib.leptris_xpath_variable_set_number(
+                            var_set, name.encode("utf-8"), float(value)
+                        )
+                    elif isinstance(value, str):
+                        rc = _ffi.lib.leptris_xpath_variable_set_string(
+                            var_set, name.encode("utf-8"), value.encode("utf-8")
+                        )
+                    else:
+                        raise TypeError(
+                            f"XPath variable {name!r} must be bool, int, float or str"
+                        )
+                    if rc != 0:
+                        raise XPathError(f"could not bind variable {name!r}")
+
+            ctx = context_element._ptr if context_element is not None else ffi.NULL
+            encoded = expression.encode("utf-8")
+            if var_set != ffi.NULL:
+                result = _ffi.lib.leptris_xpath_eval_with_vars_context(
+                    document._ptr, ctx, encoded, var_set
+                )
+            elif ns_set != ffi.NULL:
+                result = _ffi.lib.leptris_xpath_eval_ns(
+                    document._ptr, ctx, encoded, ns_set
+                )
+            else:
+                result = _ffi.lib.leptris_xpath_eval(document._ptr, ctx, encoded)
+            if result == ffi.NULL:
+                # leptris_document_last_error is the document-scoped
+                # variant, but libleptris 1.2.0 does not export it;
+                # the thread-local message covers the same failure.
+                message = _ffi.lib.leptris_last_error()
+                detail = (
+                    ffi.string(message).decode("utf-8", "replace")
+                    if message != ffi.NULL
+                    else expression
+                )
+                raise XPathError(f"XPath evaluation failed: {detail}")
+
             result_type = _ffi.lib.leptris_xpath_result_type(result)
             if result_type == _ffi.XPATH_NODESET:
-                count = _ffi.lib.leptris_xpath_result_count(result)
-                from .element import Element
-
-                return [
-                    Element(_ffi.lib.leptris_xpath_result_get(result, i), document)
-                    for i in range(count)
-                ]
+                return XPath._nodeset(document, result)
             if result_type == _ffi.XPATH_NUMBER:
                 return _ffi.lib.leptris_xpath_result_number(result)
             if result_type == _ffi.XPATH_STRING:
                 ptr = _ffi.lib.leptris_xpath_result_string(result)
-                if ptr == _ffi.ffi.NULL:
+                if ptr == ffi.NULL:
                     return ""
-                value = _ffi.ffi.string(ptr).decode("utf-8")
+                value = ffi.string(ptr).decode("utf-8")
                 _ffi.lib.leptris_free_string(ptr)
                 return value
             if result_type == _ffi.XPATH_BOOLEAN:
                 return bool(_ffi.lib.leptris_xpath_result_boolean(result))
             return None
         finally:
-            _ffi.lib.leptris_xpath_result_free(result)
+            if result != ffi.NULL:
+                _ffi.lib.leptris_xpath_result_free(result)
+            if ns_set != ffi.NULL:
+                _ffi.lib.leptris_xpath_ns_set_free(ns_set)
+            if var_set != ffi.NULL:
+                _ffi.lib.leptris_xpath_variable_set_free(var_set)
+
+    @staticmethod
+    def _nodeset(document, result) -> list:
+        from .element import Element
+
+        count = _ffi.lib.leptris_xpath_result_count(result)
+        items = []
+        for index in range(count):
+            kind = _ffi.lib.leptris_xpath_result_node_kind(result, index)
+            if kind == _ffi.XPATH_NODE_ELEMENT:
+                items.append(
+                    Element(_ffi.lib.leptris_xpath_result_get(result, index), document)
+                )
+            else:
+                value = _ffi.lib.leptris_xpath_result_node_value(result, index)
+                items.append(
+                    _ffi.ffi.string(value).decode("utf-8")
+                    if value != _ffi.ffi.NULL
+                    else ""
+                )
+        return items

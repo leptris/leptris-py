@@ -1,10 +1,16 @@
-"""Node — wraps LeptrisNodeRef for generic tree traversal.
+"""Node — generic tree traversal over every node type.
 
-Covers every node type (element, text, comment, CDATA, PI, doctype);
-Element is the typed view for element nodes.
+Element is the lxml-shaped typed view; Node exposes the underlying
+DOM: text, comment, CDATA, PI and doctype nodes, which lxml users
+reach through text/tail only.
 """
 
+from __future__ import annotations
+
+from typing import Optional
+
 from . import _ffi
+from .error import LeptrisError
 
 
 class Node:
@@ -12,8 +18,13 @@ class Node:
         self._ptr = _ptr
         self._document = document
 
+    def _check_alive(self) -> None:
+        if self._document.closed:
+            raise LeptrisError("operation on a closed document")
+
     @property
     def type(self) -> int:
+        self._check_alive()
         return _ffi.lib.leptris_node_get_type(self._ptr)
 
     def is_element(self) -> bool:
@@ -31,8 +42,11 @@ class Node:
     def is_pi(self) -> bool:
         return self.type == _ffi.NODE_PI
 
+    def is_doctype(self) -> bool:
+        return self.type == _ffi.NODE_DOCTYPE
+
     @property
-    def content(self):
+    def content(self) -> Optional[str]:
         t = self.type
         if t == _ffi.NODE_TEXT:
             getter = _ffi.lib.leptris_text_node_get_content
@@ -46,31 +60,29 @@ class Node:
         return _ffi.ffi.string(value).decode("utf-8") if value != _ffi.ffi.NULL else ""
 
     @property
-    def first_child(self):
+    def first_child(self) -> Optional["Node"]:
+        self._check_alive()
         ptr = _ffi.lib.leptris_node_first_child(self._ptr)
-        if ptr == _ffi.ffi.NULL:
-            return None
-        return Node(ptr, self._document)
+        return None if ptr == _ffi.ffi.NULL else Node(ptr, self._document)
 
     @property
-    def next_sibling(self):
+    def next_sibling(self) -> Optional["Node"]:
+        self._check_alive()
         ptr = _ffi.lib.leptris_node_next_sibling(self._ptr)
-        if ptr == _ffi.ffi.NULL:
-            return None
-        return Node(ptr, self._document)
+        return None if ptr == _ffi.ffi.NULL else Node(ptr, self._document)
 
     @property
-    def previous_sibling(self):
+    def previous_sibling(self) -> Optional["Node"]:
+        self._check_alive()
         ptr = _ffi.lib.leptris_node_previous_sibling(self._ptr)
-        if ptr == _ffi.ffi.NULL:
-            return None
-        return Node(ptr, self._document)
+        return None if ptr == _ffi.ffi.NULL else Node(ptr, self._document)
 
     @property
     def child_count(self) -> int:
+        self._check_alive()
         return _ffi.lib.leptris_node_child_count(self._ptr)
 
-    def as_element(self):
+    def as_element(self) -> Optional["Element"]:
         if not self.is_element():
             return None
         ptr = _ffi.lib.leptris_node_as_element(self._ptr)
@@ -80,5 +92,5 @@ class Node:
 
         return Element(ptr, self._document)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<leptris.Node type={self.type}>"

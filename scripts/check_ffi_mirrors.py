@@ -12,12 +12,17 @@ Checks (against the public headers, the single source of truth):
   2. ARITY     — a mirror's argument count differs from the header's
                  parameter count.
   3. REQUIRED  — a documented core surface is missing from a mirror.
+  4. EXPORT    — a cdef symbol the built library does not export
+                 (declared in a header but never shipped — the
+                 leptris_document_last_error / v1.2.0 case). Runs
+                 only when LEPTRIS_LIB_PATH names the built library.
 
 Exit 0 = clean; exit 1 = drift (each finding printed).
 
 Usage: check_ffi_mirrors.py <repo-root>
 """
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -25,6 +30,7 @@ from pathlib import Path
 REQUIRED_CORE = [
     # document lifecycle + parse
     "leptris_parse_string",
+    "leptris_parse_file",
     "leptris_document_free",
     "leptris_document_root",
     # element access
@@ -36,17 +42,22 @@ REQUIRED_CORE = [
     "leptris_attribute_next",
     "leptris_attribute_get_name",
     "leptris_attribute_get_value",
+    "leptris_element_child",
     "leptris_element_first_child_any",
     "leptris_element_next_sibling_any",
     # node typing (bindings hardcode kinds; the check keeps the walk)
     "leptris_node_get_type",
     "leptris_node_next_sibling",
     "leptris_node_as_element",
+    # serialization
+    "leptris_element_serialize",
     # xpath
     "leptris_xpath_eval",
     "leptris_xpath_result_free",
     "leptris_xpath_result_count",
     "leptris_xpath_result_get",
+    # errors
+    "leptris_error_message",
     # strings
     "leptris_free_string",
 ]
@@ -118,6 +129,33 @@ def parse_python_from_repo(brepo):
     return out
 
 
+def check_exports(lib_path, mirror_names):
+    """cdef symbols the built library fails to export.
+
+    Header declarations are the source of truth for PHANTOM/ARITY,
+    but a header can declare a function the shared library never
+    shipped (issue #430 class); that only surfaces at dlsym time.
+    """
+    import ctypes
+
+    try:
+        library = ctypes.CDLL(lib_path)
+    except OSError as error:
+        print(f"EXPORT GATE: cannot load {lib_path}: {error}")
+        return [f"EXPORT    [python] library not loadable: {lib_path}"]
+    failures = []
+    for name in sorted(mirror_names):
+        if not name.startswith("leptris_"):
+            continue
+        try:
+            getattr(library, name)
+        except AttributeError:
+            failures.append(
+                f"EXPORT    [python] {name}: declared in cdef, missing from library"
+            )
+    return failures
+
+
 def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".")
 
@@ -131,6 +169,9 @@ def main():
     }
 
     failures = []
+    failures = check_exports(
+        os.environ.get("LEPTRIS_LIB_PATH", ""), mirrors["python"]
+    ) if os.environ.get("LEPTRIS_LIB_PATH") else []
     for lang, mirror in mirrors.items():
         for name, arity in sorted(mirror.items()):
             if not name.startswith("leptris_"):
