@@ -312,8 +312,6 @@ class _PureElement:
     def findall(self, path: str, namespaces=None) -> list:
         if namespaces is None and "{" not in path and _QNAME_OK.match(path):
             # plain path: straight to the all-C evaluator
-            from . import _leptrisaccel as _accel
-
             raw = getattr(self, "_raw", None)
             if _accel is not None and raw is not None:
                 from . import _ffi

@@ -48,9 +48,9 @@ class Document:
         self._ptr = _ptr
         self._freed = False
         try:
-            from . import _leptrisaccel as _accel
+            from .element import _accel
             self._accel_registry = _accel.new_registry()
-        except ImportError:
+        except (ImportError, AttributeError):
             self._accel_registry = None
 
     @classmethod
@@ -137,7 +137,7 @@ class Document:
         if not self._freed:
             registry = getattr(self, "_accel_registry", None)
             if registry is not None:
-                from . import _leptrisaccel as _accel
+                from .element import _accel
                 _accel.invalidate(registry)
             _ffi.lib.leptris_document_free(self._ptr)
             self._freed = True
