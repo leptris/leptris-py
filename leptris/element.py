@@ -1,11 +1,57 @@
-"""Element — wraps LeptrisElement.
+"""Element — lxml-compatible view over LeptrisElement.
 
 Elements are owned by their parent Document; they are never freed
 directly. Element objects keep a reference to the Document so the
 tree cannot outlive its pool.
+
+``tag`` uses lxml's Clark notation (``{uri}local``). ``text``/``tail``
+follow the ElementTree model: computed from the adjacent node-level
+text and CDATA runs (runs merge, as lxml's default parser does),
+NOT from the C API's whole-subtree concatenated ``element_text``.
 """
 
+from __future__ import annotations
+
+import re
+from collections.abc import Mapping
+from typing import Iterator, List, Optional, Union
+
 from . import _ffi
+from .error import LeptrisError
+
+_CLARK = re.compile(r"\{([^}]*)\}")
+
+_TextNodes = (_ffi.NODE_TEXT, _ffi.NODE_CDATA)
+
+
+class _AttribMap(Mapping):
+    """Read-only dict view of an element's attributes."""
+
+    def __init__(self, element: "Element"):
+        self._element = element
+
+    def __getitem__(self, name: str) -> str:
+        value = self._element.get(name)
+        if value is None:
+            raise KeyError(name)
+        return value
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._element.keys())
+
+    def __len__(self) -> int:
+        self._element._check_alive()
+        return _ffi.lib.leptris_element_attribute_count(self._element._ptr)
+
+    def __repr__(self) -> str:
+        return repr(dict(self))
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, Mapping):
+            return dict(self) == dict(other)
+        return NotImplemented
+
+    __hash__ = None  # type: ignore[assignment]
 
 
 class Element:
@@ -14,20 +60,82 @@ class Element:
         self._document = document
 
     @property
-    def document(self):
+    def document(self) -> "Document":
         return self._document
 
-    @property
-    def name(self) -> str:
-        value = _ffi.lib.leptris_element_name(self._ptr)
-        return _ffi.ffi.string(value).decode("utf-8") if value != _ffi.ffi.NULL else ""
+    def _check_alive(self) -> None:
+        if self._document.closed:
+            raise LeptrisError("operation on a closed document")
+
+    # -- names and namespaces -------------------------------------------
 
     @property
-    def text(self) -> str:
-        value = _ffi.lib.leptris_element_text(self._ptr)
-        return _ffi.ffi.string(value).decode("utf-8") if value != _ffi.ffi.NULL else ""
+    def tag(self) -> str:
+        self._check_alive()
+        name = _ffi.ffi.string(_ffi.lib.leptris_element_name(self._ptr)).decode("utf-8")
+        ns = _ffi.lib.leptris_element_namespace(self._ptr)
+        if ns == _ffi.ffi.NULL:
+            return name
+        return "{%s}%s" % (_ffi.ffi.string(ns).decode("utf-8"), name)
 
-    def attribute(self, name: str, default=None):
+    @property
+    def namespace(self) -> Optional[str]:
+        self._check_alive()
+        value = _ffi.lib.leptris_element_namespace(self._ptr)
+        if value == _ffi.ffi.NULL:
+            return None
+        return _ffi.ffi.string(value).decode("utf-8")
+
+    @property
+    def prefix(self) -> Optional[str]:
+        self._check_alive()
+        value = _ffi.lib.leptris_element_prefix(self._ptr)
+        if value == _ffi.ffi.NULL:
+            return None
+        return _ffi.ffi.string(value).decode("utf-8")
+
+    # -- text (ElementTree model) ---------------------------------------
+
+    def _run_at(self, node: Optional["Node"]) -> Optional[str]:
+        parts = []
+        while node is not None and node.type in _TextNodes:
+            parts.append(node.content or "")
+            node = node.next_sibling
+        return "".join(parts) if parts else None
+
+    @property
+    def text(self) -> Optional[str]:
+        self._check_alive()
+        return self._run_at(self.to_node().first_child)
+
+    @property
+    def tail(self) -> Optional[str]:
+        self._check_alive()
+        return self._run_at(self.to_node().next_sibling)
+
+    def itertext(self) -> Iterator[str]:
+        self._check_alive()
+
+        def walk(element: "Element") -> Iterator[str]:
+            node = element.to_node().first_child
+            while node is not None:
+                if node.type in _TextNodes:
+                    parts = []
+                    while node is not None and node.type in _TextNodes:
+                        parts.append(node.content or "")
+                        node = node.next_sibling
+                    yield "".join(parts)
+                else:
+                    if node.is_element():
+                        yield from walk(node.as_element())
+                    node = node.next_sibling
+
+        yield from walk(self)
+
+    # -- attributes ------------------------------------------------------
+
+    def get(self, name: str, default=None):
+        self._check_alive()
         value = _ffi.lib.leptris_element_attribute(
             self._ptr, name.encode("utf-8")
         )
@@ -35,14 +143,11 @@ class Element:
             return default
         return _ffi.ffi.string(value).decode("utf-8")
 
-    __getitem__ = attribute
+    @property
+    def attrib(self) -> Mapping:
+        return _AttribMap(self)
 
-    def attributes(self):
-        """Yield (name, value) for every attribute in document order.
-
-        Handle-based iteration — O(n) total where index-based access
-        re-walks the list per call.
-        """
+    def _iter_attributes(self):
         attr = _ffi.lib.leptris_element_first_attribute(self._ptr)
         while attr != _ffi.ffi.NULL:
             name = _ffi.ffi.string(
@@ -54,33 +159,28 @@ class Element:
             yield (name, value)
             attr = _ffi.lib.leptris_attribute_next(attr)
 
-    @property
-    def attribute_count(self) -> int:
-        return _ffi.lib.leptris_element_attribute_count(self._ptr)
+    def keys(self) -> List[str]:
+        self._check_alive()
+        return [name for name, _ in self._iter_attributes()]
 
-    @property
-    def child_count(self) -> int:
-        return _ffi.lib.leptris_element_child_count(self._ptr)
+    def items(self) -> List[tuple]:
+        self._check_alive()
+        return list(self._iter_attributes())
 
-    @property
-    def parent(self):
+    def values(self) -> List[str]:
+        self._check_alive()
+        return [value for _, value in self._iter_attributes()]
+
+    # -- tree navigation -------------------------------------------------
+
+    def getparent(self) -> Optional["Element"]:
+        self._check_alive()
         ptr = _ffi.lib.leptris_element_parent(self._ptr)
         if ptr == _ffi.ffi.NULL:
             return None
         return Element(ptr, self._document)
 
-    @property
-    def first_child_element(self):
-        ptr = _ffi.lib.leptris_element_first_child_any(self._ptr)
-        if ptr == _ffi.ffi.NULL:
-            return None
-        return Element(ptr, self._document)
-
-    @property
-    def next_sibling_element(self):
-        # The node-level sibling chain interleaves text nodes, so
-        # walk until the next element (or the end of the chain).
-        node = _ffi.lib.leptris_node_next_sibling(_ffi.lib.leptris_element_as_node(self._ptr))
+    def _next_element_from(self, node):
         while node != _ffi.ffi.NULL:
             elem = _ffi.lib.leptris_node_as_element(node)
             if elem != _ffi.ffi.NULL:
@@ -88,22 +188,101 @@ class Element:
             node = _ffi.lib.leptris_node_next_sibling(node)
         return None
 
-    def child_elements(self):
-        child = self.first_child_element
-        while child is not None:
-            yield child
-            child = child.next_sibling_element
+    def _previous_element_from(self, node):
+        while node != _ffi.ffi.NULL:
+            elem = _ffi.lib.leptris_node_as_element(node)
+            if elem != _ffi.ffi.NULL:
+                return Element(elem, self._document)
+            node = _ffi.lib.leptris_node_previous_sibling(node)
+        return None
 
-    def to_node(self):
+    def getnext(self) -> Optional["Element"]:
+        # The node-level sibling chain interleaves text nodes, so skip
+        # ahead to the next element (lxml getnext semantics).
+        self._check_alive()
+        node = _ffi.lib.leptris_node_next_sibling(
+            _ffi.lib.leptris_element_as_node(self._ptr)
+        )
+        return self._next_element_from(node)
+
+    def getprevious(self) -> Optional["Element"]:
+        self._check_alive()
+        node = _ffi.lib.leptris_node_previous_sibling(
+            _ffi.lib.leptris_element_as_node(self._ptr)
+        )
+        return self._previous_element_from(node)
+
+    def _child_at(self, index: int) -> "Element":
+        ptr = _ffi.lib.leptris_element_child(self._ptr, index)
+        if ptr == _ffi.ffi.NULL:
+            raise IndexError("child index out of range")
+        return Element(ptr, self._document)
+
+    def __getitem__(self, index: Union[int, slice]) -> Union["Element", List["Element"]]:
+        self._check_alive()
+        count = _ffi.lib.leptris_element_child_count(self._ptr)
+        if isinstance(index, slice):
+            return [self._child_at(i) for i in range(*index.indices(count))]
+        if index < 0:
+            index += count
+        if not 0 <= index < count:
+            raise IndexError("child index out of range")
+        return self._child_at(index)
+
+    def __len__(self) -> int:
+        self._check_alive()
+        return _ffi.lib.leptris_element_child_count(self._ptr)
+
+    def __iter__(self) -> Iterator["Element"]:
+        self._check_alive()
+        node = _ffi.lib.leptris_node_first_child(
+            _ffi.lib.leptris_element_as_node(self._ptr)
+        )
+        while node != _ffi.ffi.NULL:
+            elem = _ffi.lib.leptris_node_as_element(node)
+            if elem != _ffi.ffi.NULL:
+                yield Element(elem, self._document)
+            node = _ffi.lib.leptris_node_next_sibling(node)
+
+    def iter(self, tag: Optional[str] = None) -> Iterator["Element"]:
+        if tag is None or self.tag == tag:
+            yield self
+        for child in self:
+            yield from child.iter(tag)
+
+    def iterdescendants(self, tag: Optional[str] = None) -> Iterator["Element"]:
+        for child in self:
+            yield from child.iter(tag)
+
+    def to_node(self) -> "Node":
         from .node import Node
 
         return Node(_ffi.lib.leptris_element_as_node(self._ptr), self._document)
 
-    def xpath(self, expression):
-        return self._document.xpath(expression, context=self)
+    # -- queries ---------------------------------------------------------
 
-    def __iter__(self):
-        return self.child_elements()
+    def xpath(self, expression: str, *, namespaces=None, variables=None):
+        return self._document.xpath(
+            expression, context=self, namespaces=namespaces, variables=variables
+        )
 
-    def __repr__(self):
-        return f"<leptris.Element {self.name!r}>"
+    def findall(self, path: str, namespaces=None) -> list:
+        from .xpath import expand_clark_names
+
+        expression, extra = expand_clark_names(path, namespaces)
+        merged = dict(namespaces) if namespaces else {}
+        merged.update(extra)
+        return self.xpath(expression, namespaces=merged or None)
+
+    def find(self, path: str, namespaces=None) -> Optional["Element"]:
+        results = self.findall(path, namespaces)
+        return results[0] if results else None
+
+    def findtext(self, path: str, default=None, namespaces=None) -> Optional[str]:
+        found = self.find(path, namespaces)
+        if found is None:
+            return default
+        return found.text if found.text is not None else default
+
+    def __repr__(self) -> str:
+        return f"<Element {self.tag!r} at {id(self):#x}>"

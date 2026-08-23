@@ -1,9 +1,10 @@
 """C bridge for leptris.
 
 cffi ABI mode: the cdef below mirrors the public headers
-(src/include/leptris/). All handles are opaque pointers; strings
-returned by accessors are document-owned and only valid until
-leptris_document_free — copy into Python str at the boundary.
+(src/include/leptris/ plus the leptris.h umbrella). All handles are
+opaque pointers; strings returned by accessors are document-owned and
+only valid until leptris_document_free — copy into Python str at the
+boundary.
 
 The library is resolved from LEPTRIS_LIB_PATH, then the usual
 install names, then the local build directory.
@@ -17,17 +18,44 @@ ffi = FFI()
 
 ffi.cdef(
     """
+    typedef int LeptrisStatus;
+
     typedef struct leptris_document* LeptrisDocument;
     typedef struct leptris_element*  LeptrisElement;
     typedef struct leptris_node*     LeptrisNodeRef;
     typedef struct leptris_attribute* LeptrisAttribute;
     typedef struct leptris_xpath_result* LeptrisXPathResult;
+    typedef struct leptris_xpath_variable_set* LeptrisXPathVariableSet;
+    typedef struct leptris_xpath_ns_map* LeptrisXPathNsSet;
+
+    typedef struct {
+        int indent;
+        int xml_declaration;
+        const char* encoding;
+    } LeptrisSerializeOptions;
+
+    typedef struct LeptrisSAXParser LeptrisSAXParser;
+    typedef struct {
+        void (*start_document)(void* user_data);
+        void (*end_document)(void* user_data);
+        void (*start_element)(void* user_data, const char* name, const char** attrs);
+        void (*end_element)(void* user_data, const char* name);
+        void (*characters)(void* user_data, const char* text, size_t len);
+        void (*comment)(void* user_data, const char* comment);
+        void (*cdata)(void* user_data, const char* cdata);
+        void (*processing_instruction)(void* user_data, const char* target, const char* data);
+        void (*start_prefix_mapping)(void* user_data, const char* prefix, const char* uri);
+        void (*end_prefix_mapping)(void* user_data, const char* prefix);
+        void (*error)(void* user_data, const char* message, int line, int column);
+    } LeptrisSAXHandler;
 
     LeptrisDocument leptris_parse_string(const char* xml, size_t len, int* status);
+    LeptrisDocument leptris_parse_file(const char* filepath, int* status);
     void           leptris_document_free(LeptrisDocument doc);
     LeptrisElement  leptris_document_root(LeptrisDocument doc);
-    char*          leptris_document_serialize(LeptrisDocument doc, void* options);
+    char*          leptris_document_serialize(LeptrisDocument doc, LeptrisSerializeOptions* options);
     int            leptris_xinclude_process(LeptrisDocument doc, const char* base_path);
+    int            leptris_document_save_file(LeptrisDocument doc, const char* filepath, LeptrisSerializeOptions* options);
 
     int    leptris_node_get_type(LeptrisNodeRef node);
     LeptrisNodeRef leptris_node_first_child(LeptrisNodeRef node);
@@ -39,18 +67,20 @@ ffi.cdef(
 
     const char* leptris_element_name(LeptrisElement elem);
     const char* leptris_element_text(LeptrisElement elem);
+    const char* leptris_element_prefix(LeptrisElement elem);
+    const char* leptris_element_namespace(LeptrisElement elem);
+    LeptrisElement leptris_element_child(LeptrisElement elem, size_t index);
     LeptrisElement leptris_element_first_child_any(LeptrisElement elem);
     LeptrisElement leptris_element_parent(LeptrisElement elem);
-    const char* leptris_element_attribute(LeptrisElement elem,
-                                         const char* name);
+    const char* leptris_element_attribute(LeptrisElement elem, const char* name);
     LeptrisElement leptris_element_next_sibling_any(LeptrisElement elem);
     LeptrisAttribute leptris_element_first_attribute(LeptrisElement elem);
     LeptrisAttribute leptris_attribute_next(LeptrisAttribute attr);
     const char* leptris_attribute_get_name(LeptrisAttribute attr);
-    const char* leptris_attribute_get_value(LeptrisElement elem,
-                                            LeptrisAttribute attr);
+    const char* leptris_attribute_get_value(LeptrisElement elem, LeptrisAttribute attr);
     size_t leptris_element_attribute_count(LeptrisElement elem);
     size_t leptris_element_child_count(LeptrisElement elem);
+    char* leptris_element_serialize(LeptrisElement elem, LeptrisSerializeOptions* options);
 
     const char* leptris_text_node_get_content(LeptrisNodeRef node);
     const char* leptris_comment_node_get_content(LeptrisNodeRef node);
@@ -58,9 +88,17 @@ ffi.cdef(
     const char* leptris_pi_node_get_target(LeptrisNodeRef node);
     const char* leptris_pi_node_get_data(LeptrisNodeRef node);
 
-    LeptrisXPathResult leptris_xpath_eval(LeptrisDocument doc,
-                                        LeptrisElement context,
-                                        const char* expression);
+    char* leptris_c14n_canonicalize(LeptrisDocument doc, int version, int flags);
+    char* leptris_c14n_canonicalize_ex(LeptrisDocument doc, int version, int mode, const char** inclusive_ns_prefixes, int with_comments);
+    char* leptris_c14n_canonicalize_subtree(LeptrisElement elem, int version, int flags);
+    char* leptris_c14n_canonicalize_subtree_ex(LeptrisElement elem, int version, int mode, const char** inclusive_ns_prefixes, int with_comments);
+
+    const char* leptris_error_message(int status);
+    const char* leptris_last_error(void);
+
+    LeptrisXPathResult leptris_xpath_eval(LeptrisDocument doc, LeptrisElement context, const char* expression);
+    LeptrisXPathResult leptris_xpath_eval_ns(LeptrisDocument doc, LeptrisElement context, const char* expression, LeptrisXPathNsSet ns);
+    LeptrisXPathResult leptris_xpath_eval_with_vars_context(LeptrisDocument doc, LeptrisElement context, const char* expression, LeptrisXPathVariableSet variables);
     void     leptris_xpath_result_free(LeptrisXPathResult result);
     int      leptris_xpath_result_type(LeptrisXPathResult result);
     double   leptris_xpath_result_number(LeptrisXPathResult result);
@@ -68,6 +106,26 @@ ffi.cdef(
     char*    leptris_xpath_result_string(LeptrisXPathResult result);
     size_t   leptris_xpath_result_count(LeptrisXPathResult result);
     LeptrisElement leptris_xpath_result_get(LeptrisXPathResult result, size_t index);
+    int      leptris_xpath_result_node_kind(LeptrisXPathResult result, size_t index);
+    LeptrisNodeRef leptris_xpath_result_get_node(LeptrisXPathResult result, size_t index);
+    const char* leptris_xpath_result_node_name(LeptrisXPathResult result, size_t index);
+    const char* leptris_xpath_result_node_value(LeptrisXPathResult result, size_t index);
+
+    LeptrisXPathVariableSet leptris_xpath_variable_set_new(void);
+    void leptris_xpath_variable_set_free(LeptrisXPathVariableSet set);
+    int  leptris_xpath_variable_set_boolean(LeptrisXPathVariableSet set, const char* name, int value);
+    int  leptris_xpath_variable_set_number(LeptrisXPathVariableSet set, const char* name, double value);
+    int  leptris_xpath_variable_set_string(LeptrisXPathVariableSet set, const char* name, const char* value);
+
+    LeptrisXPathNsSet leptris_xpath_ns_set_new(void);
+    void leptris_xpath_ns_set_free(LeptrisXPathNsSet set);
+    int  leptris_xpath_ns_set_add(LeptrisXPathNsSet set, const char* prefix, const char* uri);
+
+    int leptris_sax_parse(const char* xml, size_t len, LeptrisSAXHandler* handler, void* user_data);
+    LeptrisSAXParser* leptris_sax_parser_create(LeptrisSAXHandler* handler, void* user_data);
+    int leptris_sax_parser_feed(LeptrisSAXParser* parser, const char* xml, size_t len, int is_final);
+    void leptris_sax_parser_free(LeptrisSAXParser* parser);
+    int leptris_sax_parser_set_streaming(LeptrisSAXParser* parser, int streaming);
 
     void leptris_free_string(char* str);
     """
@@ -107,3 +165,13 @@ XPATH_NODESET = 0
 XPATH_BOOLEAN = 1
 XPATH_NUMBER = 2
 XPATH_STRING = 3
+
+XPATH_NODE_ELEMENT = 0
+XPATH_NODE_ATTRIBUTE = 1
+XPATH_NODE_TEXT = 2
+XPATH_NODE_OTHER = 3
+
+C14N_1_0 = 0
+C14N_1_1 = 1
+C14N_CANONICAL = 0
+C14N_EXCLUSIVE = 1
