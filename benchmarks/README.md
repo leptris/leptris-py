@@ -40,6 +40,7 @@ macos-14 and uploads `python-benchmark-results-<os>` artifacts
 (90-day retention). Hand-measured numbers do not go on the website;
 the site consumes those artifacts.
 
-Version labels for every published number: leptris 1.2.0 binding
-libleptris 1.2.0 (see `libleptris-version.txt`), lxml per the
-`[bench]` extra at measurement time.
+Version-label every published number: the leptris version
+(`leptris.__version__`), the libleptris pin
+(`libleptris-version.txt`), and lxml per the `[bench]` extra at
+measurement time.

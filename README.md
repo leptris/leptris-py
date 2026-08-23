@@ -116,9 +116,11 @@ document is closed raises `LeptrisError`.
 
 ## Versioning
 
-The package version tracks libleptris (lockstep): library 1.2.0 ↔
-leptris 1.2.0. The version lives in `pyproject.toml`,
-`leptris/__init__.py` and `libleptris-version.txt`, which must agree
+`libleptris-version.txt` pins the library release the binding is
+built and tested against. From 1.3.0 the package follows its own
+semver: 1.2.0 shipped an interim bespoke API to no adopters, and
+1.3.0 replaces it with the lxml-shaped API (breaking, but
+pre-adoption). `pyproject.toml` and `leptris/__init__.py` must agree
 at release time.
 
 ## Publishing
