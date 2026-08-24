@@ -91,9 +91,9 @@ class Document:
         return self.root
 
     def xpath(self, expression: str, *, context=None, namespaces=None, variables=None):
-        from .xpath import XPath
+        from .xpath import _XPathEngine
 
-        return XPath.evaluate(
+        return _XPathEngine.evaluate(
             self, context, expression, namespaces=namespaces, variables=variables
         )
 

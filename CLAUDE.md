@@ -38,7 +38,7 @@ python scripts/check_ffi_mirrors.py /path/to/libleptris
 
 ## Architecture
 
-- `leptris/_leptrisaccel.c` — optional C accelerator (abi3): allocates Element instances in C; the whole API surface stays in Python, attached onto the C heap type in `element.py` (dual-mode — `_PureElement` is the fallback; `LEPTRIS_PURE=1` forces it).
+- `leptris/_leptrisaccel.c` — optional C accelerator (abi3): allocates Element instances in C; the whole API surface stays in Python, attached onto the C heap type in `element.py` (single-mode: the accelerator is required; `_ElementMethods` is the Python method host attached onto the C type).
 - `leptris/_ffi.py` — the ONLY place the libleptris FFI surface is declared. The `cdef` mirrors libleptris's public headers (`src/include/leptris/` + the `leptris.h` umbrella in the C repo). Node-type / XPath-result / C14N constants live here.
 - `leptris/document.py` — `Document` (the ElementTree analogue): owns the tree + pool; `parse`, `parse_file`, `getroot`/`root`, `xpath`, `write`, `process_xinclude`, `close`/context manager. Also `serialize_options()` (shared by `api.tostring` and `write`).
 - `leptris/element.py` — `Element`: lxml-compatible (`tag` in Clark notation, `get`/`attrib` read-only Mapping, `getparent`/`getnext`/`getprevious`, child indexing/slices, `iter`/`iterdescendants`/`itertext`, `find`/`findall`/`findtext` with `{uri}local` translation, `namespace`/`prefix`) plus `_AttribMap`.

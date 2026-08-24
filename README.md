@@ -2,10 +2,10 @@
 
 `leptris` wraps the [libleptris](https://github.com/leptris/leptris)
 C API (XML 1.0 parsing, XPath 1.0) using `cffi` in ABI mode, with a
-C accelerator for Element allocation and the hot accessors (`tag`,
-`text`, `attrib`, `get`, indexing, sibling navigation and plain-path
-XPath evaluation) — wheels ship compiled; the pure-Python fallback
-covers toolchain-less installs (`LEPTRIS_PURE=1` forces it).
+required C accelerator for Element allocation and the hot accessors
+(`tag`, `text`, `attrib`, `get`, indexing, sibling navigation and
+plain-path XPath evaluation). Wheels ship it compiled; sdist builds
+require a C compiler.
 
 The pinned libleptris version lives in `libleptris-version.txt`
 (lockstep releases); CI builds it from the release tarball. The
@@ -85,10 +85,10 @@ with sax.StreamingParser(handler) as parser:  # push, constant memory
 | `etree.c14n` / `etree.XInclude` | `c14n(…)` / `doc.process_xinclude()` | |
 | `etree.XMLSyntaxError` | `ParseError` | XPath failures raise `XPathError`; both subclass `LeptrisError` |
 | `etree.Element`, `SubElement`, `append`, `set`, `remove` | **not exposed** | libleptris has partial mutation upstream (node content setters, `set_root`, `remove_children`) — not surfaced here; build trees elsewhere |
-| `etree.iterparse` | **absent** | use `leptris.sax.StreamingParser` (callback-based, constant memory) |
+| `etree.iterparse` | `leptris.iterparse(source)` | bounded by the largest subtree; yields `("end", element)`; elements borrowed until the next yield (v1: names are QNames as written) |
 | smart strings | plain `str` | XPath string/attribute results |
 | `elem.nsmap` | **absent** | use `elem.namespace` / `elem.prefix` and `xpath(namespaces=…)` |
-| `etree.XPath` compiled objects | **absent** | upstream ask: compiled-expression C API |
+| `etree.XPath` compiled objects | `leptris.XPath(expression)` | compile once, evaluate many; contexts and namespaces supported |
 | parser options (`resolve_entities`, …) | **absent** | libleptris 1.2.0 has no per-parse options |
 | `elem.sourceline` | same | requires libleptris 1.3.0+ |
 | undeclared XPath prefix | raises in lxml | evaluates to an empty nodeset here |

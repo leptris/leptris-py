@@ -60,11 +60,11 @@ class _AttribMap(Mapping):
     __hash__ = None  # type: ignore[assignment]
 
 
-class _PureElement:
-    """Element as a plain Python class (fallback when the C
-    accelerator is unavailable — same behavior, slower allocation)."""
+class _ElementMethods:
+    """Method host: the API surface attached onto the C heap type in
+    _leptrisaccel (allocation and the hot accessors live there)."""
 
-    __slots__ = ("_ptr", "_document")
+    __slots__ = ()
 
     def __init__(self, _ptr, document):
         self._ptr = _ptr
@@ -415,121 +415,100 @@ class _PureElement:
         return f"<Element {self.tag!r} at {id(self):#x}>"
 
 
-import os as _os
+from . import _leptrisaccel as _accel
 
-if _os.environ.get("LEPTRIS_PURE"):
-    # Explicit pure mode (CI exercises the fallback path this way).
-    _accel = None
-else:
-    try:
-        from . import _leptrisaccel as _accel
-    except ImportError:
-        _accel = None
-
-if _accel is not None:
-    Element = _accel.Element
-    # The whole API surface lives in Python; the C heap type
-    # contributes allocation plus the hot accessors (tag, text,
-    # attrib, get, len, int indexing, getparent/getnext) which bind
-    # to libleptris directly. Dunders attach post-creation (heap
-    # types update their slots); _PureElement remains the reference
-    # implementation and the pure-mode fallback.
-    _accelerated = {
-        "tag", "text", "tail", "attrib", "get", "getparent", "getnext",
-        "getprevious", "keys", "items", "values", "itertext",
-        "namespace", "prefix", "sourceline",
-        "__len__", "__getitem__", "_ptr", "_document",
-    }
-    for _name, _value in _PureElement.__dict__.items():
-        if _name in _accelerated or _name in (
-            "__slots__", "__module__", "__dict__", "__weakref__",
-            "__init__", "__doc__", "__qualname__",
-        ):
-            continue
-        setattr(Element, _name, _value)
+# The C heap type owns allocation, the hot accessors and the fields;
+# everything below attaches onto it. _accelerated names stay C-owned
+# (attaching the Python versions would override the C slots).
+Element = _accel.Element
+_accelerated = {
+    "tag", "text", "tail", "attrib", "get", "getparent", "getnext",
+    "getprevious", "keys", "items", "values", "itertext",
+    "namespace", "prefix", "sourceline",
+    "__len__", "__getitem__", "_ptr", "_document",
+    "__slots__", "__module__", "__dict__", "__weakref__",
+    "__init__", "__doc__", "__qualname__",
+}
+for _name, _value in _ElementMethods.__dict__.items():
+    if _name in _accelerated:
+        continue
+    setattr(Element, _name, _value)
 
 
-    def _accel_init(self, _ptr, document):
-        self._ptr = _ptr
-        self._document = document
-        self._raw = int(_ffi.ffi.cast("uintptr_t", _ptr))
+def _element_init(self, _ptr, document):
+    self._ptr = _ptr
+    self._document = document
+    self._raw = int(_ffi.ffi.cast("uintptr_t", _ptr))
 
-    _accel_itertext_c = Element.itertext
-    Element.itertext = lambda self: iter(_accel_itertext_c(self))
-    Element.__init__ = _accel_init
 
-    _ffi.ffi  # ensure loaded
-    _lib = _ffi.lib
-    _accel.bind(
-        **{
-            name[8:]: int(_ffi.ffi.cast("uintptr_t", getattr(_lib, name)))
-            for name in (
-                "leptris_element_name", "leptris_element_namespace",
-                "leptris_element_attribute", "leptris_element_child",
-                "leptris_element_child_count", "leptris_element_as_node",
-                "leptris_element_first_child_any",
-                "leptris_node_first_child", "leptris_node_next_sibling",
-                "leptris_node_get_type", "leptris_text_node_get_content",
-                "leptris_cdata_node_get_content",
-                "leptris_element_first_attribute",
-                "leptris_attribute_next", "leptris_attribute_get_name",
-                "leptris_attribute_get_value", "leptris_element_parent",
-                "leptris_element_next_sibling_any", "leptris_node_line",
-                "leptris_xpath_eval", "leptris_xpath_result_type",
-                "leptris_xpath_result_count",
-                "leptris_xpath_result_get_nodes",
-                "leptris_xpath_result_free",
-                "leptris_xpath_result_number",
-                "leptris_xpath_result_boolean",
-                "leptris_xpath_result_string",
-                "leptris_free_string",
-            )
-        },
-        ns_set_new=int(
-            _ffi.ffi.cast("uintptr_t", _lib.leptris_xpath_ns_set_new)
-        ),
-        ns_set_free=int(
-            _ffi.ffi.cast("uintptr_t", _lib.leptris_xpath_ns_set_free)
-        ),
-        ns_set_add=int(
-            _ffi.ffi.cast("uintptr_t", _lib.leptris_xpath_ns_set_add)
-        ),
-        xpath_eval_ns=int(
-            _ffi.ffi.cast("uintptr_t", _lib.leptris_xpath_eval_ns)
-        ),
-        element_serialize=int(
-            _ffi.ffi.cast("uintptr_t", _lib.leptris_element_serialize)
-        ),
-        element_prefix_fn=int(
-            _ffi.ffi.cast("uintptr_t", _lib.leptris_element_prefix)
-        ),
-        element_previous_sibling_any_fn=int(
-            _ffi.ffi.cast(
-                "uintptr_t", _lib.leptris_element_previous_sibling_any
-            )
-        ),
-        error_class=LeptrisError,
+Element.__init__ = _element_init
+
+_itertext_c = Element.itertext
+Element.itertext = lambda self: iter(_itertext_c(self))
+
+
+def _make(_ptr, document):
+    return _accel.create(int(_ffi.ffi.cast("uintptr_t", _ptr)), _ptr, document)
+
+
+def _materialize(buffer, document):
+    count = len(buffer)
+    return _accel.materialize(
+        _ffi.ffi.unpack(buffer, count),
+        document,
+        _ffi.ffi.unpack(_ffi.ffi.cast("uintptr_t*", buffer), count),
     )
 
-    def _make(_ptr, document):
-        return _accel.create(
-            int(_ffi.ffi.cast("uintptr_t", _ptr)), _ptr, document
+
+_lib = _ffi.lib
+_accel.bind(
+    **{
+        name[8:]: int(_ffi.ffi.cast("uintptr_t", getattr(_lib, name)))
+        for name in (
+            "leptris_element_name", "leptris_element_namespace",
+            "leptris_element_attribute", "leptris_element_child",
+            "leptris_element_child_count", "leptris_element_as_node",
+            "leptris_node_first_child", "leptris_node_next_sibling",
+            "leptris_node_get_type", "leptris_text_node_get_content",
+            "leptris_cdata_node_get_content",
+            "leptris_element_first_attribute",
+            "leptris_attribute_next", "leptris_attribute_get_name",
+            "leptris_attribute_get_value", "leptris_element_parent",
+            "leptris_element_next_sibling_any", "leptris_node_line",
+            "leptris_element_first_child_any",
+            "leptris_node_first_child", "leptris_node_next_sibling",
+            "leptris_xpath_eval", "leptris_xpath_result_type",
+            "leptris_xpath_result_count",
+            "leptris_xpath_result_get_nodes",
+            "leptris_xpath_result_free",
+            "leptris_xpath_result_number",
+            "leptris_xpath_result_boolean",
+            "leptris_xpath_result_string",
+            "leptris_free_string",
         )
-
-    def _materialize(buffer, document):
-        count = len(buffer)
-        return _accel.materialize(
-            _ffi.ffi.unpack(buffer, count),
-            document,
-            _ffi.ffi.unpack(_ffi.ffi.cast("uintptr_t*", buffer), count),
+    },
+    element_prefix_fn=int(
+        _ffi.ffi.cast("uintptr_t", _lib.leptris_element_prefix)
+    ),
+    element_previous_sibling_any_fn=int(
+        _ffi.ffi.cast(
+            "uintptr_t", _lib.leptris_element_previous_sibling_any
         )
-
-else:
-    Element = _PureElement
-    _make = Element
-
-    def _materialize(buffer, document):
-        return [
-            Element(ptr, document)
-            for ptr in _ffi.ffi.unpack(buffer, len(buffer))
-        ]
+    ),
+    ns_set_new=int(
+        _ffi.ffi.cast("uintptr_t", _lib.leptris_xpath_ns_set_new)
+    ),
+    ns_set_free=int(
+        _ffi.ffi.cast("uintptr_t", _lib.leptris_xpath_ns_set_free)
+    ),
+    ns_set_add=int(
+        _ffi.ffi.cast("uintptr_t", _lib.leptris_xpath_ns_set_add)
+    ),
+    xpath_eval_ns=int(
+        _ffi.ffi.cast("uintptr_t", _lib.leptris_xpath_eval_ns)
+    ),
+    element_serialize=int(
+        _ffi.ffi.cast("uintptr_t", _lib.leptris_element_serialize)
+    ),
+    error_class=LeptrisError,
+)

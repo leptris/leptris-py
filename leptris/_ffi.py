@@ -127,6 +127,18 @@ ffi.cdef(
     void leptris_xpath_ns_set_free(LeptrisXPathNsSet set);
     int  leptris_xpath_ns_set_add(LeptrisXPathNsSet set, const char* prefix, const char* uri);
 
+    typedef struct leptris_xpath_compiled* LeptrisXPathCompiled;
+    LeptrisXPathCompiled leptris_xpath_compile(const char* expression);
+    LeptrisXPathResult leptris_xpath_compiled_eval(LeptrisXPathCompiled compiled, LeptrisDocument doc, LeptrisElement context);
+    LeptrisXPathResult leptris_xpath_compiled_eval_ns(LeptrisXPathCompiled compiled, LeptrisDocument doc, LeptrisElement context, LeptrisXPathNsSet ns);
+    void leptris_xpath_compiled_free(LeptrisXPathCompiled compiled);
+
+    typedef struct leptris_iterparse* LeptrisIterparse;
+    LeptrisIterparse leptris_iterparse_new(const char* xml, size_t len);
+    LeptrisIterparse leptris_iterparse_new_file(const char* path);
+    LeptrisElement leptris_iterparse_next(LeptrisIterparse it);
+    void leptris_iterparse_free(LeptrisIterparse it);
+
     int leptris_sax_parse(const char* xml, size_t len, LeptrisSAXHandler* handler, void* user_data);
     LeptrisSAXParser* leptris_sax_parser_create(LeptrisSAXHandler* handler, void* user_data);
     int leptris_sax_parser_feed(LeptrisSAXParser* parser, const char* xml, size_t len, int is_final);
