@@ -62,6 +62,9 @@ ffi.cdef(
     LeptrisNodeRef leptris_node_next_sibling(LeptrisNodeRef node);
     LeptrisNodeRef leptris_node_previous_sibling(LeptrisNodeRef node);
     size_t leptris_node_child_count(LeptrisNodeRef node);
+    size_t leptris_node_children(LeptrisNodeRef parent, LeptrisNodeRef* out_nodes, size_t max_count);
+    size_t leptris_document_serialize_into(LeptrisDocument doc, char* buf, size_t capacity, size_t* out_len);
+    size_t leptris_element_serialize_into(LeptrisElement elem, char* buf, size_t capacity, size_t* out_len);
     LeptrisElement  leptris_node_as_element(LeptrisNodeRef node);
     LeptrisNodeRef  leptris_element_as_node(LeptrisElement elem);
 
