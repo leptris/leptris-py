@@ -67,7 +67,6 @@ ffi.cdef(
     int leptris_element_has_attribute_ns(LeptrisElement elem, const char* uri, const char* local);
     const char* leptris_attribute_prefix(LeptrisAttribute attr);
     const char* leptris_attribute_namespace_uri(LeptrisAttribute attr);
-    size_t leptris_node_children(LeptrisNodeRef parent, LeptrisNodeRef* out_nodes, size_t max_count);
     size_t leptris_document_pi_count(LeptrisDocument doc);
     const char* leptris_document_pi_target(LeptrisDocument doc, size_t index);
     const char* leptris_document_pi_data(LeptrisDocument doc, size_t index);
