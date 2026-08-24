@@ -16,7 +16,7 @@ loader path.
 
 - Python 3.9+
 - `cffi` (installed automatically)
-- libleptris **1.3.0+** as a shared library
+- libleptris **1.9.0+** as a shared library
 - libleptris as a shared library (`libleptris.dylib` / `.so` /
   `.dll`) on the loader path, or pointed to by `LEPTRIS_LIB_PATH`
   (which must name the library **file** — the loader `dlopen`s it
