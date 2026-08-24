@@ -12,13 +12,14 @@ Requires libleptris on the library search path (or LEPTRIS_LIB_PATH).
 
 from __future__ import annotations
 
-__version__ = "1.8.0"
+__version__ = "1.9.0"
 
 from . import sax
-from .api import XML, c14n, fromstring, libleptris_version, parse, tostring
+from .api import XML, c14n, fromstring, iterparse, libleptris_version, parse, tostring
 from .document import Document
 from .element import Element
 from .error import LeptrisError, ParseError, XPathError
+from .xpath import XPath
 from .node import Node
 
 __all__ = [
@@ -29,7 +30,9 @@ __all__ = [
     "ParseError",
     "XPathError",
     "XML",
+    "XPath",
     "c14n",
+    "iterparse",
     "fromstring",
     "libleptris_version",
     "parse",

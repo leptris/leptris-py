@@ -7,7 +7,7 @@ from typing import List, Optional, Union
 from . import _ffi
 from .document import Document, serialize_options
 from .element import Element
-from .error import LeptrisError
+from .error import LeptrisError, ParseError
 
 
 def libleptris_version() -> str:
@@ -63,7 +63,6 @@ def tostring(
     if doc.closed:
         raise LeptrisError("operation on a closed document")
     c_encoding = None if encoding in (None, "unicode") else encoding
-    options, _keepalive = serialize_options(c_encoding, pretty_print, xml_declaration)
     if elem is not None:
         from .element import _accel
 
@@ -82,6 +81,8 @@ def tostring(
             if encoding == "unicode":
                 return data.decode("utf-8")
             return data
+    options, _keepalive = serialize_options(c_encoding, pretty_print, xml_declaration)
+    if elem is not None:
         ptr = _ffi.lib.leptris_element_serialize(elem._cd(), options)
     else:
         ptr = _ffi.lib.leptris_document_serialize(doc._ptr, options)
@@ -136,3 +137,66 @@ def c14n(
     data = _ffi.ffi.string(ptr)
     _ffi.lib.leptris_free_string(ptr)
     return data
+
+def iterparse(source, events=("end",)):
+    """Incrementally parse XML with bounded memory (lxml parity).
+
+    Yields ("end", element) pairs for each completed top-level child
+    of the root; each element (and its subtree) stays valid only
+    until the next yield — the engine releases it then, keeping
+    memory bounded by the largest subtree, not the document.
+
+    Accepts a file path or an XML str/bytes. Only "end" events are
+    supported. Names are the QNames as written (namespace prefixes
+    are not re-resolved — use the DOM path when namespace URIs
+    matter).
+    """
+    requested = tuple(events) if not isinstance(events, str) else (events,)
+    if requested != ("end",):
+        raise ValueError("only 'end' events are supported")
+    from . import _ffi as _binding
+
+    lib, ffi = _binding.lib, _binding.ffi
+    if hasattr(source, "read"):
+        data = source.read()
+        if isinstance(data, str):
+            data = data.encode("utf-8")
+        iterator = lib.leptris_iterparse_new(data, len(data))
+    else:
+        import os
+
+        path = os.fspath(source)
+        if isinstance(path, str):
+            path = path.encode("utf-8")
+        iterator = lib.leptris_iterparse_new_file(path)
+    if iterator == ffi.NULL:
+        raise ParseError("iterparse could not start")
+
+    class _IterparseDocument:
+        """Sentinel owner for borrowed iterparse elements."""
+
+        closed = False
+        _raw_addr = None
+
+        def close(self):
+            pass
+
+    sentinel = _IterparseDocument()
+
+    from .element import _make
+
+    def generate():
+        try:
+            while True:
+                element_ptr = lib.leptris_iterparse_next(iterator)
+                if element_ptr == ffi.NULL:
+                    return
+                # The element is borrowed: valid until the next call.
+                # Wrap with the raw address for the C fast paths.
+                element = _make(element_ptr, sentinel)
+                yield ("end", element)
+        finally:
+            lib.leptris_iterparse_free(iterator)
+
+    return generate()
+

@@ -55,26 +55,17 @@ class TestNodesets:
     def test_attribute_selection_returns_strings(self, books):
         assert books.xpath("//book/@id") == ["1", "2"]
 
-    def test_mixed_nodeset_preserves_order(self):
+    def test_mixed_nodeset_preserves_order_and_types(self):
         root = fromstring("<r><a id='1'>x</a><a id='2'>y</a></r>")
         result = root.xpath("//a | //a/@id")
-        # Element entries sit at stable document-order positions.
-        # Attribute entries are misclassified on some libleptris
-        # builds (leptris/leptris#516 — build-dependent node-tag reads
-        # on synthetic attribute nodes), so only the guaranteed
-        # subset is asserted here.
+        # Fixed upstream in libleptris 1.6.0 (#514): attribute
+        # entries in mixed nodesets carry their values.
         assert len(result) == 4
-        assert result[0].text == "x"
-        assert result[2].text == "y"
-
-    @pytest.mark.xfail(
-        strict=False,
-        reason="upstream leptris/leptris#514: attribute nodes lose "
-               "name/value inside mixed (union) nodesets",
-    )
-    def test_mixed_nodeset_attribute_values(self):
-        root = fromstring("<r><a id='1'>x</a><a id='2'>y</a></r>")
-        assert root.xpath("//a | //a/@id")[1] == "1"
+        assert [type(item).__name__ for item in result] == [
+            "Element", "str", "Element", "str",
+        ]
+        assert result[0].text == "x" and result[1] == "1"
+        assert result[2].text == "y" and result[3] == "2"
 
     def test_union_deduplicates(self, books):
         assert len(books.xpath("//book | //book")) == 2

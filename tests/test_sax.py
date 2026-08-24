@@ -152,3 +152,118 @@ class TestHandlerContract:
         with pytest.raises(ParseError):
             sax.parse("<broken", handler)
         assert handler.seen is not None and handler.seen[1] >= 1
+
+class TestIterparse:
+    XML = "<root>" + "".join(f"<rec id='{i}'>v{i}</rec>" for i in range(5)) + "</root>"
+
+    def test_yields_completed_top_level(self):
+        from leptris import iterparse
+        import io
+
+        seen = [(e.get("id"), e.text) for _, e in iterparse(io.StringIO(self.XML))]
+        assert seen == [(str(i), f"v{i}") for i in range(5)]
+
+    def test_file_source(self, tmp_path):
+        from leptris import iterparse
+
+        path = tmp_path / "doc.xml"
+        path.write_text(self.XML)
+        tags = [e.tag for _, e in iterparse(str(path))]
+        assert tags == ["rec"] * 5
+
+    def test_subtree_content(self):
+        from leptris import iterparse
+        import io
+
+        # Elements are borrowed: inspect within the iteration (the
+        # engine releases each subtree on the next yield).
+        xml = "<r><rec><a>1</a><b x='2'/></rec></r>"
+        checked = []
+        for _, element in iterparse(io.StringIO(xml)):
+            checked.append(
+                (element.tag, element[0].text, element[1].get("x"))
+            )
+        assert checked == [("rec", "1", "2")]
+
+    def test_borrowed_until_next(self):
+        from leptris import iterparse
+        import io
+
+        # Only the CURRENT element may be inspected; iteration runs
+        # to exhaustion without holding references.
+        count = 0
+        for _, element in iterparse(io.StringIO(self.XML)):
+            assert element.tag == "rec"
+            count += 1
+        assert count == 5
+
+    def test_repeat_is_stable(self):
+        from leptris import iterparse
+        import io
+
+        for _ in range(10):
+            assert len(list(iterparse(io.StringIO(self.XML)))) == 5
+
+    def test_only_end_events(self):
+        from leptris import iterparse
+        import io
+
+        with pytest.raises(ValueError):
+            iterparse(io.StringIO(self.XML), events=("start", "end"))
+        list(iterparse(io.StringIO(self.XML), events="end"))
+
+    def test_missing_file(self):
+        from leptris import iterparse
+        from leptris.error import ParseError
+
+        with pytest.raises(ParseError):
+            iterparse("/nonexistent/doc.xml")
+
+
+class TestCompiledXPath:
+    def test_scalar(self):
+        from leptris import XPath, fromstring
+
+        root = fromstring("<r><a>1</a><a>2</a></r>")
+        query = XPath("count(//a)")
+        assert query(root) == 2.0
+        assert query(root) == 2.0  # reusable
+
+    def test_nodeset(self):
+        from leptris import XPath, fromstring
+
+        root = fromstring("<r><a id='1'>x</a><a id='2'>y</a></r>")
+        query = XPath("//a[@id='2']")
+        assert query(root)[0].text == "y"
+
+    def test_document_argument(self):
+        from leptris import XPath, Document
+
+        with Document.parse("<r><a/></r>") as doc:
+            assert len(XPath("//a")(doc)) == 1
+
+    def test_context_element(self):
+        from leptris import XPath, fromstring
+
+        root = fromstring("<r><b id='1'/><b id='2'/></r>")
+        assert XPath("string(@id)")(root[1]) == "2"
+
+    def test_namespaces(self):
+        from leptris import XPath, fromstring
+
+        root = fromstring("<x:r xmlns:x='urn:x'><x:a/></x:r>")
+        query = XPath("count(//x:a)")
+        assert query(root, namespaces={"x": "urn:x"}) == 1.0
+
+    def test_invalid_expression_raises(self):
+        from leptris import XPath
+        from leptris.error import XPathError
+
+        with pytest.raises(XPathError):
+            XPath("///[")
+
+    def test_repr(self):
+        from leptris import XPath
+
+        assert repr(XPath("//a")) == "<XPath '//a'>"
+

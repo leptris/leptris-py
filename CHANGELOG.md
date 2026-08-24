@@ -1,5 +1,40 @@
 # Changelog
 
+
+Legacy purge (the binding is single-mode now):
+
+- the pure-Python Element fallback and `LEPTRIS_PURE` are gone —
+  the C accelerator is a required component; sdist builds without a
+  toolchain fail loudly instead of degrading
+- the legacy static `XPath` wrapper is gone; `leptris.XPath` is the
+  precompiled class
+- the libleptris-1.2.0 error-message fallback is gone (XPath errors
+  use `leptris_document_last_error`)
+- CI pure-mode leg removed; the plan document (implemented 1.3.0)
+  deleted
+
+Also with libleptris 1.6.0: mixed-nodeset attribute payloads are
+correct (#514) — the xfail test is now a hard assertion; same-parent
+move corruption (#518) fixed upstream.
+
+## 1.9.0 — 2026-08-24
+
+Adopts libleptris 1.6.0 (pin bump from 1.3.0; 1.5.x folded in):
+
+- `leptris.iterparse(source)` — incremental parsing with memory
+  bounded by the largest subtree (lxml parity for the top use case).
+  Yields `("end", element)` per completed top-level child; elements
+  are borrowed until the next yield. File or file-like input;
+  only "end" events.
+- `leptris.XPath(expression)` — precompiled XPath (lxml's
+  `etree.XPath`): compile once, evaluate many times, with element
+  contexts and namespaces.
+- element serialization fixed upstream (#523): `tostring(elem)`
+  went from ~12x behind lxml to parity (engine 7.8 us -> 0.35 us);
+  wrapper trimmed accordingly
+- unprefixed XPath name tests no longer match namespaced elements
+  (upstream correctness fix — lxml semantics)
+
 ## 1.8.0 — 2026-08-24
 
 Full-surface accessor sweep: every remaining Python+cffi path moved
