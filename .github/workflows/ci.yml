@@ -62,8 +62,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install .[test]
-          # pytest imports the source tree from the checkout; build the
-          # accelerator in place so the compiled surface is exercised.
-          python -m pip install -e . --no-deps 2>/dev/null || python setup.py build_ext --inplace
+          # pytest imports the source tree from the checkout; the
+          # accelerator must exist in place for the compiled surface
+          # to be exercised.
+          python setup.py build_ext --inplace
           echo "using lib at: $LEPTRIS_LIB_PATH"
           python -m pytest tests/ -q
