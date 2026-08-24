@@ -55,14 +55,28 @@ class Document:
         self._raw_addr = int(_ffi.ffi.cast("uintptr_t", _ptr))
 
     @classmethod
-    def parse(cls, xml) -> "Document":
+    def parse(cls, xml, *, recover: bool = False) -> "Document":
+        """Parse XML. With recover=True a malformed document yields an
+        empty (rootless) Document instead of raising ParseError
+        (libleptris 1.9.0 recover mode — partial-tree recovery is not
+        yet implemented upstream)."""
         if isinstance(xml, str):
             xml = xml.encode("utf-8")
         if not isinstance(xml, (bytes, bytearray, memoryview)):
             raise TypeError("xml must be str or bytes")
         xml = bytes(xml)
         status = _ffi.ffi.new("int*")
-        ptr = _ffi.lib.leptris_parse_string(xml, len(xml), status)
+        if recover:
+            options = _ffi.ffi.new("LeptrisParseOptions*")
+            options.flags = 0
+            options.strict_mode = -1
+            options.max_depth = 0
+            options.recover = 1
+            ptr = _ffi.lib.leptris_parse_string_ex(
+                xml, len(xml), options, status
+            )
+        else:
+            ptr = _ffi.lib.leptris_parse_string(xml, len(xml), status)
         if ptr == _ffi.ffi.NULL:
             raise ParseError(status_message(status[0]))
         return cls(ptr)

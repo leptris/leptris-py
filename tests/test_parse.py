@@ -100,3 +100,18 @@ def test_libleptris_version():
 
     assert isinstance(libleptris_version(), str)
     assert libleptris_version() != ""
+
+class TestRecover:
+    def test_malformed_raises_without_recover(self):
+        with pytest.raises(ParseError):
+            Document.parse("<broken")
+
+    def test_recover_yields_rootless_document(self):
+        doc = Document.parse("<broken", recover=True)
+        assert doc.getroot() is None
+        doc.close()
+
+    def test_recover_accepts_valid_document(self):
+        with Document.parse("<r><a/></r>", recover=True) as doc:
+            assert doc.xpath("count(//a)") == 1.0
+

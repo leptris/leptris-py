@@ -65,6 +65,13 @@ ffi.cdef(
     size_t leptris_node_children(LeptrisNodeRef parent, LeptrisNodeRef* out_nodes, size_t max_count);
     const char* leptris_element_attribute_ns(LeptrisElement elem, const char* uri, const char* local);
     int leptris_element_has_attribute_ns(LeptrisElement elem, const char* uri, const char* local);
+    typedef struct {
+        int flags;
+        int strict_mode;
+        int max_depth;
+        int recover;
+    } LeptrisParseOptions;
+    LeptrisDocument leptris_parse_string_ex(const char* xml, size_t length, const LeptrisParseOptions* options, int* status);
     const char* leptris_attribute_prefix(LeptrisAttribute attr);
     const char* leptris_attribute_namespace_uri(LeptrisAttribute attr);
     size_t leptris_document_pi_count(LeptrisDocument doc);
