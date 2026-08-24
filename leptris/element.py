@@ -147,9 +147,17 @@ class _ElementMethods:
 
     def get(self, name: str, default=None):
         self._check_alive()
-        value = _ffi.lib.leptris_element_attribute(
-            self._cd(), name.encode("utf-8")
-        )
+        if name.startswith("{") and "}" in name:
+            # Clark notation "{uri}local" (lxml semantics) — resolved
+            # through the namespace-aware lookup (libleptris 1.8.0).
+            uri, local = name[1:].split("}", 1)
+            value = _ffi.lib.leptris_element_attribute_ns(
+                self._cd(), uri.encode("utf-8"), local.encode("utf-8")
+            )
+        else:
+            value = _ffi.lib.leptris_element_attribute(
+                self._cd(), name.encode("utf-8")
+            )
         if value == _ffi.ffi.NULL:
             return default
         return _ffi.ffi.string(value).decode("utf-8")
@@ -466,7 +474,8 @@ _accel.bind(
         name[8:]: int(_ffi.ffi.cast("uintptr_t", getattr(_lib, name)))
         for name in (
             "leptris_element_name", "leptris_element_namespace",
-            "leptris_element_attribute", "leptris_element_child",
+            "leptris_element_attribute", "leptris_element_attribute_ns",
+            "leptris_element_child",
             "leptris_element_child_count", "leptris_element_as_node",
             "leptris_node_first_child", "leptris_node_next_sibling",
             "leptris_node_get_type", "leptris_text_node_get_content",

@@ -64,6 +64,7 @@ static struct {
     const char *(*element_name)(void *);
     const char *(*element_namespace)(void *);
     const char *(*element_attribute)(void *, const char *);
+    const char *(*element_attribute_ns)(void *, const char *, const char *);
     void *(*element_child)(void *, size_t);
     size_t (*element_child_count)(void *);
     void *(*element_as_node)(void *);
@@ -522,7 +523,24 @@ elem_get_method(AccelElement *self, PyObject *args)
         Py_DECREF(encoded);
         return NULL;
     }
-    const char *value = Fns.element_attribute(self->raw, utf8);
+    const char *value = NULL;
+    if (utf8[0] == '{' && Fns.element_attribute_ns != NULL) {
+        /* Clark "{uri}local" -> namespace-aware lookup */
+        const char *close = strchr(utf8 + 1, '}');
+        if (close != NULL) {
+            PyObject *uri = PyBytes_FromStringAndSize(
+                utf8 + 1, close - utf8 - 1);
+            if (uri == NULL) {
+                Py_DECREF(encoded);
+                return NULL;
+            }
+            value = Fns.element_attribute_ns(
+                self->raw, PyBytes_AsString(uri), close + 1);
+            Py_DECREF(uri);
+        }
+    } else {
+        value = Fns.element_attribute(self->raw, utf8);
+    }
     Py_DECREF(encoded);
     if (value == NULL) {
         Py_INCREF(default_value);
@@ -935,7 +953,7 @@ accel_bind(PyObject *module, PyObject *args, PyObject *kwargs)
         "xpath_result_boolean", "xpath_result_string", "free_string",
         "ns_set_new", "ns_set_free", "ns_set_add",
         "xpath_eval_ns", "element_serialize",
-        "element_serialize_into", "error_class", NULL};
+        "element_serialize_into", "element_attribute_ns", "error_class", NULL};
                 PyObject *value_element_name = NULL, *value_element_namespace = NULL,
              *value_element_attribute = NULL, *value_element_child = NULL,
              *value_element_child_count = NULL, *value_element_as_node = NULL,
@@ -952,9 +970,9 @@ accel_bind(PyObject *module, PyObject *args, PyObject *kwargs)
              *value_xpath_result_boolean = NULL, *value_xpath_result_string = NULL,
              *value_free_string = NULL, *value_ns_set_new = NULL, *value_ns_set_free =
              NULL, *value_ns_set_add = NULL, *value_xpath_eval_ns = NULL,
-             *value_element_serialize = NULL, *value_element_serialize_into = NULL, *value_error_class = NULL;
+             *value_element_serialize = NULL, *value_element_serialize_into = NULL, *value_element_attribute_ns = NULL, *value_error_class = NULL;
     if (!PyArg_ParseTupleAndKeywords(
-            args, kwargs, "|$OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO", kwlist,
+            args, kwargs, "|$OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO", kwlist,
 &value_element_name,
 &value_element_namespace,
 &value_element_attribute,
@@ -990,7 +1008,7 @@ accel_bind(PyObject *module, PyObject *args, PyObject *kwargs)
 &value_ns_set_add,
 &value_xpath_eval_ns,
 &value_element_serialize,
-            &value_element_serialize_into, &value_error_class))
+            &value_element_serialize_into, &value_element_attribute_ns, &value_error_class))
         return NULL;
 #define BIND_FN(name) \
     if (value_##name != NULL && value_##name != Py_None) { \
@@ -1001,6 +1019,7 @@ accel_bind(PyObject *module, PyObject *args, PyObject *kwargs)
     BIND_FN(element_name)
     BIND_FN(element_namespace)
     BIND_FN(element_attribute)
+    BIND_FN(element_attribute_ns)
     BIND_FN(element_child)
     BIND_FN(element_child_count)
     BIND_FN(element_as_node)
@@ -1209,35 +1228,29 @@ accel_serialize_elem(PyObject *module, PyObject *args)
      * for defaults - pass NULL unless something is requested. */
     void *options = NULL;
     struct { int indent; int xml_declaration; const char *encoding; } opts;
+    static const char utf8[] = "UTF-8";
     if (indent != 0 || declaration != 0) {
         opts.indent = indent;
         opts.xml_declaration = declaration;
-        opts.encoding = NULL;
+        /* the engine emits the declaration only with an encoding set */
+        opts.encoding = (declaration != 0) ? utf8 : NULL;
         options = &opts;
     }
     if (Fns.element_serialize_into == NULL)
         Py_RETURN_NONE;
+    /* 1.9.0: _into takes the options pointer directly - no
+     * allocating fallback needed. */
     size_t needed = Fns.element_serialize_into(
-        (void *)(uintptr_t)address, NULL, 0, NULL, NULL);
+        (void *)(uintptr_t)address, NULL, 0, NULL, options);
     if (needed == 0)
         Py_RETURN_NONE;
-    /* options pass-through is not available on _into; fall back to the
-     * allocating call when non-default options are requested */
-    if (options != NULL) {
-        char *out = Fns.element_serialize((void *)(uintptr_t)address, options);
-        if (out == NULL)
-            Py_RETURN_NONE;
-        PyObject *bytes =
-            PyBytes_FromStringAndSize(out, (Py_ssize_t)strlen(out));
-        Fns.free_string(out);
-        return bytes;
-    }
     PyObject *bytes = PyBytes_FromStringAndSize(NULL, (Py_ssize_t)(needed - 1));
     if (bytes == NULL)
         return NULL;
     size_t written = 0;
     Fns.element_serialize_into((void *)(uintptr_t)address,
-                               PyBytes_AsString(bytes), needed, &written, NULL);
+                               PyBytes_AsString(bytes), needed, &written,
+                               options);
     return bytes;
 }
 

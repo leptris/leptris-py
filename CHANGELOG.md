@@ -17,6 +17,28 @@ Also with libleptris 1.6.0: mixed-nodeset attribute payloads are
 correct (#514) — the xfail test is now a hard assertion; same-parent
 move corruption (#518) fixed upstream.
 
+## 1.11.0 — 2026-08-24
+
+Adopts libleptris 1.9.0 (1.8.0 + 1.9.0 surface):
+
+- `Document.parse(..., recover=True)` — malformed input yields an
+  empty rootless Document instead of raising ParseError (#547
+  engine mode; partial-tree recovery not yet implemented upstream)
+- `Element.get("{uri}local")` — Clark-notation attribute lookup via
+  `leptris_element_attribute_ns` (lxml semantics), implemented in
+  the C accelerator
+- element serialization passes options through
+  `leptris_element_serialize_into` directly (1.9.0 options support);
+  the allocating fallback is gone, and declarations now carry the
+  UTF-8 encoding the engine requires to emit them
+- cdef: `node_children`, both `serialize_into` variants (5-arg),
+  `attribute_ns`/`has_attribute_ns`, `ParseOptions` +
+  `parse_string_ex`
+- filed upstream leptris/leptris#550: raw-API
+  `document_serialize` fails on fresh flat-path documents (TODO 139
+  Phase D promote) — the binding is unaffected (it touches
+  `document_root` first)
+
 ## 1.10.0 — 2026-08-24
 
 Adopts libleptris 1.7.0 (includes 1.6.2's mixed-content

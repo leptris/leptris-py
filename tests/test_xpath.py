@@ -182,3 +182,19 @@ class TestErrors:
     def test_parse_error_type(self):
         with pytest.raises(ParseError):
             fromstring("<a>")
+
+class TestNamespaceAwareGet:
+    def test_clark_get(self):
+        root = fromstring(
+            "<x:r xmlns:x='urn:x' x:id='7' plain='v'/>"
+        )
+        assert root.get("{urn:x}id") == "7"
+        assert root.get("{urn:x}nope") is None
+        assert root.get("plain") == "v"
+        assert root.get("{urn:x}id", "d") == "7"
+        assert root.get("nope", "d") == "d"
+
+    def test_clark_get_wrong_uri(self):
+        root = fromstring("<x:r xmlns:x='urn:x' x:id='7'/>")
+        assert root.get("{urn:other}id") is None
+
