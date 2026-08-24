@@ -96,7 +96,7 @@ static struct {
     int (*ns_set_add)(void *, const char *, const char *);
     void *(*xpath_eval_ns)(void *, void *, const char *, void *);
     char *(*element_serialize)(void *, void *);
-    size_t (*element_serialize_into)(void *, char *, size_t, size_t *);
+    size_t (*element_serialize_into)(void *, char *, size_t, size_t *, const void *);
 } Fns;
 
 static int bound = 0;
@@ -1218,7 +1218,7 @@ accel_serialize_elem(PyObject *module, PyObject *args)
     if (Fns.element_serialize_into == NULL)
         Py_RETURN_NONE;
     size_t needed = Fns.element_serialize_into(
-        (void *)(uintptr_t)address, NULL, 0, NULL);
+        (void *)(uintptr_t)address, NULL, 0, NULL, NULL);
     if (needed == 0)
         Py_RETURN_NONE;
     /* options pass-through is not available on _into; fall back to the
@@ -1237,7 +1237,7 @@ accel_serialize_elem(PyObject *module, PyObject *args)
         return NULL;
     size_t written = 0;
     Fns.element_serialize_into((void *)(uintptr_t)address,
-                               PyBytes_AsString(bytes), needed, &written);
+                               PyBytes_AsString(bytes), needed, &written, NULL);
     return bytes;
 }
 
