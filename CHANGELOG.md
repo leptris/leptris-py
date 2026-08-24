@@ -17,6 +17,20 @@ Also with libleptris 1.6.0: mixed-nodeset attribute payloads are
 correct (#514) — the xfail test is now a hard assertion; same-parent
 move corruption (#518) fixed upstream.
 
+## 1.10.0 — 2026-08-24
+
+Adopts libleptris 1.7.0 (includes 1.6.2's mixed-content
+pretty-print fix, #534):
+
+- element serialization uses `leptris_element_serialize_into` —
+  zero-copy into a pre-sized buffer (~15% off `tostring(elem)`,
+  which is at or ahead of lxml)
+- `leptris_node_children` and the `_serialize_into` pair declared in
+  the FFI surface (batch node access available to advanced users of
+  the cdef)
+- drift gate verified against 1.7.0 headers (86 declarations /
+  220 public symbols)
+
 ## 1.9.0 — 2026-08-24
 
 Adopts libleptris 1.6.0 (pin bump from 1.3.0; 1.5.x folded in):

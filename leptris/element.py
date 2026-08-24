@@ -510,5 +510,8 @@ _accel.bind(
     element_serialize=int(
         _ffi.ffi.cast("uintptr_t", _lib.leptris_element_serialize)
     ),
+    element_serialize_into=int(
+        _ffi.ffi.cast("uintptr_t", _lib.leptris_element_serialize_into)
+    ),
     error_class=LeptrisError,
 )
