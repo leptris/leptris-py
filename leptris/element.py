@@ -13,51 +13,14 @@ NOT from the C API's whole-subtree concatenated ``element_text``.
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
-from itertools import repeat
-from typing import Iterator, List, Optional, Union
+from typing import Iterator, Optional
 
 from . import _ffi
 from .error import LeptrisError
 
-_CLARK = re.compile(r"\{([^}]*)\}")
-
 _QNAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_.\-]*$")
 _QNAME_OK = re.compile(r"^[A-Za-z_][A-Za-z0-9_.\-]*(::.*)?$")
 
-_TextNodes = (_ffi.NODE_TEXT, _ffi.NODE_CDATA)
-
-
-class _AttribMap(Mapping):
-    """Read-only dict view of an element's attributes."""
-
-    __slots__ = ("_element",)
-
-    def __init__(self, element: "Element"):
-        self._element = element
-
-    def __getitem__(self, name: str) -> str:
-        value = self._element.get(name)
-        if value is None:
-            raise KeyError(name)
-        return value
-
-    def __iter__(self) -> Iterator[str]:
-        return iter(self._element.keys())
-
-    def __len__(self) -> int:
-        self._element._check_alive()
-        return _ffi.lib.leptris_element_attribute_count(self._element._ptr)
-
-    def __repr__(self) -> str:
-        return repr(dict(self))
-
-    def __eq__(self, other: object) -> bool:
-        if isinstance(other, Mapping):
-            return dict(self) == dict(other)
-        return NotImplemented
-
-    __hash__ = None  # type: ignore[assignment]
 
 
 class _ElementMethods:
@@ -66,10 +29,6 @@ class _ElementMethods:
 
     __slots__ = ()
 
-    def __init__(self, _ptr, document):
-        self._ptr = _ptr
-        self._document = document
-
     @property
     def document(self) -> "Document":
         return self._document
@@ -77,146 +36,6 @@ class _ElementMethods:
     def _check_alive(self) -> None:
         if self._document.closed:
             raise LeptrisError("operation on a closed document")
-
-    # -- names and namespaces -------------------------------------------
-
-    @property
-    def tag(self) -> str:
-        self._check_alive()
-        name = _ffi.ffi.string(_ffi.lib.leptris_element_name(self._cd())).decode("utf-8")
-        ns = _ffi.lib.leptris_element_namespace(self._cd())
-        if ns == _ffi.ffi.NULL:
-            return name
-        return "{%s}%s" % (_ffi.ffi.string(ns).decode("utf-8"), name)
-
-    @property
-    def namespace(self) -> Optional[str]:
-        self._check_alive()
-        value = _ffi.lib.leptris_element_namespace(self._cd())
-        if value == _ffi.ffi.NULL:
-            return None
-        return _ffi.ffi.string(value).decode("utf-8")
-
-    @property
-    def prefix(self) -> Optional[str]:
-        self._check_alive()
-        value = _ffi.lib.leptris_element_prefix(self._cd())
-        if value == _ffi.ffi.NULL:
-            return None
-        return _ffi.ffi.string(value).decode("utf-8")
-
-    # -- text (ElementTree model) ---------------------------------------
-
-    def _run_at(self, node: Optional["Node"]) -> Optional[str]:
-        parts = []
-        while node is not None and node.type in _TextNodes:
-            parts.append(node.content or "")
-            node = node.next_sibling
-        return "".join(parts) if parts else None
-
-    @property
-    def text(self) -> Optional[str]:
-        self._check_alive()
-        return self._run_at(self.to_node().first_child)
-
-    @property
-    def tail(self) -> Optional[str]:
-        self._check_alive()
-        return self._run_at(self.to_node().next_sibling)
-
-    def itertext(self) -> Iterator[str]:
-        self._check_alive()
-
-        def walk(element: "Element") -> Iterator[str]:
-            node = element.to_node().first_child
-            while node is not None:
-                if node.type in _TextNodes:
-                    parts = []
-                    while node is not None and node.type in _TextNodes:
-                        parts.append(node.content or "")
-                        node = node.next_sibling
-                    yield "".join(parts)
-                else:
-                    if node.is_element():
-                        yield from walk(node.as_element())
-                    node = node.next_sibling
-
-        yield from walk(self)
-
-    # -- attributes ------------------------------------------------------
-
-    def get(self, name: str, default=None):
-        self._check_alive()
-        if name.startswith("{") and "}" in name:
-            # Clark notation "{uri}local" (lxml semantics) — resolved
-            # through the namespace-aware lookup (libleptris 1.8.0).
-            uri, local = name[1:].split("}", 1)
-            value = _ffi.lib.leptris_element_attribute_ns(
-                self._cd(), uri.encode("utf-8"), local.encode("utf-8")
-            )
-        else:
-            value = _ffi.lib.leptris_element_attribute(
-                self._cd(), name.encode("utf-8")
-            )
-        if value == _ffi.ffi.NULL:
-            return default
-        return _ffi.ffi.string(value).decode("utf-8")
-
-    @property
-    def attrib(self) -> Mapping:
-        return _AttribMap(self)
-
-    def _iter_attributes(self):
-        attr = _ffi.lib.leptris_element_first_attribute(self._cd())
-        while attr != _ffi.ffi.NULL:
-            name = _ffi.ffi.string(
-                _ffi.lib.leptris_attribute_get_name(attr)
-            ).decode("utf-8")
-            value = _ffi.ffi.string(
-                _ffi.lib.leptris_attribute_get_value(self._ptr, attr)
-            ).decode("utf-8")
-            yield (name, value)
-            attr = _ffi.lib.leptris_attribute_next(attr)
-
-    def keys(self) -> List[str]:
-        self._check_alive()
-        return [name for name, _ in self._iter_attributes()]
-
-    def items(self) -> List[tuple]:
-        self._check_alive()
-        return list(self._iter_attributes())
-
-    def values(self) -> List[str]:
-        self._check_alive()
-        return [value for _, value in self._iter_attributes()]
-
-    # -- tree navigation -------------------------------------------------
-
-    @property
-    def sourceline(self) -> int:
-        """1-based source line of the element's start tag (lxml parity)."""
-        self._check_alive()
-        return _ffi.lib.leptris_node_line(
-            _ffi.lib.leptris_element_as_node(self._cd())
-        )
-
-    def getparent(self) -> Optional["Element"]:
-        self._check_alive()
-        ptr = _ffi.lib.leptris_element_parent(self._ptr)
-        if ptr == _ffi.ffi.NULL:
-            return None
-        return _make(ptr, self._document)
-
-    def getnext(self) -> Optional["Element"]:
-        # Element-level sibling chain skips text nodes (lxml getnext).
-        self._check_alive()
-        ptr = _ffi.lib.leptris_element_next_sibling_any(self._ptr)
-        return None if ptr == _ffi.ffi.NULL else _make(ptr, self._document)
-
-    def getprevious(self) -> Optional["Element"]:
-        self._check_alive()
-        ptr = _ffi.lib.leptris_element_previous_sibling_any(self._cd())
-        return None if ptr == _ffi.ffi.NULL else _make(ptr, self._document)
 
     def _child_at(self, index: int) -> "Element":
         ptr = _ffi.lib.leptris_element_child(self._cd(), index)
@@ -237,12 +56,6 @@ class _ElementMethods:
         if not 0 <= index < count:
             raise IndexError("child index out of range")
         return self._child_at(index)
-
-    __getitem__ = _py_getitem
-
-    def __len__(self) -> int:
-        self._check_alive()
-        return _ffi.lib.leptris_element_child_count(self._ptr)
 
     def __iter__(self) -> Iterator["Element"]:
         self._check_alive()
@@ -388,6 +201,7 @@ def _element_init(self, _ptr, document):
 
 Element.__init__ = _element_init
 
+# The C itertext returns a list; the API contract is an iterator.
 _itertext_c = Element.itertext
 Element.itertext = lambda self: iter(_itertext_c(self))
 
@@ -447,6 +261,11 @@ _BIND_NAMES = (
     "leptris_element_serialize",
     "leptris_element_serialize_into",
     "leptris_document_serialize",
+    "leptris_parse_string",
+    "leptris_parse_string_ex",
+    "leptris_parse_file",
+    "leptris_document_root",
+    "leptris_document_free",
 )
 _accel.bind(
     [

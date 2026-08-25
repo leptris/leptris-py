@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import gc
 import json
+import os
 import platform
 import sys
 import time
@@ -58,6 +59,25 @@ def _leptris_libs():
         "libleptris": libleptris_version() or "unknown",
         "libleptris pin": pinned,
     }
+
+
+def _loadavg():
+    """1-minute load average, or None where unavailable (Windows)."""
+    try:
+        return round(os.getloadavg()[0], 2)
+    except (AttributeError, OSError):
+        return None
+
+
+def _contended(loadavg):
+    """Timings recorded above 2x the CPU count are machine noise."""
+    if loadavg is None:
+        return False
+    try:
+        cpus = os.cpu_count() or 1
+    except AttributeError:
+        return False
+    return loadavg > 2 * cpus
 
 
 def _make_benchmarks():
@@ -212,7 +232,14 @@ def main():
     versions["ElementTree"] = sys.version.split()[0]
     versions["minidom"] = "stdlib"
 
+    loadavg = _loadavg()
+    contended = _contended(loadavg)
     print(f"python {sys.version.split()[0]} on {platform.platform()}")
+    print(
+        f"  loadavg {loadavg} — "
+        + ("CONTENDED: timings are unreliable, do not record"
+           if contended else "quiet")
+    )
     for name in LIB_ORDER:
         print(f"  {name:<13} {versions.get(name, '?')}")
     print()
@@ -244,7 +271,9 @@ def main():
         ))
     print()
 
-    display = {"op": "operation", "winner": "winner", **{lib: lib for lib in LIB_ORDER}}
+    suffix = " (CONTENDED)" if contended else ""
+    display = {"op": "operation", "winner": "winner" + suffix,
+               **{lib: lib for lib in LIB_ORDER}}
     keys = ["op"] + LIB_ORDER + ["winner"]
     widths = [max(len(display[k]), *(len(str(row[k])) for row in table_rows)) for k in keys]
     print("| " + " | ".join(display[k].ljust(w) for k, w in zip(keys, widths)) + " |")
@@ -257,6 +286,8 @@ def main():
     print(json.dumps({
         "python": sys.version.split()[0],
         "platform": platform.platform(),
+        "loadavg": loadavg,
+        "contended": contended,
         "libs": versions,
         "results": results,
     }, indent=2))

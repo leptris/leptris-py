@@ -151,16 +151,16 @@ class _XPathEngine:
             encoded = expression.encode("utf-8")
             if var_set != ffi.NULL:
                 result = _ffi.lib.leptris_xpath_eval_with_vars_context(
-                    document._ptr, ctx, encoded, var_set
+                    document._cd(), ctx, encoded, var_set
                 )
             elif ns_set != ffi.NULL:
                 result = _ffi.lib.leptris_xpath_eval_ns(
-                    document._ptr, ctx, encoded, ns_set
+                    document._cd(), ctx, encoded, ns_set
                 )
             else:
-                result = _ffi.lib.leptris_xpath_eval(document._ptr, ctx, encoded)
+                result = _ffi.lib.leptris_xpath_eval(document._cd(), ctx, encoded)
             if result == ffi.NULL:
-                message = _ffi.lib.leptris_document_last_error(document._ptr)
+                message = _ffi.lib.leptris_document_last_error(document._cd())
                 detail = (
                     ffi.string(message).decode("utf-8", "replace")
                     if message != ffi.NULL
@@ -270,13 +270,13 @@ class XPath:
                     if rc != 0:
                         raise XPathError(f"invalid namespace binding {prefix!r}")
                 result = _ffi.lib.leptris_xpath_compiled_eval_ns(
-                    self._compiled, document._ptr, context, ns_set
+                    self._compiled, document._cd(), context, ns_set
                 )
             finally:
                 _ffi.lib.leptris_xpath_ns_set_free(ns_set)
         else:
             result = _ffi.lib.leptris_xpath_compiled_eval(
-                self._compiled, document._ptr, context
+                self._compiled, document._cd(), context
             )
         if result == _ffi.ffi.NULL:
             raise XPathError(f"XPath evaluation failed: {self._expression!r}")
