@@ -263,23 +263,25 @@ class _ElementMethods:
             child = lib.leptris_element_next_sibling_any(child)
 
     def iter(self, tag: Optional[str] = None) -> Iterator["Element"]:
-        # Subtree walks delegate to the engine: one descendant-or-self
-        # evaluation at C speed plus batch materialization replaces
-        # ~2 FFI dispatches per element (5x measured on the benchmark
-        # matrix). Yields self first, then descendants in document
-        # order — lxml's iter() contract.
+        # Subtree walks delegate to the engine (one evaluation plus
+        # batch materialization — 5x over per-element FFI dispatch).
+        # Self is matched in Python and the engine walks `descendant::`
+        # because descendant-or-self omits a namespaced root for
+        # prefixed name tests (leptris/leptris#557).
         if tag is None or tag == "*":
             return iter(self.xpath("descendant-or-self::*"))
         if tag.startswith("{"):
             from .xpath import expand_clark_names
 
-            expression, extra = expand_clark_names(
-                "descendant-or-self::" + tag, None
-            )
-            return iter(self.xpath(expression, namespaces=extra or None))
-        if _QNAME.match(tag):
-            return iter(self.xpath("descendant-or-self::" + tag))
-        return self._iter_filter(tag)
+            expression, extra = expand_clark_names("descendant::" + tag, None)
+            rest = self.xpath(expression, namespaces=extra or None)
+        elif _QNAME.match(tag):
+            rest = self.xpath("descendant::" + tag)
+        else:
+            return self._iter_filter(tag)
+        if self.tag == tag:
+            return iter([self, *rest])
+        return iter(rest)
 
     def _iter_filter(self, tag) -> Iterator["Element"]:
         # Names that are not expressible as an XPath name test
@@ -314,76 +316,48 @@ class _ElementMethods:
 
     def xpath(self, expression: str, *, namespaces=None, variables=None):
         if variables is None:
-            raw = getattr(self, "_raw", None)
-            if _accel is not None and raw is not None:
-                from . import _ffi
+            from .xpath import _c_evaluate
 
-                if namespaces:
-                    flat = [v for pair in namespaces.items() for v in pair]
-                    items = _accel.nodeset_ns(
-                        self._document._raw_addr,
-                        raw,
-                        expression,
-                        self._document,
-                        flat,
-                    )
-                else:
-                    items = _accel.nodeset(
-                        self._document._raw_addr,
-                        raw,
-                        expression,
-                        self._document,
-                    )
-                if items is not None:
-                    return items
+            items = _c_evaluate(
+                self._document, self, expression, namespaces
+            )
+            if items is not None:
+                return items
         return self._document.xpath(
             expression, context=self, namespaces=namespaces, variables=variables
         )
 
     def findall(self, path: str, namespaces=None) -> list:
         if "{" in path or namespaces:
-            from .xpath import expand_clark_names
+            from .xpath import _c_evaluate, expand_clark_names
 
             expression, extra = expand_clark_names(path, namespaces)
             merged = dict(namespaces) if namespaces else {}
             merged.update(extra)
-            if merged:
-                raw = getattr(self, "_raw", None)
-                if _accel is not None and raw is not None:
-                    from . import _ffi
-
-                    flat = [v for pair in merged.items() for v in pair]
-                    items = _accel.nodeset_ns(
-                        self._document._raw_addr,
-                        raw,
-                        expression,
-                        self._document,
-                        flat,
-                    )
-                    if items is not None:
-                        return items
-            return self.xpath(expression, namespaces=merged or None)
-        if namespaces is None and "{" not in path and _QNAME_OK.match(path):
+            items = _c_evaluate(
+                self._document, self, expression, merged or None
+            )
+            if items is not None:
+                return items
+            return self._document.xpath(
+                expression, context=self, namespaces=merged or None
+            )
+        if _QNAME_OK.match(path):
             # plain path: straight to the all-C evaluator
-            raw = getattr(self, "_raw", None)
-            if _accel is not None and raw is not None:
-                from . import _ffi
+            from .xpath import _c_evaluate
 
-                items = _accel.nodeset(
-                    self._document._raw_addr,
-                    raw,
-                    path,
-                    self._document,
-                )
-                if items is not None:
-                    return items
-            return self.xpath(path)
+            items = _c_evaluate(self._document, self, path, None)
+            if items is not None:
+                return items
+            return self._document.xpath(path, context=self)
         from .xpath import expand_clark_names
 
         expression, extra = expand_clark_names(path, namespaces)
         merged = dict(namespaces) if namespaces else {}
         merged.update(extra)
-        return self.xpath(expression, namespaces=merged or None)
+        return self._document.xpath(
+            expression, context=self, namespaces=merged or None
+        )
 
     def find(self, path: str, namespaces=None) -> Optional["Element"]:
         if (
@@ -425,22 +399,19 @@ class _ElementMethods:
 
 from . import _leptrisaccel as _accel
 
-# The C heap type owns allocation, the hot accessors and the fields;
-# everything below attaches onto it. _accelerated names stay C-owned
-# (attaching the Python versions would override the C slots).
+# The C heap type is self-describing: a member it provides (hot
+# accessors, slots) resolves to something beyond object's default, so
+# it is left alone — the ownership contract has one home, the C module.
 Element = _accel.Element
-_accelerated = {
-    "tag", "text", "tail", "attrib", "get", "getparent", "getnext",
-    "getprevious", "keys", "items", "values", "itertext",
-    "namespace", "prefix", "sourceline",
-    "__len__", "__getitem__", "_ptr", "_document",
-    "__slots__", "__module__", "__dict__", "__weakref__",
-    "__init__", "__doc__", "__qualname__",
-}
+_TYPE_MACHINERY = frozenset(
+    ("__slots__", "__module__", "__dict__", "__weakref__",
+     "__doc__", "__qualname__")
+)
 for _name, _value in _ElementMethods.__dict__.items():
-    if _name in _accelerated:
+    if _name in _TYPE_MACHINERY:
         continue
-    setattr(Element, _name, _value)
+    if getattr(Element, _name, None) is getattr(object, _name, None):
+        setattr(Element, _name, _value)
 
 
 def _element_init(self, _ptr, document):
@@ -469,58 +440,51 @@ def _materialize(buffer, document):
 
 
 _lib = _ffi.lib
+# Fns declaration order in _leptrisaccel.c is the protocol: this
+# tuple must list the libleptris symbols in exactly that order.
+_BIND_NAMES = (
+    "leptris_element_name",
+    "leptris_element_namespace",
+    "leptris_element_attribute",
+    "leptris_element_attribute_ns",
+    "leptris_element_child",
+    "leptris_element_child_count",
+    "leptris_element_as_node",
+    "leptris_node_first_child",
+    "leptris_node_next_sibling",
+    "leptris_node_get_type",
+    "leptris_text_node_get_content",
+    "leptris_cdata_node_get_content",
+    "leptris_element_first_child_any",
+    "leptris_element_prefix",
+    "leptris_element_previous_sibling_any",
+    "leptris_element_first_attribute",
+    "leptris_attribute_next",
+    "leptris_attribute_get_name",
+    "leptris_attribute_get_value",
+    "leptris_element_parent",
+    "leptris_element_next_sibling_any",
+    "leptris_node_line",
+    "leptris_xpath_eval",
+    "leptris_xpath_result_type",
+    "leptris_xpath_result_count",
+    "leptris_xpath_result_get_nodes",
+    "leptris_xpath_result_free",
+    "leptris_xpath_result_number",
+    "leptris_xpath_result_boolean",
+    "leptris_xpath_result_string",
+    "leptris_free_string",
+    "leptris_xpath_ns_set_new",
+    "leptris_xpath_ns_set_free",
+    "leptris_xpath_ns_set_add",
+    "leptris_xpath_eval_ns",
+    "leptris_element_serialize",
+    "leptris_element_serialize_into",
+)
 _accel.bind(
-    **{
-        name[8:]: int(_ffi.ffi.cast("uintptr_t", getattr(_lib, name)))
-        for name in (
-            "leptris_element_name", "leptris_element_namespace",
-            "leptris_element_attribute", "leptris_element_attribute_ns",
-            "leptris_element_child",
-            "leptris_element_child_count", "leptris_element_as_node",
-            "leptris_node_first_child", "leptris_node_next_sibling",
-            "leptris_node_get_type", "leptris_text_node_get_content",
-            "leptris_cdata_node_get_content",
-            "leptris_element_first_attribute",
-            "leptris_attribute_next", "leptris_attribute_get_name",
-            "leptris_attribute_get_value", "leptris_element_parent",
-            "leptris_element_next_sibling_any", "leptris_node_line",
-            "leptris_element_first_child_any",
-            "leptris_node_first_child", "leptris_node_next_sibling",
-            "leptris_xpath_eval", "leptris_xpath_result_type",
-            "leptris_xpath_result_count",
-            "leptris_xpath_result_get_nodes",
-            "leptris_xpath_result_free",
-            "leptris_xpath_result_number",
-            "leptris_xpath_result_boolean",
-            "leptris_xpath_result_string",
-            "leptris_free_string",
-        )
-    },
-    element_prefix_fn=int(
-        _ffi.ffi.cast("uintptr_t", _lib.leptris_element_prefix)
-    ),
-    element_previous_sibling_any_fn=int(
-        _ffi.ffi.cast(
-            "uintptr_t", _lib.leptris_element_previous_sibling_any
-        )
-    ),
-    ns_set_new=int(
-        _ffi.ffi.cast("uintptr_t", _lib.leptris_xpath_ns_set_new)
-    ),
-    ns_set_free=int(
-        _ffi.ffi.cast("uintptr_t", _lib.leptris_xpath_ns_set_free)
-    ),
-    ns_set_add=int(
-        _ffi.ffi.cast("uintptr_t", _lib.leptris_xpath_ns_set_add)
-    ),
-    xpath_eval_ns=int(
-        _ffi.ffi.cast("uintptr_t", _lib.leptris_xpath_eval_ns)
-    ),
-    element_serialize=int(
-        _ffi.ffi.cast("uintptr_t", _lib.leptris_element_serialize)
-    ),
-    element_serialize_into=int(
-        _ffi.ffi.cast("uintptr_t", _lib.leptris_element_serialize_into)
-    ),
-    error_class=LeptrisError,
+    [
+        int(_ffi.ffi.cast("uintptr_t", getattr(_lib, name)))
+        for name in _BIND_NAMES
+    ],
+    LeptrisError,
 )

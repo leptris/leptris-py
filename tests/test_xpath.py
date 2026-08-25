@@ -198,3 +198,49 @@ class TestNamespaceAwareGet:
         root = fromstring("<x:r xmlns:x='urn:x' x:id='7'/>")
         assert root.get("{urn:other}id") is None
 
+class TestCompiledXPath:
+    def test_scalar(self):
+        from leptris import XPath, fromstring
+
+        root = fromstring("<r><a>1</a><a>2</a></r>")
+        query = XPath("count(//a)")
+        assert query(root) == 2.0
+        assert query(root) == 2.0  # reusable
+
+    def test_nodeset(self):
+        from leptris import XPath, fromstring
+
+        root = fromstring("<r><a id='1'>x</a><a id='2'>y</a></r>")
+        query = XPath("//a[@id='2']")
+        assert query(root)[0].text == "y"
+
+    def test_document_argument(self):
+        from leptris import XPath, Document
+
+        with Document.parse("<r><a/></r>") as doc:
+            assert len(XPath("//a")(doc)) == 1
+
+    def test_context_element(self):
+        from leptris import XPath, fromstring
+
+        root = fromstring("<r><b id='1'/><b id='2'/></r>")
+        assert XPath("string(@id)")(root[1]) == "2"
+
+    def test_namespaces(self):
+        from leptris import XPath, fromstring
+
+        root = fromstring("<x:r xmlns:x='urn:x'><x:a/></x:r>")
+        query = XPath("count(//x:a)")
+        assert query(root, namespaces={"x": "urn:x"}) == 1.0
+
+    def test_invalid_expression_raises(self):
+        from leptris import XPath
+        from leptris.error import XPathError
+
+        with pytest.raises(XPathError):
+            XPath("///[")
+
+    def test_repr(self):
+        from leptris import XPath
+
+        assert repr(XPath("//a")) == "<XPath '//a'>"

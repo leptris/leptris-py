@@ -115,3 +115,19 @@ class TestRecover:
         with Document.parse("<r><a/></r>", recover=True) as doc:
             assert doc.xpath("count(//a)") == 1.0
 
+
+class TestFreshDocumentRegression:
+    # leptris/leptris#550: flat-path documents misbehave until the
+    # root is touched; Document.parse promotes at construction.
+
+    def test_xpath_without_getroot(self):
+        doc = Document.parse("<r><a/></r>")
+        assert doc.xpath("count(//a)") == 1.0
+        doc.close()
+
+    def test_tostring_without_getroot(self):
+        from leptris import tostring
+
+        doc = Document.parse("<r><a/></r>")
+        assert tostring(doc) == b"<r><a/></r>"
+        doc.close()

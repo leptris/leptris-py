@@ -138,6 +138,17 @@ def c14n(
     _ffi.lib.leptris_free_string(ptr)
     return data
 
+class _BorrowedDocument:
+    """Sentinel owner for borrowed iterparse elements: the iterator,
+    not a Document, owns their memory."""
+
+    closed = False
+    _raw_addr = None
+
+    def close(self):
+        pass
+
+
 def iterparse(source, events=("end",)):
     """Incrementally parse XML with bounded memory (lxml parity).
 
@@ -172,16 +183,7 @@ def iterparse(source, events=("end",)):
     if iterator == ffi.NULL:
         raise ParseError("iterparse could not start")
 
-    class _IterparseDocument:
-        """Sentinel owner for borrowed iterparse elements."""
-
-        closed = False
-        _raw_addr = None
-
-        def close(self):
-            pass
-
-    sentinel = _IterparseDocument()
+    sentinel = _BorrowedDocument()
 
     from .element import _make
 
