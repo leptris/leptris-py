@@ -1524,18 +1524,19 @@ make_registry_capsule(void)
     return capsule;
 }
 
-/* parse(address, length, recover) -> (address | None, registry |
- * None, status). The buffer is only read during the call (the
- * engine copies internally); parse_string_inplace was measured
- * 8-40% slower than parse_string at every scale on 1.9.0, despite
- * the header's "3-5x faster" claim. */
+/* parse(data, recover) -> (address | None, registry | None,
+ * status). "y#p" hands the bytes buffer straight to C
+ * (PyBytes_AsStringAndSize is in the stable ABI); the engine copies,
+ * so the buffer is only read during the call. parse_string_inplace
+ * was measured 8-40% slower than parse_string at every scale on
+ * 1.9.0, despite the header's "3-5x faster" claim (leptris#561). */
 static PyObject *
 accel_parse(PyObject *module, PyObject *args)
 {
-    unsigned long long address;
+    const char *data;
     Py_ssize_t length;
     int recover;
-    if (!PyArg_ParseTuple(args, "Knp", &address, &length, &recover))
+    if (!PyArg_ParseTuple(args, "y#p", &data, &length, &recover))
         return NULL;
     if (!bound) {
         PyErr_SetString(LeptrisErrorType, "accelerator is not bound");
@@ -1545,11 +1546,9 @@ accel_parse(PyObject *module, PyObject *args)
     void *doc;
     if (recover) {
         CParseOptions opts = {0, -1, 0, 1};
-        doc = Fns.parse_string_ex(
-            (const char *)(uintptr_t)address, (size_t)length, &opts, &status);
+        doc = Fns.parse_string_ex(data, (size_t)length, &opts, &status);
     } else {
-        doc = Fns.parse_string_fn(
-            (const char *)(uintptr_t)address, (size_t)length, &status);
+        doc = Fns.parse_string_fn(data, (size_t)length, &status);
     }
     if (doc == NULL)
         return Py_BuildValue("(OOi)", Py_None, Py_None, status);
@@ -1628,7 +1627,7 @@ static PyMethodDef accel_methods[] = {
     {"serialize_elem", accel_serialize_elem, METH_VARARGS,
      "serialize_elem(address, indent, declaration) -> bytes | None"},
     {"parse", accel_parse, METH_VARARGS,
-     "parse(address, length, recover) -> (address|None, registry|None, status)"},
+     "parse(data, recover) -> (address|None, registry|None, status)"},
     {"parse_file", accel_parse_file, METH_VARARGS,
      "parse_file(path_bytes) -> (address|None, registry|None, status)"},
     {"close_document", accel_close_document, METH_VARARGS,
