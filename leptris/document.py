@@ -1,4 +1,5 @@
-"""Document — the ElementTree analogue; owns the tree and its pool.
+"""Document — the ElementTree analogue; owns the tree, its pool, and
+(when parsed from a string) the buffer the engine parsed in place.
 
 Release it with close() (or the context manager); __del__ is a
 last-resort safety net for CPython refcounting, not a contract.
@@ -44,18 +45,14 @@ def serialize_options(
 class Document:
     __slots__ = ("_ptr", "_freed", "_accel_registry", "_raw_addr")
 
-    def __init__(self, _ptr):
-        self._ptr = _ptr
-        self._freed = False
-        try:
-            from .element import _accel
-            self._accel_registry = _accel.new_registry()
-        except (ImportError, AttributeError):
-            self._accel_registry = None
-        self._raw_addr = int(_ffi.ffi.cast("uintptr_t", _ptr))
-        # Touch the root once: flat-path documents misbehave on XPath
-        # and serialization until promoted (leptris/leptris#550).
-        _ffi.lib.leptris_document_root(_ptr)
+    @classmethod
+    def _from_parts(cls, address, registry):
+        doc = cls.__new__(cls)
+        doc._ptr = _ffi.ffi.NULL
+        doc._freed = False
+        doc._accel_registry = registry
+        doc._raw_addr = address
+        return doc
 
     @classmethod
     def parse(cls, xml, *, recover: bool = False) -> "Document":
@@ -67,47 +64,54 @@ class Document:
             xml = xml.encode("utf-8")
         if not isinstance(xml, (bytes, bytearray, memoryview)):
             raise TypeError("xml must be str or bytes")
-        xml = bytes(xml)
-        status = _ffi.ffi.new("int*")
-        if recover:
-            options = _ffi.ffi.new("LeptrisParseOptions*")
-            options.flags = 0
-            options.strict_mode = -1
-            options.max_depth = 0
-            options.recover = 1
-            ptr = _ffi.lib.leptris_parse_string_ex(
-                xml, len(xml), options, status
-            )
-        else:
-            ptr = _ffi.lib.leptris_parse_string(xml, len(xml), status)
-        if ptr == _ffi.ffi.NULL:
-            raise ParseError(status_message(status[0]))
-        return cls(ptr)
+        data = bytearray(xml)  # writable: from_buffer needs write access
+        if not data:
+            raise ParseError("parse error: empty input")
+        from .element import _accel
+
+        view = _ffi.ffi.from_buffer("char[]", data)
+        address, registry, status = _accel.parse(
+            int(_ffi.ffi.cast("uintptr_t", view)), len(data), recover
+        )
+        del view  # the engine copies; the buffer is not retained
+        if address is None:
+            raise ParseError(status_message(status))
+        return cls._from_parts(address, registry)
 
     @classmethod
     def parse_file(cls, path) -> "Document":
         path = os.fspath(path)
         if isinstance(path, str):
             path = path.encode("utf-8")
-        status = _ffi.ffi.new("int*")
-        ptr = _ffi.lib.leptris_parse_file(path, status)
+        from .element import _accel
+
+        address, registry, status = _accel.parse_file(path)
+        if address is None:
+            raise ParseError(status_message(status))
+        return cls._from_parts(address, registry)
+
+    def _cd(self):
+        """cffi handle for cold cffi paths, created lazily."""
+        ptr = self._ptr
         if ptr == _ffi.ffi.NULL:
-            raise ParseError(status_message(status[0]))
-        return cls(ptr)
+            ptr = _ffi.ffi.cast("LeptrisDocument", self._raw_addr)
+            self._ptr = ptr
+        return ptr
 
     @property
     def root(self) -> Optional["Element"]:
-        ptr = _ffi.lib.leptris_document_root(self._ptr)
-        if ptr == _ffi.ffi.NULL:
-            return None
-        from .element import _make
+        if self._freed:
+            raise LeptrisError("operation on a closed document")
+        from .element import _accel
 
-        return _make(ptr, self)
+        return _accel.document_root(self._raw_addr, self)
 
     def getroot(self) -> Optional["Element"]:
         return self.root
 
     def xpath(self, expression: str, *, context=None, namespaces=None, variables=None):
+        if self._freed:
+            raise LeptrisError("operation on a closed document")
         if variables is None:
             from .xpath import _c_evaluate
 
@@ -146,24 +150,27 @@ class Document:
         if isinstance(path, str):
             path = path.encode("utf-8")
         options, _keepalive = serialize_options(encoding, pretty_print, xml_declaration)
-        status = _ffi.lib.leptris_document_save_file(self._ptr, path, options)
+        status = _ffi.lib.leptris_document_save_file(self._cd(), path, options)
         if status != 0:
             raise LeptrisError(status_message(status))
 
     def process_xinclude(self, base_url: Optional[str] = None) -> "Document":
+        if self._freed:
+            raise LeptrisError("operation on a closed document")
         base = base_url.encode("utf-8") if base_url is not None else _ffi.ffi.NULL
-        rc = _ffi.lib.leptris_xinclude_process(self._ptr, base)
+        rc = _ffi.lib.leptris_xinclude_process(self._cd(), base)
         if rc != 0:
             raise LeptrisError("XInclude processing failed")
         return self
 
     def close(self) -> None:
         if not self._freed:
+            from .element import _accel
+
             registry = getattr(self, "_accel_registry", None)
             if registry is not None:
-                from .element import _accel
                 _accel.invalidate(registry)
-            _ffi.lib.leptris_document_free(self._ptr)
+            _accel.close_document(self._raw_addr)
             self._freed = True
             self._ptr = _ffi.ffi.NULL
 

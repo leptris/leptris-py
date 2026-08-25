@@ -131,3 +131,32 @@ class TestFreshDocumentRegression:
         doc = Document.parse("<r><a/></r>")
         assert tostring(doc) == b"<r><a/></r>"
         doc.close()
+
+
+class TestRawAddressDocument:
+    def test_empty_input_raises(self):
+        with pytest.raises(ParseError):
+            fromstring("")
+
+    def test_memoryview_input(self):
+        assert fromstring(memoryview(b"<r><a/></r>"))[0].tag == "a"
+
+    def test_c14n_after_close_raises(self):
+        from leptris import c14n
+
+        doc = Document.parse("<r/>")
+        doc.close()
+        with pytest.raises(LeptrisError):
+            c14n(doc)
+
+    def test_write_after_close_raises(self):
+        doc = Document.parse("<r/>")
+        doc.close()
+        with pytest.raises(LeptrisError):
+            doc.write("/dev/null")
+
+    def test_xinclude_after_close_raises(self):
+        doc = Document.parse("<r/>")
+        doc.close()
+        with pytest.raises(LeptrisError):
+            doc.process_xinclude()

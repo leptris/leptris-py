@@ -1,6 +1,32 @@
 # Changelog
 
 
+## 1.13.0 — 2026-08-25
+
+Document joins Element's raw-address pattern; one home per accessor.
+
+- `_accel.parse`/`parse_file`: parse + #550 promote-touch +
+  registry creation in ONE C call returning an address; Fns grows
+  to 43 entries (parse_string, parse_string_ex, parse_file,
+  document_root, document_free)
+- Document stores the raw address; the cffi handle is created
+  lazily (`_cd()`) for cold paths (write-to-file, XInclude, c14n,
+  engine XPath); `close()` runs through a bound `document_free`;
+  closed-document guards added at every `_cd()` entry
+- leptris/leptris#561 filed: parse_string_inplace measured 8-42%
+  SLOWER than parse_string at every scale (header claims 3-5x
+  faster) — the binding keeps parse_string
+- element.py purge: the seventeen Python accessors shadowed by the
+  C type (tag/text/tail/namespace/prefix/sourceline/attrib/get/
+  keys/items/values/getparent/getnext/getprevious/__len__/
+  __getitem__) and their orphaned helpers (_AttribMap, _run_at,
+  _iter_attributes, dead imports) are deleted — each accessor has
+  exactly one home now (462 -> 275 lines)
+- benchmarks/matrix.py records loadavg and marks runs CONTENDED
+  above 2x CPU count (a loadavg-247 machine produced a garbage
+  matrix earlier today; the guard makes such runs self-labeling)
+
+
 ## 1.12.0 — 2026-08-25
 
 Performance pass: subtree walks never touch the XPath engine.

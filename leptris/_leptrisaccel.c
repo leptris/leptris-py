@@ -99,9 +99,14 @@ static struct {
     char *(*element_serialize)(void *, void *);
     size_t (*element_serialize_into)(void *, char *, size_t, size_t *, const void *);
     char *(*document_serialize)(void *, void *);
+    void *(*parse_string_fn)(const char *, size_t, int *);
+    void *(*parse_string_ex)(const char *, size_t, const void *, int *);
+    void *(*parse_file)(const char *, int *);
+    void *(*document_root)(void *);
+    void (*document_free)(void *);
 } Fns;
 
-#define FN_COUNT 38
+#define FN_COUNT 43
 
 static int bound = 0;
 static PyObject *LeptrisErrorType = NULL;
@@ -954,8 +959,8 @@ accel_bind(PyObject *module, PyObject *args)
         Py_DECREF(fast);
         PyErr_Format(
             PyExc_ValueError,
-            "bind: expected FN_COUNT function addresses in Fns declaration "
-            "order, got %zd", count);
+            "bind: expected %d function addresses in Fns declaration "
+            "order, got %zd", FN_COUNT, count);
         return NULL;
     }
     /* The Fns declaration order IS the protocol. */
@@ -998,6 +1003,11 @@ accel_bind(PyObject *module, PyObject *args)
     (void **)&Fns.element_serialize,
     (void **)&Fns.element_serialize_into,
     (void **)&Fns.document_serialize,
+    (void **)&Fns.parse_string_fn,
+    (void **)&Fns.parse_string_ex,
+    (void **)&Fns.parse_file,
+    (void **)&Fns.document_root,
+    (void **)&Fns.document_free,
     };
     for (Py_ssize_t i = 0; i < FN_COUNT; i++) {
         PyObject *item = PyList_Check(fast)
@@ -1244,21 +1254,12 @@ accel_find_first(PyObject *module, PyObject *args)
     Py_RETURN_NONE;
 }
 
+static PyObject *make_registry_capsule(void);
+
 static PyObject *
 accel_new_registry(PyObject *module, PyObject *unused)
 {
-    Registry *reg = (Registry *)PyMem_Malloc(sizeof(Registry));
-    if (reg == NULL)
-        return PyErr_NoMemory();
-    reg->first = NULL;
-    reg->last = NULL;
-    PyObject *capsule =
-        PyCapsule_New(reg, "leptris.registry", registry_capsule_free);
-    if (capsule == NULL) {
-        PyMem_Free(reg);
-        return NULL;
-    }
-    return capsule;
+    return make_registry_capsule();
 }
 
 static PyObject *
@@ -1497,6 +1498,120 @@ accel_serialize_doc(PyObject *module, PyObject *args)
     return out;
 }
 
+/* ---- document parse/registry seam ---------------------------------- */
+
+/* LeptrisParseOptions layout (types.h): flags, strict_mode, max_depth,
+ * recover — four ints. */
+typedef struct { int flags; int strict_mode; int max_depth; int recover; }
+    CParseOptions;
+
+static PyObject *
+make_registry_capsule(void)
+{
+    Registry *reg = (Registry *)PyMem_Malloc(sizeof(Registry));
+    if (reg == NULL) {
+        PyErr_NoMemory();
+        return NULL;
+    }
+    reg->first = NULL;
+    reg->last = NULL;
+    PyObject *capsule =
+        PyCapsule_New(reg, "leptris.registry", registry_capsule_free);
+    if (capsule == NULL) {
+        PyMem_Free(reg);
+        return NULL;
+    }
+    return capsule;
+}
+
+/* parse(address, length, recover) -> (address | None, registry |
+ * None, status). The buffer is only read during the call (the
+ * engine copies internally); parse_string_inplace was measured
+ * 8-40% slower than parse_string at every scale on 1.9.0, despite
+ * the header's "3-5x faster" claim. */
+static PyObject *
+accel_parse(PyObject *module, PyObject *args)
+{
+    unsigned long long address;
+    Py_ssize_t length;
+    int recover;
+    if (!PyArg_ParseTuple(args, "Knp", &address, &length, &recover))
+        return NULL;
+    if (!bound) {
+        PyErr_SetString(LeptrisErrorType, "accelerator is not bound");
+        return NULL;
+    }
+    int status = 0;
+    void *doc;
+    if (recover) {
+        CParseOptions opts = {0, -1, 0, 1};
+        doc = Fns.parse_string_ex(
+            (const char *)(uintptr_t)address, (size_t)length, &opts, &status);
+    } else {
+        doc = Fns.parse_string_fn(
+            (const char *)(uintptr_t)address, (size_t)length, &status);
+    }
+    if (doc == NULL)
+        return Py_BuildValue("(OOi)", Py_None, Py_None, status);
+    Fns.document_root(doc); /* promote flat-path documents (#550) */
+    PyObject *registry = make_registry_capsule();
+    if (registry == NULL)
+        return NULL;
+    return Py_BuildValue("(NOi)", PyLong_FromVoidPtr(doc), registry, status);
+}
+
+/* parse_file(path_bytes) -> (address | None, registry | None, status) */
+static PyObject *
+accel_parse_file(PyObject *module, PyObject *args)
+{
+    const char *path;
+    Py_ssize_t length;
+    if (!PyArg_ParseTuple(args, "y#", &path, &length))
+        return NULL;
+    if (!bound) {
+        PyErr_SetString(LeptrisErrorType, "accelerator is not bound");
+        return NULL;
+    }
+    int status = 0;
+    void *doc = Fns.parse_file(path, &status);
+    if (doc == NULL)
+        return Py_BuildValue("(OOi)", Py_None, Py_None, status);
+    Fns.document_root(doc);
+    PyObject *registry = make_registry_capsule();
+    if (registry == NULL)
+        return NULL;
+    return Py_BuildValue("(NOi)", PyLong_FromVoidPtr(doc), registry, status);
+}
+
+/* close_document(address) -> None */
+static PyObject *
+accel_close_document(PyObject *module, PyObject *args)
+{
+    unsigned long long address;
+    if (!PyArg_ParseTuple(args, "K", &address))
+        return NULL;
+    if (bound)
+        Fns.document_free((void *)(uintptr_t)address);
+    Py_RETURN_NONE;
+}
+
+/* document_root(address, document) -> Element | None */
+static PyObject *
+accel_document_root(PyObject *module, PyObject *args)
+{
+    unsigned long long address;
+    PyObject *document;
+    if (!PyArg_ParseTuple(args, "KO", &address, &document))
+        return NULL;
+    if (!bound)
+        Py_RETURN_NONE;
+    void *root = Fns.document_root((void *)(uintptr_t)address);
+    if (root == NULL)
+        Py_RETURN_NONE;
+    return element_from_parts_reg(
+        root, Py_None, document, registry_of(document));
+}
+
 static PyMethodDef accel_methods[] = {
     {"create", accel_create, METH_VARARGS,
      "create(address, ptr, document) -> Element"},
@@ -1512,6 +1627,14 @@ static PyMethodDef accel_methods[] = {
      "find_first(address, name, document) -> Element | None"},
     {"serialize_elem", accel_serialize_elem, METH_VARARGS,
      "serialize_elem(address, indent, declaration) -> bytes | None"},
+    {"parse", accel_parse, METH_VARARGS,
+     "parse(address, length, recover) -> (address|None, registry|None, status)"},
+    {"parse_file", accel_parse_file, METH_VARARGS,
+     "parse_file(path_bytes) -> (address|None, registry|None, status)"},
+    {"close_document", accel_close_document, METH_VARARGS,
+     "close_document(address) -> None"},
+    {"document_root", accel_document_root, METH_VARARGS,
+     "document_root(address, document) -> Element | None"},
     {"subtree_iter", accel_subtree_iter, METH_VARARGS,
      "subtree_iter(element, include_self, ns, local) -> SubtreeIterator"},
     {"children", (PyCFunction)accel_children, METH_O,

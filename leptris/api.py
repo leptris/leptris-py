@@ -97,7 +97,7 @@ def tostring(
     if elem is not None:
         ptr = _ffi.lib.leptris_element_serialize(elem._cd(), options)
     else:
-        ptr = _ffi.lib.leptris_document_serialize(doc._ptr, options)
+        ptr = _ffi.lib.leptris_document_serialize(doc._cd(), options)
     if ptr == ffi.NULL:
         raise LeptrisError("serialization failed")
     data = ffi.string(ptr)
@@ -133,8 +133,10 @@ def c14n(
     mode = _ffi.C14N_EXCLUSIVE if exclusive else _ffi.C14N_CANONICAL
     prefixes, _keepalive = _prefix_array(inclusive_ns_prefixes)
     if isinstance(target, Document):
+        if target.closed:
+            raise LeptrisError("operation on a closed document")
         ptr = _ffi.lib.leptris_c14n_canonicalize_ex(
-            target._ptr, versions[version], mode, prefixes, int(with_comments)
+            target._cd(), versions[version], mode, prefixes, int(with_comments)
         )
     elif isinstance(target, Element):
         if target.document.closed:
