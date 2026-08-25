@@ -246,42 +246,22 @@ class _ElementMethods:
 
     def __iter__(self) -> Iterator["Element"]:
         self._check_alive()
-        lib = _ffi.lib
-        count = lib.leptris_element_child_count(self._ptr)
-        if count > 3:
-            # Bulk fill wins from ~4 children up (measured crossover).
-            buffer = _ffi.ffi.new("LeptrisElement[]", count)
-            lib.leptris_element_children(self._cd(), buffer, count)
-            return iter(_materialize(buffer, self._document))
-        return self._iter_chain()
-
-    def _iter_chain(self) -> Iterator["Element"]:
-        lib = _ffi.lib
-        child = lib.leptris_element_first_child_any(self._cd())
-        while child != _ffi.ffi.NULL:
-            yield _make(child, self._document)
-            child = lib.leptris_element_next_sibling_any(child)
+        return iter(_accel.children(self))
 
     def iter(self, tag: Optional[str] = None) -> Iterator["Element"]:
-        # Subtree walks delegate to the engine (one evaluation plus
-        # batch materialization — 5x over per-element FFI dispatch).
-        # Self is matched in Python and the engine walks `descendant::`
-        # because descendant-or-self omits a namespaced root for
-        # prefixed name tests (leptris/leptris#557).
+        # The C cursor walks first_child/next_sibling/parent directly —
+        # no expression is built and no engine evaluation happens, so
+        # the descendant-or-self root omission (leptris/leptris#557)
+        # cannot bite here.
+        self._check_alive()
         if tag is None or tag == "*":
-            return iter(self.xpath("descendant-or-self::*"))
-        if tag.startswith("{"):
-            from .xpath import expand_clark_names
-
-            expression, extra = expand_clark_names("descendant::" + tag, None)
-            rest = self.xpath(expression, namespaces=extra or None)
-        elif _QNAME.match(tag):
-            rest = self.xpath("descendant::" + tag)
-        else:
-            return self._iter_filter(tag)
-        if self.tag == tag:
-            return iter([self, *rest])
-        return iter(rest)
+            return _accel.subtree_iter(self, True, None, None)
+        if tag.startswith("{") and "}" in tag:
+            uri, local = tag[1:].split("}", 1)
+            return _accel.subtree_iter(self, True, uri, local)
+        if _QNAME.match(tag):
+            return _accel.subtree_iter(self, True, None, tag)
+        return self._iter_filter(tag)
 
     def _iter_filter(self, tag) -> Iterator["Element"]:
         # Names that are not expressible as an XPath name test
@@ -292,15 +272,14 @@ class _ElementMethods:
             yield from child._iter_filter(tag)
 
     def iterdescendants(self, tag: Optional[str] = None) -> Iterator["Element"]:
+        self._check_alive()
         if tag is None or tag == "*":
-            return iter(self.xpath("descendant::*"))
-        if tag.startswith("{"):
-            from .xpath import expand_clark_names
-
-            expression, extra = expand_clark_names("descendant::" + tag, None)
-            return iter(self.xpath(expression, namespaces=extra or None))
+            return _accel.subtree_iter(self, False, None, None)
+        if tag.startswith("{") and "}" in tag:
+            uri, local = tag[1:].split("}", 1)
+            return _accel.subtree_iter(self, False, uri, local)
         if _QNAME.match(tag):
-            return iter(self.xpath("descendant::" + tag))
+            return _accel.subtree_iter(self, False, None, tag)
         return self._iter_descendants_filter(tag)
 
     def _iter_descendants_filter(self, tag) -> Iterator["Element"]:
@@ -316,11 +295,7 @@ class _ElementMethods:
 
     def xpath(self, expression: str, *, namespaces=None, variables=None):
         if variables is None:
-            from .xpath import _c_evaluate
-
-            items = _c_evaluate(
-                self._document, self, expression, namespaces
-            )
+            items = _c_evaluate(self._document, self, expression, namespaces)
             if items is not None:
                 return items
         return self._document.xpath(
@@ -329,14 +304,10 @@ class _ElementMethods:
 
     def findall(self, path: str, namespaces=None) -> list:
         if "{" in path or namespaces:
-            from .xpath import _c_evaluate, expand_clark_names
-
             expression, extra = expand_clark_names(path, namespaces)
             merged = dict(namespaces) if namespaces else {}
             merged.update(extra)
-            items = _c_evaluate(
-                self._document, self, expression, merged or None
-            )
+            items = _c_evaluate(self._document, self, expression, merged or None)
             if items is not None:
                 return items
             return self._document.xpath(
@@ -344,19 +315,13 @@ class _ElementMethods:
             )
         if _QNAME_OK.match(path):
             # plain path: straight to the all-C evaluator
-            from .xpath import _c_evaluate
-
             items = _c_evaluate(self._document, self, path, None)
             if items is not None:
                 return items
             return self._document.xpath(path, context=self)
-        from .xpath import expand_clark_names
-
         expression, extra = expand_clark_names(path, namespaces)
-        merged = dict(namespaces) if namespaces else {}
-        merged.update(extra)
         return self._document.xpath(
-            expression, context=self, namespaces=merged or None
+            expression, context=self, namespaces=extra or None
         )
 
     def find(self, path: str, namespaces=None) -> Optional["Element"]:
@@ -398,6 +363,7 @@ class _ElementMethods:
 
 
 from . import _leptrisaccel as _accel
+from .xpath import _c_evaluate, expand_clark_names
 
 # The C heap type is self-describing: a member it provides (hot
 # accessors, slots) resolves to something beyond object's default, so
@@ -480,6 +446,7 @@ _BIND_NAMES = (
     "leptris_xpath_eval_ns",
     "leptris_element_serialize",
     "leptris_element_serialize_into",
+    "leptris_document_serialize",
 )
 _accel.bind(
     [

@@ -1,6 +1,44 @@
 # Changelog
 
 
+## 1.12.0 — 2026-08-25
+
+Performance pass: subtree walks never touch the XPath engine.
+
+- C subtree cursor (`SubtreeIterator` in the accelerator):
+  `Element.iter()`/`iterdescendants()` walk
+  first-child/next-sibling/parent directly in C and stream
+  elements instead of building an expression string, evaluating
+  it, and materializing the whole subtree as a list; name and
+  namespace are matched in C (the tag is split once, in Python)
+- child iteration (`for child in element`) is a single C call
+  returning a presized list (`_accel.children`)
+- `Element.__iter__`'s two Python paths (chain generator, bulk
+  FFI fill) are gone
+- nodeset results are presized (`PyList_New` + `SetItem`) and
+  mixed nodesets bail to the engine path before any object is
+  built
+- the XPath adapter (`_c_evaluate`) is imported once at module
+  scope instead of inside every `xpath()`/`findall()` call;
+  findall's duplicated namespace-merge branch is folded
+- `Document.xpath()` goes straight to the all-C adapter when no
+  variables are bound (it previously detoured through the Python
+  engine wrapper even on the fast path)
+- `tostring(document)`/`Document.write(fileobj)` defaults run
+  `leptris_document_serialize` in one C call (`_accel.serialize_doc`,
+  Fns entry #38); option-carrying paths are unchanged
+- the #557 workaround (self-match + `descendant::` detour) is no
+  longer load-bearing for iter() — the cursor compares name and
+  namespace directly, so engine fix or not, iter() is correct
+- bind protocol: FN_COUNT is single-sourced in the accelerator
+  (the count check and the fill loop share one constant)
+- new tests: mid-iteration close raises LeptrisError (both
+  iterators), deep-tree document order, broken Clark tags yield
+  nothing, wildcard iterdescendants
+- README: iter()/iterdescendants() documented as elements-only
+  (ElementTree semantics; lxml also yields comments/PIs)
+
+
 ## 1.11.1 — 2026-08-25
 
 Architecture deepening pass, no API changes:

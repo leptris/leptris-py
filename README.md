@@ -79,7 +79,7 @@ with sax.StreamingParser(handler) as parser:  # push, constant memory
 | `elem.attrib` / `.get()` / `.keys()` / `.items()` | same | `attrib` is a **read-only** Mapping |
 | `elem.getparent/getnext/getprevious` | same | |
 | `elem[i]`, `len(elem)`, iteration, slices | same | indexing is child indexing, never attribute lookup |
-| `elem.iter()` / `.iterdescendants()` / `.itertext()` | same | |
+| `elem.iter()` / `.iterdescendants()` / `.itertext()` | same | elements only (ElementTree semantics); lxml's `iter()` also yields comments/PIs |
 | `elem.find/findall/findtext` | same | accepts full XPath 1.0 — a superset of ElementPath — including `{uri}local` names |
 | `elem.xpath(expr, namespaces=…)` | same | plus `variables={…}` (leptris extension) |
 | `etree.c14n` / `etree.XInclude` | `c14n(…)` / `doc.process_xinclude()` | |

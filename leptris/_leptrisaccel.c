@@ -98,7 +98,10 @@ static struct {
     void *(*xpath_eval_ns)(void *, void *, const char *, void *);
     char *(*element_serialize)(void *, void *);
     size_t (*element_serialize_into)(void *, char *, size_t, size_t *, const void *);
+    char *(*document_serialize)(void *, void *);
 } Fns;
+
+#define FN_COUNT 38
 
 static int bound = 0;
 static PyObject *LeptrisErrorType = NULL;
@@ -947,11 +950,11 @@ accel_bind(PyObject *module, PyObject *args)
     if (fast == NULL)
         return NULL;
     Py_ssize_t count = PySequence_Size(fast);
-    if (count != 37) {
+    if (count != FN_COUNT) {
         Py_DECREF(fast);
         PyErr_Format(
             PyExc_ValueError,
-            "bind: expected 37 function addresses in Fns declaration "
+            "bind: expected FN_COUNT function addresses in Fns declaration "
             "order, got %zd", count);
         return NULL;
     }
@@ -994,8 +997,9 @@ accel_bind(PyObject *module, PyObject *args)
     (void **)&Fns.xpath_eval_ns,
     (void **)&Fns.element_serialize,
     (void **)&Fns.element_serialize_into,
+    (void **)&Fns.document_serialize,
     };
-    for (Py_ssize_t i = 0; i < 37; i++) {
+    for (Py_ssize_t i = 0; i < FN_COUNT; i++) {
         PyObject *item = PyList_Check(fast)
             ? PyList_GetItem(fast, i)
             : PyTuple_GetItem(fast, i);
@@ -1042,14 +1046,14 @@ finish_result(void *result, PyObject *document)
         return scalar;
     }
     size_t count = Fns.xpath_result_count(result);
-    PyObject *out = PyList_New(0);
+    if (count == 0) {
+        Fns.xpath_result_free(result);
+        return PyList_New(0);
+    }
+    PyObject *out = PyList_New((Py_ssize_t)count);
     if (out == NULL) {
         Fns.xpath_result_free(result);
         return NULL;
-    }
-    if (count == 0) {
-        Fns.xpath_result_free(result);
-        return out;
     }
     void **elems = (void **)PyMem_Malloc(count * sizeof(void *));
     if (elems == NULL) {
@@ -1059,22 +1063,23 @@ finish_result(void *result, PyObject *document)
     }
     size_t copied = Fns.xpath_result_get_nodes(result, elems, count);
     Fns.xpath_result_free(result);
+    if (copied != count) {
+        /* mixed nodeset: hand back to the engine path untouched */
+        Py_DECREF(out);
+        PyMem_Free(elems);
+        Py_RETURN_NONE;
+    }
     Registry *reg = registry_of(document);
     for (size_t i = 0; i < copied; i++) {
         PyObject *el = element_from_parts_reg(elems[i], Py_None, document, reg);
-        if (el == NULL || PyList_Append(out, el) < 0) {
-            Py_XDECREF(el);
+        if (el == NULL) {
             Py_DECREF(out);
             PyMem_Free(elems);
             return NULL;
         }
-        Py_DECREF(el);
+        PyList_SetItem(out, (Py_ssize_t)i, el);
     }
     PyMem_Free(elems);
-    if (copied != count) {
-        Py_DECREF(out);
-        Py_RETURN_NONE;
-    }
     return out;
 }
 
@@ -1286,6 +1291,212 @@ accel_invalidate(PyObject *module, PyObject *capsule)
     Py_RETURN_NONE;
 }
 
+/* ---- subtree cursor: a walk, not a query ---------------------------- */
+
+typedef struct {
+    PyObject_HEAD
+    AccelElement *start;      /* strong ref: keeps the document alive
+                                 and its poison flag signals close() */
+    void *top;                /* raw pointer of the subtree root */
+    void *current;            /* next candidate, NULL when exhausted */
+    PyObject *document;       /* strong ref */
+    Registry *registry;
+    PyObject *local_bytes;    /* NULL = match every element */
+    PyObject *ns_bytes;       /* namespace filter (see want_ns) */
+    const char *local_c;      /* borrowed from local_bytes */
+    const char *ns_c;         /* borrowed from ns_bytes */
+    int want_ns;              /* 1: ns must equal ns_c; 0: ns must
+                                 be absent (unprefixed name test) */
+} AccelCursor;
+
+static PyTypeObject *CursorType;
+
+static void *
+cursor_successor(AccelCursor *c, void *el)
+{
+    void *child = Fns.element_first_child_any(el);
+    if (child != NULL)
+        return child;
+    while (el != c->top) {
+        void *sib = Fns.element_next_sibling_any(el);
+        if (sib != NULL)
+            return sib;
+        el = Fns.element_parent(el);
+        if (el == NULL)
+            return NULL;
+    }
+    return NULL;
+}
+
+static int
+cursor_matches(AccelCursor *c, void *el)
+{
+    if (c->local_bytes == NULL)
+        return 1;
+    const char *name = Fns.element_name(el);
+    if (name == NULL || strcmp(name, c->local_c) != 0)
+        return 0;
+    const char *ns = Fns.element_namespace(el);
+    if (c->want_ns)
+        return ns != NULL && strcmp(ns, c->ns_c) == 0;
+    return ns == NULL;
+}
+
+static PyObject *
+cursor_next(AccelCursor *self)
+{
+    if (self->start->raw == ACCEL_RAW_INVALID) {
+        PyErr_SetString(LeptrisErrorType, "operation on a closed document");
+        return NULL;
+    }
+    while (self->current != NULL) {
+        void *el = self->current;
+        self->current = cursor_successor(self, el);
+        if (cursor_matches(self, el))
+            return element_from_parts_reg(
+                el, Py_None, self->document, self->registry);
+    }
+    return NULL; /* StopIteration */
+}
+
+static PyObject *
+cursor_self(AccelCursor *self)
+{
+    Py_INCREF(self);
+    return (PyObject *)self;
+}
+
+static void
+cursor_dealloc(AccelCursor *self)
+{
+    Py_XDECREF(self->start);
+    Py_XDECREF(self->document);
+    Py_XDECREF(self->local_bytes);
+    Py_XDECREF(self->ns_bytes);
+    PyObject_Free(self);
+}
+
+static PyObject *
+cursor_repr(AccelCursor *self)
+{
+    return PyUnicode_FromFormat(
+        "<leptris.SubtreeIterator object at %p>", (void *)self);
+}
+
+static PyType_Slot cursor_slots[] = {
+    {Py_tp_iter, (void *)cursor_self},
+    {Py_tp_iternext, (void *)cursor_next},
+    {Py_tp_dealloc, (void *)cursor_dealloc},
+    {Py_tp_repr, (void *)cursor_repr},
+    {Py_tp_doc, (void *)"Document-order element cursor over a subtree."},
+    {0, NULL}
+};
+
+static PyType_Spec cursor_spec = {
+    "leptris._leptrisaccel.SubtreeIterator",
+    sizeof(AccelCursor),
+    0,
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HEAPTYPE,
+    cursor_slots
+};
+
+/* subtree_iter(element, include_self, ns | None, local | None) */
+static PyObject *
+accel_subtree_iter(PyObject *module, PyObject *args)
+{
+    PyObject *start, *ns, *local;
+    int include_self;
+    if (!PyArg_ParseTuple(args, "O!pOO",
+                          ElementType, &start, &include_self, &ns, &local))
+        return NULL;
+    if (!bound) {
+        PyErr_SetString(LeptrisErrorType, "accelerator is not bound");
+        return NULL;
+    }
+    AccelElement *el = (AccelElement *)start;
+    if (check_poisoned(el) < 0)
+        return NULL;
+    AccelCursor *c = (AccelCursor *)PyType_GenericAlloc(CursorType, 0);
+    if (c == NULL)
+        return NULL;
+    c->top = el->raw;
+    c->current = include_self ? el->raw : cursor_successor(c, el->raw);
+    Py_INCREF(start);
+    c->start = el;
+    Py_INCREF(el->document);
+    c->document = el->document;
+    c->registry = registry_of(el->document);
+    c->want_ns = (ns != Py_None);
+    if (local != Py_None) {
+        c->local_bytes = PyUnicode_AsUTF8String(local);
+        if (c->local_bytes == NULL) {
+            Py_DECREF(c);
+            return NULL;
+        }
+        c->local_c = PyBytes_AsString(c->local_bytes);
+    }
+    if (c->want_ns) {
+        c->ns_bytes = PyUnicode_AsUTF8String(ns);
+        if (c->ns_bytes == NULL) {
+            Py_DECREF(c);
+            return NULL;
+        }
+        c->ns_c = PyBytes_AsString(c->ns_bytes);
+    }
+    return (PyObject *)c;
+}
+
+/* children(element) -> presized list of element children */
+static PyObject *
+accel_children(PyObject *module, PyObject *element)
+{
+    if (!PyObject_TypeCheck(element, ElementType)) {
+        PyErr_SetString(PyExc_TypeError, "expected an Element");
+        return NULL;
+    }
+    AccelElement *self = (AccelElement *)element;
+    if (check_poisoned(self) < 0)
+        return NULL;
+    if (!bound || self->raw == NULL)
+        return PyList_New(0);
+    size_t count = Fns.element_child_count(self->raw);
+    PyObject *out = PyList_New((Py_ssize_t)count);
+    if (out == NULL)
+        return NULL;
+    Registry *reg = registry_of(self->document);
+    void *child = Fns.element_first_child_any(self->raw);
+    for (size_t i = 0; i < count && child != NULL; i++) {
+        PyObject *item = element_from_parts_reg(
+            child, Py_None, self->document, reg);
+        if (item == NULL) {
+            Py_DECREF(out);
+            return NULL;
+        }
+        PyList_SetItem(out, (Py_ssize_t)i, item);
+        child = Fns.element_next_sibling_any(child);
+    }
+    return out;
+}
+
+/* serialize_doc(document_address) -> bytes (default options) */
+static PyObject *
+accel_serialize_doc(PyObject *module, PyObject *args)
+{
+    unsigned long long address;
+    if (!PyArg_ParseTuple(args, "K", &address))
+        return NULL;
+    if (!bound)
+        Py_RETURN_NONE;
+    char *data = Fns.document_serialize((void *)(uintptr_t)address, NULL);
+    if (data == NULL) {
+        PyErr_SetString(LeptrisErrorType, "serialization failed");
+        return NULL;
+    }
+    PyObject *out = PyBytes_FromStringAndSize(data, strlen(data));
+    Fns.free_string(data);
+    return out;
+}
+
 static PyMethodDef accel_methods[] = {
     {"create", accel_create, METH_VARARGS,
      "create(address, ptr, document) -> Element"},
@@ -1301,6 +1512,12 @@ static PyMethodDef accel_methods[] = {
      "find_first(address, name, document) -> Element | None"},
     {"serialize_elem", accel_serialize_elem, METH_VARARGS,
      "serialize_elem(address, indent, declaration) -> bytes | None"},
+    {"subtree_iter", accel_subtree_iter, METH_VARARGS,
+     "subtree_iter(element, include_self, ns, local) -> SubtreeIterator"},
+    {"children", (PyCFunction)accel_children, METH_O,
+     "children(element) -> list[Element]"},
+    {"serialize_doc", accel_serialize_doc, METH_VARARGS,
+     "serialize_doc(document_address) -> bytes | None"},
     {"new_registry", (PyCFunction)accel_new_registry, METH_NOARGS,
      "new_registry() -> capsule tracking live elements of a document"},
     {"invalidate", (PyCFunction)accel_invalidate, METH_O,
@@ -1340,6 +1557,17 @@ PyInit__leptrisaccel(void)
     }
     if (PyModule_AddObject(module, "Element", (PyObject *)ElementType) < 0) {
         Py_DECREF(ElementType);
+        Py_DECREF(module);
+        return NULL;
+    }
+    CursorType = (PyTypeObject *)PyType_FromSpec(&cursor_spec);
+    if (CursorType == NULL) {
+        Py_DECREF(module);
+        return NULL;
+    }
+    if (PyModule_AddObject(module, "SubtreeIterator",
+                           (PyObject *)CursorType) < 0) {
+        Py_DECREF(CursorType);
         Py_DECREF(module);
         return NULL;
     }

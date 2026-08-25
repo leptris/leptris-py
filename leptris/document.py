@@ -108,6 +108,12 @@ class Document:
         return self.root
 
     def xpath(self, expression: str, *, context=None, namespaces=None, variables=None):
+        if variables is None:
+            from .xpath import _c_evaluate
+
+            items = _c_evaluate(self, context, expression, namespaces)
+            if items is not None:
+                return items
         from .xpath import _XPathEngine
 
         return _XPathEngine.evaluate(

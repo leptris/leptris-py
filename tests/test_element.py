@@ -268,3 +268,36 @@ class TestIterNamespacedRoot:
     def test_iter_plain_includes_self(self):
         root = fromstring("<r><a/></r>")
         assert [e.tag for e in root.iter("r")] == ["r"]
+
+class TestSubtreeCursor:
+    def test_iter_raises_after_document_close(self):
+        root = fromstring("<r><a><b/></a><c/></r>")
+        walk = root.iter()
+        assert next(walk).tag == "r"
+        root.document.close()
+        with pytest.raises(LeptrisError):
+            next(walk)
+
+    def test_iterdescendants_raises_after_document_close(self):
+        root = fromstring("<r><a/></r>")
+        walk = root.iterdescendants()
+        assert next(walk).tag == "a"
+        root.document.close()
+        with pytest.raises(LeptrisError):
+            next(walk)
+
+    def test_cursor_document_order_deep_tree(self):
+        xml = "<r><a><b><c/></b><d/></a><e><f/></e><g/></r>"
+        assert [e.tag for e in fromstring(xml).iter()] == [
+            "r", "a", "b", "c", "d", "e", "f", "g",
+        ]
+
+    def test_iterdescendants_wildcard(self):
+        root = fromstring("<x:root xmlns:x='urn:x'><x:a/><b/></x:root>")
+        assert len(list(root.iterdescendants("*"))) == 2
+
+    def test_iter_broken_clark_yields_nothing(self):
+        # "{broken" has no closing brace: not a Clark name, not a
+        # QName — lxml compares for equality and never matches.
+        root = fromstring("<r><a/></r>")
+        assert list(root.iter("{broken")) == []
