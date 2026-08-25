@@ -1,6 +1,21 @@
 # Changelog
 
 
+## 1.13.1 — 2026-08-25
+
+Thin pass (review #4; two probed candidates, everything else declined):
+
+- bytes-direct parse: the `y#` format unit works under the 3.9
+  limited API (PyBytes_AsStringAndSize is in the stable ABI —
+  probed before proposing), so `_accel.parse(data, recover)` takes
+  the bytes buffer directly and `Document.parse` drops the
+  bytearray/from_buffer/cast ceremony and the empty-input special
+  case; parse small 3.81 -> ~3.0 µs (2.0x -> ~2.6x vs lxml)
+- xpath.py keeps a single Python result converter
+  (`_XPathEngine.evaluate` now returns through `_convert` instead
+  of carrying an identical inline copy — a drift hazard)
+
+
 ## 1.13.0 — 2026-08-25
 
 Document joins Element's raw-address pattern; one home per accessor.

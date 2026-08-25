@@ -64,16 +64,9 @@ class Document:
             xml = xml.encode("utf-8")
         if not isinstance(xml, (bytes, bytearray, memoryview)):
             raise TypeError("xml must be str or bytes")
-        data = bytearray(xml)  # writable: from_buffer needs write access
-        if not data:
-            raise ParseError("parse error: empty input")
         from .element import _accel
 
-        view = _ffi.ffi.from_buffer("char[]", data)
-        address, registry, status = _accel.parse(
-            int(_ffi.ffi.cast("uintptr_t", view)), len(data), recover
-        )
-        del view  # the engine copies; the buffer is not retained
+        address, registry, status = _accel.parse(bytes(xml), recover)
         if address is None:
             raise ParseError(status_message(status))
         return cls._from_parts(address, registry)

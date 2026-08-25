@@ -168,21 +168,7 @@ class _XPathEngine:
                 )
                 raise XPathError(f"XPath evaluation failed: {detail}")
 
-            result_type = _ffi.lib.leptris_xpath_result_type(result)
-            if result_type == _ffi.XPATH_NODESET:
-                return _XPathEngine._nodeset(document, result)
-            if result_type == _ffi.XPATH_NUMBER:
-                return _ffi.lib.leptris_xpath_result_number(result)
-            if result_type == _ffi.XPATH_STRING:
-                ptr = _ffi.lib.leptris_xpath_result_string(result)
-                if ptr == ffi.NULL:
-                    return ""
-                value = ffi.string(ptr).decode("utf-8")
-                _ffi.lib.leptris_free_string(ptr)
-                return value
-            if result_type == _ffi.XPATH_BOOLEAN:
-                return bool(_ffi.lib.leptris_xpath_result_boolean(result))
-            return None
+            return _XPathEngine._convert(document, result)
         finally:
             if result != ffi.NULL:
                 _ffi.lib.leptris_xpath_result_free(result)
