@@ -63,6 +63,18 @@ def tostring(
     if doc.closed:
         raise LeptrisError("operation on a closed document")
     c_encoding = None if encoding in (None, "unicode") else encoding
+    if (
+        elem is None
+        and c_encoding is None
+        and not pretty_print
+        and xml_declaration in (None, False)
+    ):
+        from .element import _accel
+
+        data = _accel.serialize_doc(doc._raw_addr)
+        if data is None:
+            raise LeptrisError("serialization failed")
+        return data.decode("utf-8") if encoding == "unicode" else data
     if elem is not None:
         from .element import _accel
 
