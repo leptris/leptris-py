@@ -1,6 +1,35 @@
 # Changelog
 
 
+## 1.11.1 — 2026-08-25
+
+Architecture deepening pass, no API changes:
+
+- positional bind seam: the accelerator is bound by passing 37
+  function addresses in `Fns` declaration order (one tuple in
+  element.py, one slot array in _leptrisaccel.c); count mismatches
+  fail loudly instead of mis-binding
+- self-describing method attach: `_ElementMethods` members attach
+  only where the C type provides nothing beyond object's default —
+  the hand-maintained skip-set is gone
+- `_c_evaluate` adapter in xpath.py is the single bridge to all-C
+  nodeset evaluation; `Element.xpath`, `findall` and the engine
+  fast path all go through it
+- `_BorrowedDocument` (iterparse sentinel owner) hoisted out of the
+  closure
+- test split: iterparse tests live in tests/test_iterparse.py,
+  compiled-XPath tests folded into tests/test_xpath.py
+
+Engine-bug workarounds (filed upstream):
+
+- leptris/leptris#550 (flat-path promote, extends to XPath):
+  `Document.parse` touches the root once so fresh documents
+  serialize and evaluate XPath correctly without a prior getroot()
+- leptris/leptris#557 (descendant-or-self omits a namespaced root
+  for prefixed name tests): `Element.iter(tag)` matches self in
+  Python and walks `descendant::` instead
+
+
 Legacy purge (the binding is single-mode now):
 
 - the pure-Python Element fallback and `LEPTRIS_PURE` are gone —

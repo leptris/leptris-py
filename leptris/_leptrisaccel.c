@@ -938,126 +938,79 @@ accel_materialize(PyObject *module, PyObject *args)
 }
 
 static PyObject *
-accel_bind(PyObject *module, PyObject *args, PyObject *kwargs)
+accel_bind(PyObject *module, PyObject *args)
 {
-    static char *kwlist[] = {
-        "element_name", "element_namespace", "element_attribute",
-        "element_child", "element_child_count", "element_as_node",
-        "node_first_child", "node_next_sibling", "node_get_type",
-        "text_node_get_content", "cdata_node_get_content", "element_first_child_any",
-        "element_prefix_fn", "element_previous_sibling_any_fn", "element_first_attribute",
-        "attribute_next", "attribute_get_name", "attribute_get_value",
-        "element_parent", "element_next_sibling_any", "node_line",
-        "xpath_eval", "xpath_result_type", "xpath_result_count",
-        "xpath_result_get_nodes", "xpath_result_free", "xpath_result_number",
-        "xpath_result_boolean", "xpath_result_string", "free_string",
-        "ns_set_new", "ns_set_free", "ns_set_add",
-        "xpath_eval_ns", "element_serialize",
-        "element_serialize_into", "element_attribute_ns", "error_class", NULL};
-                PyObject *value_element_name = NULL, *value_element_namespace = NULL,
-             *value_element_attribute = NULL, *value_element_child = NULL,
-             *value_element_child_count = NULL, *value_element_as_node = NULL,
-             *value_node_first_child = NULL, *value_node_next_sibling = NULL,
-             *value_node_get_type = NULL, *value_text_node_get_content = NULL,
-             *value_cdata_node_get_content = NULL, *value_element_first_child_any = NULL,
-             *value_element_prefix_fn = NULL, *value_element_previous_sibling_any_fn =
-             NULL, *value_element_first_attribute = NULL, *value_attribute_next = NULL,
-             *value_attribute_get_name = NULL, *value_attribute_get_value = NULL,
-             *value_element_parent = NULL, *value_element_next_sibling_any = NULL,
-             *value_node_line = NULL, *value_xpath_eval = NULL, *value_xpath_result_type =
-             NULL, *value_xpath_result_count = NULL, *value_xpath_result_get_nodes = NULL,
-             *value_xpath_result_free = NULL, *value_xpath_result_number = NULL,
-             *value_xpath_result_boolean = NULL, *value_xpath_result_string = NULL,
-             *value_free_string = NULL, *value_ns_set_new = NULL, *value_ns_set_free =
-             NULL, *value_ns_set_add = NULL, *value_xpath_eval_ns = NULL,
-             *value_element_serialize = NULL, *value_element_serialize_into = NULL, *value_element_attribute_ns = NULL, *value_error_class = NULL;
-    if (!PyArg_ParseTupleAndKeywords(
-            args, kwargs, "|$OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO", kwlist,
-&value_element_name,
-&value_element_namespace,
-&value_element_attribute,
-&value_element_child,
-&value_element_child_count,
-&value_element_as_node,
-&value_node_first_child,
-&value_node_next_sibling,
-&value_node_get_type,
-&value_text_node_get_content,
-&value_cdata_node_get_content,
-&value_element_first_child_any,
-&value_element_prefix_fn,
-&value_element_previous_sibling_any_fn,
-&value_element_first_attribute,
-&value_attribute_next,
-&value_attribute_get_name,
-&value_attribute_get_value,
-&value_element_parent,
-&value_element_next_sibling_any,
-&value_node_line,
-&value_xpath_eval,
-&value_xpath_result_type,
-&value_xpath_result_count,
-&value_xpath_result_get_nodes,
-&value_xpath_result_free,
-&value_xpath_result_number,
-&value_xpath_result_boolean,
-&value_xpath_result_string,
-&value_free_string,
-&value_ns_set_new,
-&value_ns_set_free,
-&value_ns_set_add,
-&value_xpath_eval_ns,
-&value_element_serialize,
-            &value_element_serialize_into, &value_element_attribute_ns, &value_error_class))
+    PyObject *addresses, *error_class;
+    if (!PyArg_ParseTuple(args, "OO", &addresses, &error_class))
         return NULL;
-#define BIND_FN(name) \
-    if (value_##name != NULL && value_##name != Py_None) { \
-        unsigned long long addr = PyLong_AsUnsignedLongLong(value_##name); \
-        if (PyErr_Occurred()) return NULL; \
-        Fns.name = (__typeof__(Fns.name))(uintptr_t)addr; \
+    PyObject *fast = PySequence_Fast(addresses, "addresses must be a sequence");
+    if (fast == NULL)
+        return NULL;
+    Py_ssize_t count = PySequence_Size(fast);
+    if (count != 37) {
+        Py_DECREF(fast);
+        PyErr_Format(
+            PyExc_ValueError,
+            "bind: expected 37 function addresses in Fns declaration "
+            "order, got %zd", count);
+        return NULL;
     }
-    BIND_FN(element_name)
-    BIND_FN(element_namespace)
-    BIND_FN(element_attribute)
-    BIND_FN(element_attribute_ns)
-    BIND_FN(element_child)
-    BIND_FN(element_child_count)
-    BIND_FN(element_as_node)
-    BIND_FN(node_first_child)
-    BIND_FN(node_next_sibling)
-    BIND_FN(node_get_type)
-    BIND_FN(text_node_get_content)
-    BIND_FN(cdata_node_get_content)
-    BIND_FN(element_first_child_any)
-    BIND_FN(element_prefix_fn)
-    BIND_FN(element_previous_sibling_any_fn)
-    BIND_FN(element_first_attribute)
-    BIND_FN(attribute_next)
-    BIND_FN(attribute_get_name)
-    BIND_FN(attribute_get_value)
-    BIND_FN(element_parent)
-    BIND_FN(element_next_sibling_any)
-    BIND_FN(node_line)
-    BIND_FN(xpath_eval)
-    BIND_FN(xpath_result_type)
-    BIND_FN(xpath_result_count)
-    BIND_FN(xpath_result_get_nodes)
-    BIND_FN(xpath_result_free)
-    BIND_FN(xpath_result_number)
-    BIND_FN(xpath_result_boolean)
-    BIND_FN(xpath_result_string)
-    BIND_FN(free_string)
-    BIND_FN(ns_set_new)
-    BIND_FN(ns_set_free)
-    BIND_FN(ns_set_add)
-    BIND_FN(xpath_eval_ns)
-    BIND_FN(element_serialize)
-    BIND_FN(element_serialize_into)
-#undef BIND_FN
-    if (value_error_class != NULL && value_error_class != Py_None) {
+    /* The Fns declaration order IS the protocol. */
+    void **slots[] = {
+    (void **)&Fns.element_name,
+    (void **)&Fns.element_namespace,
+    (void **)&Fns.element_attribute,
+    (void **)&Fns.element_attribute_ns,
+    (void **)&Fns.element_child,
+    (void **)&Fns.element_child_count,
+    (void **)&Fns.element_as_node,
+    (void **)&Fns.node_first_child,
+    (void **)&Fns.node_next_sibling,
+    (void **)&Fns.node_get_type,
+    (void **)&Fns.text_node_get_content,
+    (void **)&Fns.cdata_node_get_content,
+    (void **)&Fns.element_first_child_any,
+    (void **)&Fns.element_prefix_fn,
+    (void **)&Fns.element_previous_sibling_any_fn,
+    (void **)&Fns.element_first_attribute,
+    (void **)&Fns.attribute_next,
+    (void **)&Fns.attribute_get_name,
+    (void **)&Fns.attribute_get_value,
+    (void **)&Fns.element_parent,
+    (void **)&Fns.element_next_sibling_any,
+    (void **)&Fns.node_line,
+    (void **)&Fns.xpath_eval,
+    (void **)&Fns.xpath_result_type,
+    (void **)&Fns.xpath_result_count,
+    (void **)&Fns.xpath_result_get_nodes,
+    (void **)&Fns.xpath_result_free,
+    (void **)&Fns.xpath_result_number,
+    (void **)&Fns.xpath_result_boolean,
+    (void **)&Fns.xpath_result_string,
+    (void **)&Fns.free_string,
+    (void **)&Fns.ns_set_new,
+    (void **)&Fns.ns_set_free,
+    (void **)&Fns.ns_set_add,
+    (void **)&Fns.xpath_eval_ns,
+    (void **)&Fns.element_serialize,
+    (void **)&Fns.element_serialize_into,
+    };
+    for (Py_ssize_t i = 0; i < 37; i++) {
+        PyObject *item = PyList_Check(fast)
+            ? PyList_GetItem(fast, i)
+            : PyTuple_GetItem(fast, i);
+        if (!PyLong_Check(item)) {
+            Py_DECREF(fast);
+            PyErr_SetString(PyExc_TypeError, "addresses must be ints");
+            return NULL;
+        }
+        *slots[i] = PyLong_AsVoidPtr(item);
+    }
+    Py_DECREF(fast);
+    if (error_class != Py_None) {
         Py_XDECREF(LeptrisErrorType);
-        Py_INCREF(value_error_class);
-        LeptrisErrorType = value_error_class;
+        Py_INCREF(error_class);
+        LeptrisErrorType = error_class;
     }
     bound = 1;
     Py_RETURN_NONE;
@@ -1338,8 +1291,8 @@ static PyMethodDef accel_methods[] = {
      "create(address, ptr, document) -> Element"},
     {"materialize", accel_materialize, METH_VARARGS,
      "materialize(ptrs, document, addresses) -> list[Element]"},
-    {"bind", (PyCFunction)accel_bind, METH_VARARGS | METH_KEYWORDS,
-     "bind(**fn_addresses) -> None"},
+    {"bind", accel_bind, METH_VARARGS,
+     "bind(addresses_in_Fns_order, error_class) -> None"},
     {"nodeset", accel_nodeset, METH_VARARGS,
      "nodeset(document_address, context_address, expression, document) -> list | scalar | None"},
     {"nodeset_ns", accel_nodeset_ns, METH_VARARGS,

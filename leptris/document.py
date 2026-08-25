@@ -53,6 +53,9 @@ class Document:
         except (ImportError, AttributeError):
             self._accel_registry = None
         self._raw_addr = int(_ffi.ffi.cast("uintptr_t", _ptr))
+        # Touch the root once: flat-path documents misbehave on XPath
+        # and serialization until promoted (leptris/leptris#550).
+        _ffi.lib.leptris_document_root(_ptr)
 
     @classmethod
     def parse(cls, xml, *, recover: bool = False) -> "Document":

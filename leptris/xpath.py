@@ -39,6 +39,34 @@ def expand_clark_names(
     return _CLARK.sub(replacement, path), extra
 
 
+def _c_evaluate(document, context_element, expression, namespaces):
+    """The single bridge from Python query entry points to all-C
+    evaluation (eval, batch fill, element construction in one call).
+
+    Returns the converted result, or None when the C path is
+    unavailable or unsuitable (unbound accelerator, closed document,
+    failed evaluation, mixed nodeset) — callers fall back to the
+    engine path, which handles those faithfully.
+    """
+    from .element import _accel
+
+    if _accel is None or document.closed:
+        return None
+    ctx = (
+        context_element._raw
+        if context_element is not None
+        else None
+    )
+    if namespaces:
+        flat = [v for pair in namespaces.items() for v in pair]
+        return _accel.nodeset_ns(
+            document._raw_addr, ctx, expression, document, flat
+        )
+    return _accel.nodeset(
+        document._raw_addr, ctx, expression, document
+    )
+
+
 class _XPathEngine:
     @staticmethod
     def _convert(document, result):
@@ -76,36 +104,11 @@ class _XPathEngine:
     ):
         ffi = _ffi.ffi
         if variables is None:
-            from .element import _accel
-
-            if _accel is not None and not document.closed:
-                # All-C fast path: eval, batch fill and element
-                # construction in one call. Returns None when the
-                # expression failed or the nodeset is mixed — the
-                # Python path below handles both faithfully.
-                doc_raw = document._raw_addr
-                ctx = None
-                if context_element is not None:
-                    raw = getattr(context_element, "_raw", None)
-                    ctx = (
-                        raw
-                        if raw is not None and raw is not False
-                        else int(ffi.cast(
-                            "uintptr_t", context_element._ptr
-                        ))
-                    )
-                if namespaces:
-                    flat = []
-                    for prefix, uri in namespaces.items():
-                        flat.append(prefix)
-                        flat.append(uri)
-                    items = _accel.nodeset_ns(
-                        doc_raw, ctx, expression, document, flat
-                    )
-                else:
-                    items = _accel.nodeset(doc_raw, ctx, expression, document)
-                if items is not None:
-                    return items
+            items = _c_evaluate(
+                document, context_element, expression, namespaces
+            )
+            if items is not None:
+                return items
         ns_set = ffi.NULL
         var_set = ffi.NULL
         result = ffi.NULL

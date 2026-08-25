@@ -255,3 +255,16 @@ def _walk(node):
     while child is not None:
         yield child
         child = child.next_sibling
+
+class TestIterNamespacedRoot:
+    # leptris/leptris#557: descendant-or-self omits a namespaced root
+    # for prefixed name tests — iter() matches self in Python and
+    # walks descendant:: instead.
+
+    def test_iter_clark_includes_namespaced_self(self):
+        root = fromstring("<x:r xmlns:x='urn:x'><x:a/></x:r>")
+        assert [e.tag for e in root.iter("{urn:x}r")] == ["{urn:x}r"]
+
+    def test_iter_plain_includes_self(self):
+        root = fromstring("<r><a/></r>")
+        assert [e.tag for e in root.iter("r")] == ["r"]
