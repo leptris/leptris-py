@@ -319,3 +319,25 @@ class TestNodeAsElementRegistry:
         assert via_node.tag == root.tag
         assert via_node.get("x") == "1"
         assert [c.tag for c in via_node] == ["a"]
+
+class TestFindNamespaceSemantics:
+    def test_find_plain_name_requires_no_namespace(self):
+        # find() and findall() must agree: a plain name test matches
+        # only elements in no namespace (ElementTree/lxml semantics).
+        root = fromstring("<x:r xmlns:x='urn:x'><x:book/><plain/></x:r>")
+        assert root.find("book") is None
+        assert root.find("plain") is not None
+        assert root.findall("book") == []
+
+    def test_find_multi_step_matches_findall_first(self):
+        root = fromstring("<r><a><b id='1'>x</b><b id='2'>y</b></a></r>")
+        found = root.find("a/b")
+        assert found is not None and found.get("id") == "1"
+
+    def test_find_multi_step_namespace_agreement(self):
+        root = fromstring(
+            "<x:r xmlns:x='urn:x'><x:book/><plain><q/></plain></x:r>"
+        )
+        assert root.find("book/q") is None   # book is namespaced: no match
+        found = root.find("plain/q")         # both un-namespaced: match
+        assert found is not None and found.tag == "q"
