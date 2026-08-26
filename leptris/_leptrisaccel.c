@@ -104,9 +104,11 @@ static struct {
     void *(*parse_file)(const char *, int *);
     void *(*document_root)(void *);
     void (*document_free)(void *);
+    void *(*xpath_compiled_eval)(void *, void *, void *);
+    void *(*xpath_compiled_eval_ns)(void *, void *, void *, void *);
 } Fns;
 
-#define FN_COUNT 43
+#define FN_COUNT 45
 
 static int bound = 0;
 static PyObject *LeptrisErrorType = NULL;
@@ -1008,6 +1010,8 @@ accel_bind(PyObject *module, PyObject *args)
     (void **)&Fns.parse_file,
     (void **)&Fns.document_root,
     (void **)&Fns.document_free,
+    (void **)&Fns.xpath_compiled_eval,
+    (void **)&Fns.xpath_compiled_eval_ns,
     };
     for (Py_ssize_t i = 0; i < FN_COUNT; i++) {
         PyObject *item = PyList_Check(fast)
@@ -1498,6 +1502,72 @@ accel_serialize_doc(PyObject *module, PyObject *args)
     return out;
 }
 
+/* compiled_eval(compiled_address, document_address, context_address,
+ * document, bindings) -> list | scalar | None (None: fall back to the
+ * engine path — mixed nodeset or evaluation failure). bindings is a
+ * flat [prefix, uri, ...] sequence or None. */
+static PyObject *
+accel_compiled_eval(PyObject *module, PyObject *args)
+{
+    unsigned long long compiled, document_address, context_address;
+    PyObject *document, *bindings;
+    if (!PyArg_ParseTuple(args, "KKKOO", &compiled, &document_address,
+                          &context_address, &document, &bindings))
+        return NULL;
+    if (!bound)
+        Py_RETURN_NONE;
+    void *ns_set = NULL;
+    PyObject *fast = NULL;
+    if (bindings != Py_None) {
+        fast = PySequence_Fast(bindings, "bindings must be a sequence");
+        if (fast == NULL)
+            return NULL;
+        Py_ssize_t n = PySequence_Size(fast);
+        ns_set = Fns.ns_set_new();
+        if (ns_set == NULL) {
+            Py_DECREF(fast);
+            Py_RETURN_NONE;
+        }
+        for (Py_ssize_t i = 0; i + 1 < n; i += 2) {
+            PyObject *prefix = PySequence_GetItem(fast, i);
+            PyObject *uri = PySequence_GetItem(fast, i + 1);
+            PyObject *pbytes = prefix ? PyUnicode_AsUTF8String(prefix) : NULL;
+            PyObject *ubytes = uri ? PyUnicode_AsUTF8String(uri) : NULL;
+            Py_XDECREF(prefix); Py_XDECREF(uri);
+            if (pbytes == NULL || ubytes == NULL) {
+                Py_XDECREF(pbytes); Py_XDECREF(ubytes);
+                Py_DECREF(fast); Fns.ns_set_free(ns_set);
+                return NULL;
+            }
+            int rc = Fns.ns_set_add(
+                ns_set, PyBytes_AsString(pbytes), PyBytes_AsString(ubytes));
+            Py_DECREF(pbytes); Py_DECREF(ubytes);
+            if (rc != 0) {
+                Py_DECREF(fast); Fns.ns_set_free(ns_set);
+                PyErr_SetString(LeptrisErrorType,
+                                "invalid namespace binding");
+                return NULL;
+            }
+        }
+    }
+    void *ctx = context_address ? (void *)(uintptr_t)context_address : NULL;
+    void *result;
+    if (ns_set != NULL)
+        result = Fns.xpath_compiled_eval_ns(
+            (void *)(uintptr_t)compiled, (void *)(uintptr_t)document_address,
+            ctx, ns_set);
+    else
+        result = Fns.xpath_compiled_eval(
+            (void *)(uintptr_t)compiled, (void *)(uintptr_t)document_address,
+            ctx);
+    Py_XDECREF(fast);
+    if (ns_set != NULL)
+        Fns.ns_set_free(ns_set);
+    if (result == NULL)
+        Py_RETURN_NONE;
+    return finish_result(result, document);
+}
+
 /* ---- document parse/registry seam ---------------------------------- */
 
 /* LeptrisParseOptions layout (types.h): flags, strict_mode, max_depth,
@@ -1634,6 +1704,8 @@ static PyMethodDef accel_methods[] = {
      "close_document(address) -> None"},
     {"document_root", accel_document_root, METH_VARARGS,
      "document_root(address, document) -> Element | None"},
+    {"compiled_eval", accel_compiled_eval, METH_VARARGS,
+     "compiled_eval(compiled_address, document_address, context_address, document, bindings) -> list | scalar | None"},
     {"subtree_iter", accel_subtree_iter, METH_VARARGS,
      "subtree_iter(element, include_self, ns, local) -> SubtreeIterator"},
     {"children", (PyCFunction)accel_children, METH_O,

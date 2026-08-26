@@ -244,3 +244,18 @@ class TestCompiledXPath:
         from leptris import XPath
 
         assert repr(XPath("//a")) == "<XPath '//a'>"
+
+class TestCompiledXPathFastPath:
+    def test_compiled_with_ns_matches_plain(self):
+        from leptris import XPath, fromstring
+
+        root = fromstring(
+            "<x:r xmlns:x='urn:x'><x:a>1</x:a><x:a>2</x:a><b/></x:r>"
+        )
+        ns = {"x": "urn:x"}
+        query = XPath("//x:a")
+        assert [e.text for e in query(root, namespaces=ns)] == ["1", "2"]
+        assert [e.tag for e in query(root, namespaces=ns)] == [
+            e.tag for e in root.xpath("//x:a", namespaces=ns)
+        ]
+        assert XPath("count(//x:a)")(root, namespaces=ns) == 2.0
