@@ -90,9 +90,12 @@ class Node:
         ptr = _ffi.lib.leptris_node_as_element(self._ptr)
         if ptr == _ffi.ffi.NULL:
             return None
-        from .element import Element
+        from .element import _make
 
-        return Element(ptr, self._document)
+        # _make links the element into the document registry so
+        # close() poisons it; constructing Element directly bypassed
+        # the registry and left a raw pointer into freed memory.
+        return _make(ptr, self._document)
 
     def __repr__(self) -> str:
         return f"<leptris.Node type={self.type}>"
