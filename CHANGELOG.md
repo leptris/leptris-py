@@ -1,6 +1,19 @@
 # Changelog
 
 
+## 1.13.3 — 2026-08-26
+
+Memory-safety fix (review #7 — deep-read of the last never-read
+module):
+
+- `Node.as_element()` created its Element OUTSIDE the per-document
+  registry, so `Document.close()` could not poison it: accessing
+  the element after close read freed memory instead of raising
+  LeptrisError (proven before fixing). It now goes through the
+  same `_make` seam as every other Element creation, and was the
+  package's only direct construction site
+
+
 ## 1.13.2 — 2026-08-26
 
 SAX correctness (review #5 — the module no review had read):

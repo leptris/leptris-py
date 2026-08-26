@@ -301,3 +301,21 @@ class TestSubtreeCursor:
         # QName — lxml compares for equality and never matches.
         root = fromstring("<r><a/></r>")
         assert list(root.iter("{broken")) == []
+
+class TestNodeAsElementRegistry:
+    def test_as_element_element_is_poisoned_at_close(self):
+        # as_element() once constructed Element directly, bypassing
+        # the registry: such an element read freed memory after
+        # close() instead of raising LeptrisError.
+        root = fromstring("<r><a/></r>")
+        elem = root.to_node().as_element()
+        root.document.close()
+        with pytest.raises(LeptrisError):
+            elem.tag
+
+    def test_as_element_matches_regular_element(self):
+        root = fromstring("<r x='1'><a/></r>")
+        via_node = root.to_node().as_element()
+        assert via_node.tag == root.tag
+        assert via_node.get("x") == "1"
+        assert [c.tag for c in via_node] == ["a"]
