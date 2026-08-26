@@ -160,3 +160,27 @@ class TestRawAddressDocument:
         doc.close()
         with pytest.raises(LeptrisError):
             doc.process_xinclude()
+
+
+class TestEdges:
+    def test_bom_bytes(self):
+        # UTF-8 BOM in a bytes input: leptris tolerates it (engine
+        # treats the buffer as UTF-8 with no preamble stripping) and
+        # the root tag is what it would have been without the BOM.
+        root = fromstring(b"\xef\xbb\xbf<root/>")
+        assert root.tag == "root"
+
+    def test_parse_file_pathlib_path(self, tmp_path):
+        path = tmp_path / "doc.xml"
+        path.write_bytes(b"<r><a/></r>")
+        with Document.parse_file(path) as doc:
+            assert doc.getroot().tag == "r"
+
+    def test_parse_file_pathlib_closed(self, tmp_path):
+        path = tmp_path / "doc.xml"
+        path.write_bytes(b"<r/>")
+        doc = Document.parse_file(path)
+        root = doc.getroot()
+        doc.close()
+        with pytest.raises(LeptrisError):
+            root.tag
