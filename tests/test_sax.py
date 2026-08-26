@@ -152,3 +152,20 @@ class TestHandlerContract:
         with pytest.raises(ParseError):
             sax.parse("<broken", handler)
         assert handler.seen is not None and handler.seen[1] >= 1
+
+class TestHandlerReuse:
+    def test_stale_error_does_not_poison_reuse(self):
+        # last_error is set on failure and was never cleared, so a
+        # reused handler raised the OLD error on a valid re-parse.
+        handler = sax.SAXHandler()
+        with pytest.raises(ParseError):
+            sax.parse("<broken>", handler)
+        sax.parse("<r><a/></r>", handler)  # must not raise
+
+    def test_streaming_parser_reset_on_reparse_body(self):
+        handler = sax.SAXHandler()
+        with pytest.raises(ParseError):
+            with sax.StreamingParser(handler) as parser:
+                parser.feed("<broken>", final=True)
+        with sax.StreamingParser(handler) as parser:
+            parser.feed("<r><a/></r>", final=True)  # must not raise

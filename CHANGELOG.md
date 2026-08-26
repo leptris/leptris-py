@@ -1,6 +1,20 @@
 # Changelog
 
 
+## 1.13.2 — 2026-08-26
+
+SAX correctness (review #5 — the module no review had read):
+
+- `sax.parse()` and `StreamingParser` clear
+  `handler.last_error` before starting: a REUSED handler
+  previously raised the previous document's error on a valid
+  re-parse (proven by a failing test, then fixed)
+- `StreamingParser` gains the `__del__` last-resort safety net
+  (house pattern; an unclosed parser leaks engine memory)
+- README Layout now names the C accelerator (half the codebase
+  was undocumented in the module map) and api.py's iterparse
+
+
 ## 1.13.1 — 2026-08-25
 
 Thin pass (review #4; two probed candidates, everything else declined):

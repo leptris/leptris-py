@@ -96,11 +96,16 @@ with sax.StreamingParser(handler) as parser:  # push, constant memory
 ## Layout
 
 - `leptris/_ffi.py` — cdef mirror of the public headers + loader
-  (the only place C is touched)
+  (the only place libleptris is declared)
+- `leptris/_leptrisaccel.c` — the C accelerator (abi3): allocates
+  Elements and runs the hot accessors, subtree iteration, the parse
+  and serialization seams, and the per-document element registry;
+  bound to libleptris by the positional protocol in `element.py`
 - `leptris/element.py`, `document.py`, `node.py`, `xpath.py` —
-  lxml-compatible wrappers; `node.py` exposes the full DOM (comments,
-  CDATA, PIs) beneath the ElementTree-shaped surface
-- `leptris/api.py` — `fromstring`/`parse`/`tostring`/`c14n`
+  the Python surface: queries, walks, documents; `node.py` exposes
+  the full DOM (comments, CDATA, PIs) beneath the ElementTree shape
+- `leptris/api.py` — `fromstring`/`parse`/`tostring`/`c14n`/
+  `iterparse`
 - `leptris/sax.py` — SAX one-shot and streaming
 - `tests/` — pytest suite (`pytest` with `LEPTRIS_LIB_PATH` set)
 - `benchmarks/` — matrix vs lxml/ElementTree/minidom (`pip install
