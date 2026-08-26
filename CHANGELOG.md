@@ -1,6 +1,27 @@
 # Changelog
 
 
+## 1.14.1 — 2026-08-27
+
+find(): correctness and a 6.5x speedup (review #11):
+
+- **bug**: find("name") on a namespaced document returned the
+  NAMESPACED element while findall("name") correctly returned
+  nothing — find_first compared the local name without requiring
+  no-namespace (ElementTree/lxml semantics). Fixed with a red-
+  first test; find() and findall() now agree everywhere
+- multi-step find("a/b/c") walks in C (`_accel.find_path`): a
+  first-match DFS over plain-name steps instead of materializing
+  the whole result list through findall. find("book/title"):
+  8.23 -> 1.27 µs — was 5.8x SLOWER than lxml, now 1.29x faster;
+  find("book") 1.01 -> 0.72 µs
+- engine finding filed as leptris/leptris#565: evaluation with a
+  variable set costs 53.3 µs raw vs 0.67 µs for the literal
+  equivalent (~79x) — with #563 (iterparse) and #564 (namespaced
+  eval) this brackets the third and last engine-side perf wall;
+  the binding's own share there is ~10 µs of 63.5
+
+
 ## 1.14.0 — 2026-08-26
 
 Compiled XPath rejoins the fast path (review #10):

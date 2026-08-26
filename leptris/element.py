@@ -138,20 +138,16 @@ class _ElementMethods:
         )
 
     def find(self, path: str, namespaces=None) -> Optional["Element"]:
-        if (
-            namespaces is None
-            and "{" not in path
-            and "/" not in path
-            and _QNAME_OK.match(path)
-        ):
+        if namespaces is None and "{" not in path:
             raw = getattr(self, "_raw", None)
             if _accel is not None and raw is not None:
-                found = _accel.find_first(raw, path, self._document)
-                if found is not None:
-                    return found
-                return None
-            results = self.findall(f"{path}[1]")
-            return results[0] if results else None
+                if "/" in path:
+                    # plain multi-step path: first-match walk, no list
+                    steps = path.split("/")
+                    if steps and all(_QNAME.match(s) for s in steps):
+                        return _accel.find_path(raw, steps, self._document)
+                elif _QNAME_OK.match(path):
+                    return _accel.find_first(raw, path, self._document)
         results = self.findall(path, namespaces)
         return results[0] if results else None
 

@@ -1246,8 +1246,11 @@ accel_find_first(PyObject *module, PyObject *args)
     void *child = Fns.element_first_child_any((void *)(uintptr_t)address);
     while (child != NULL) {
         const char *candidate = Fns.element_name(child);
+        /* plain name test: local name AND no namespace (ElementTree
+         * semantics — must agree with the engine path findall uses) */
         if (candidate != NULL && strcmp(candidate, want) == 0
-            && strlen(candidate) == want_len) {
+            && strlen(candidate) == want_len
+            && Fns.element_namespace(child) == NULL) {
             Py_DECREF(encoded);
             return element_from_parts_reg(
                 child, Py_None, document, registry_of(document));
@@ -1256,6 +1259,75 @@ accel_find_first(PyObject *module, PyObject *args)
     }
     Py_DECREF(encoded);
     Py_RETURN_NONE;
+}
+
+/* DFS first-match walk over a slash-separated plain-name path.
+ * names[i] are pre-encoded UTF-8; a step matches local name + no
+ * namespace, so find("a/b") agrees with findall("a/b")[0] and
+ * stops at the first match instead of materializing the list. */
+static void *
+walk_path(void *el, PyObject **names, Py_ssize_t n, Py_ssize_t i)
+{
+    void *child = Fns.element_first_child_any(el);
+    while (child != NULL) {
+        const char *name = Fns.element_name(child);
+        if (name != NULL && strcmp(name, PyBytes_AsString(names[i])) == 0
+            && Fns.element_namespace(child) == NULL) {
+            if (i + 1 == n)
+                return child;
+            void *found = walk_path(child, names, n, i + 1);
+            if (found != NULL)
+                return found;
+        }
+        child = Fns.element_next_sibling_any(child);
+    }
+    return NULL;
+}
+
+/* find_path(address, steps, document) -> Element | None */
+static PyObject *
+accel_find_path(PyObject *module, PyObject *args)
+{
+    unsigned long long address;
+    PyObject *steps_obj, *document;
+    if (!PyArg_ParseTuple(args, "KOO", &address, &steps_obj, &document))
+        return NULL;
+    if (!bound)
+        Py_RETURN_NONE;
+    PyObject *fast = PySequence_Fast(steps_obj, "steps must be a sequence");
+    if (fast == NULL)
+        return NULL;
+    Py_ssize_t n = PySequence_Size(fast);
+    if (n < 1) {
+        Py_DECREF(fast);
+        Py_RETURN_NONE;
+    }
+    PyObject **names = (PyObject **)PyMem_Malloc(n * sizeof(PyObject *));
+    if (names == NULL) {
+        Py_DECREF(fast);
+        return PyErr_NoMemory();
+    }
+    for (Py_ssize_t i = 0; i < n; i++) {
+        PyObject *item = PySequence_GetItem(fast, i);
+        names[i] = item ? PyUnicode_AsUTF8String(item) : NULL;
+        Py_XDECREF(item);
+        if (names[i] == NULL) {
+            for (Py_ssize_t j = 0; j < i; j++)
+                Py_DECREF(names[j]);
+            PyMem_Free(names);
+            Py_DECREF(fast);
+            return NULL;
+        }
+    }
+    void *found = walk_path((void *)(uintptr_t)address, names, n, 0);
+    for (Py_ssize_t i = 0; i < n; i++)
+        Py_DECREF(names[i]);
+    PyMem_Free(names);
+    Py_DECREF(fast);
+    if (found == NULL)
+        Py_RETURN_NONE;
+    return element_from_parts_reg(
+        found, Py_None, document, registry_of(document));
 }
 
 static PyObject *make_registry_capsule(void);
@@ -1706,6 +1778,8 @@ static PyMethodDef accel_methods[] = {
      "document_root(address, document) -> Element | None"},
     {"compiled_eval", accel_compiled_eval, METH_VARARGS,
      "compiled_eval(compiled_address, document_address, context_address, document, bindings) -> list | scalar | None"},
+    {"find_path", accel_find_path, METH_VARARGS,
+     "find_path(address, steps, document) -> Element | None"},
     {"subtree_iter", accel_subtree_iter, METH_VARARGS,
      "subtree_iter(element, include_self, ns, local) -> SubtreeIterator"},
     {"children", (PyCFunction)accel_children, METH_O,
