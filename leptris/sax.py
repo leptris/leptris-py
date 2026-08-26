@@ -151,6 +151,7 @@ def parse(xml, handler: SAXHandler) -> None:
     """One-shot SAX parse of a complete document."""
     if isinstance(xml, str):
         xml = xml.encode("utf-8")
+    handler.last_error = None  # a reused handler must not see stale errors
     struct, _keepalive = _wrap(handler)
     rc = _ffi.lib.leptris_sax_parse(xml, len(xml), struct, _ffi.ffi.NULL)
     _raise_if_failed(handler, rc)
@@ -167,6 +168,7 @@ class StreamingParser:
 
     def __init__(self, handler: SAXHandler, *, streaming: bool = True):
         self._handler = handler
+        handler.last_error = None  # same reuse contract as sax.parse
         # The C parser stores the handler POINTER (parser.c), so both
         # the struct and every callback must outlive it.
         self._struct, self._keepalive = _wrap(handler)
@@ -196,3 +198,9 @@ class StreamingParser:
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.close()
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
