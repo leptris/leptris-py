@@ -266,6 +266,8 @@ _BIND_NAMES = (
     "leptris_parse_file",
     "leptris_document_root",
     "leptris_document_free",
+    "leptris_xpath_compiled_eval",
+    "leptris_xpath_compiled_eval_ns",
 )
 _accel.bind(
     [

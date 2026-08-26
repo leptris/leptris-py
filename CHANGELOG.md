@@ -1,6 +1,26 @@
 # Changelog
 
 
+## 1.14.0 — 2026-08-26
+
+Compiled XPath rejoins the fast path (review #10):
+
+- the compiled `XPath` class still converted results through
+  the pre-1.12 Python path (cffi buffer, per-node unpack,
+  Python materialize, per-call ns marshaling) — 34.8 µs vs
+  lxml's 8.3 for a namespaced query, 32.5 µs even for an EMPTY
+  result. `_accel.compiled_eval` now evaluates and converts in
+  one C call through the same finish_result as every other
+  query shape (Fns protocol 43 -> 45; the compiled address is
+  cached at construction). Compiled-with-namespaces now runs at
+  parity with the plain path (was 1.7x slower than our own)
+- new regression test: compiled-with-ns matches plain-with-ns
+- engine finding filed as leptris/leptris#564: namespaced
+  evaluation costs 17.5 µs raw vs 0.95 µs un-namespaced for the
+  same scan (~18x) — the remaining query-shaped loss to lxml is
+  engine-side, like #563 (iterparse)
+
+
 ## 1.13.3 — 2026-08-26
 
 Memory-safety fix (review #7 — deep-read of the last never-read

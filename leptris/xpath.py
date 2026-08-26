@@ -225,6 +225,9 @@ class XPath:
         )
         if self._compiled == _ffi.ffi.NULL:
             raise XPathError(f"XPath compilation failed: {expression!r}")
+        self._compiled_addr = int(
+            _ffi.ffi.cast("uintptr_t", self._compiled)
+        )
 
     @property
     def expression(self) -> str:
@@ -232,7 +235,7 @@ class XPath:
 
     def __call__(self, element_or_document, *, namespaces=None):
         from .document import Document
-        from .element import Element
+        from .element import Element, _accel
 
         if isinstance(element_or_document, Element):
             element = element_or_document
@@ -243,6 +246,22 @@ class XPath:
             raise TypeError("expected an Element or Document")
         if document.closed:
             raise XPathError("document is closed")
+        # All-C fast path: eval + result conversion in one call. None
+        # falls back to the engine path below (mixed nodeset, eval
+        # failure, or a borrowed document without a raw address).
+        doc_addr = getattr(document, "_raw_addr", None)
+        if doc_addr is not None:
+            context_addr = getattr(element, "_raw", None) or 0
+            flat = (
+                [v for pair in namespaces.items() for v in pair]
+                if namespaces
+                else None
+            )
+            items = _accel.compiled_eval(
+                self._compiled_addr, doc_addr, context_addr, document, flat
+            )
+            if items is not None:
+                return items
         context = element._cd() if element is not None else _ffi.ffi.NULL
         if namespaces:
             ns_set = _ffi.lib.leptris_xpath_ns_set_new()
