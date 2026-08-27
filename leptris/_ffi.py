@@ -78,6 +78,8 @@ ffi.cdef(
     const char* leptris_document_pi_target(LeptrisDocument doc, size_t index);
     const char* leptris_document_pi_data(LeptrisDocument doc, size_t index);
     LeptrisNodeRef leptris_document_add_pi(LeptrisDocument doc, const char* target, const char* data);
+    size_t leptris_document_comment_count(LeptrisDocument doc);
+    const char* leptris_document_comment_content(LeptrisDocument doc, size_t index);
     size_t leptris_document_serialize_into(LeptrisDocument doc, char* buf, size_t capacity, size_t* out_len, const LeptrisSerializeOptions* options);
     size_t leptris_element_serialize_into(LeptrisElement elem, char* buf, size_t capacity, size_t* out_len, const LeptrisSerializeOptions* options);
     LeptrisElement  leptris_node_as_element(LeptrisNodeRef node);

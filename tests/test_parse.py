@@ -210,3 +210,43 @@ class TestErrorMessageQuality:
             fromstring("<d>" * 300 + "x" + "</d>" * 300)
         except ParseError as e:
             assert str(e).count("XML parse error") <= 1
+
+
+class TestAttributeNormalization:
+    # libleptris 1.9.3 — XML 1.0 §3.3.3 (#576)
+    def test_newlines_and_tabs_become_spaces(self):
+        root = fromstring(b"<e a='x\ny\tz'/>")
+        assert root.get("a") == "x y z"
+
+
+class TestDatalessPI:
+    # libleptris 1.9.3 — accept <?target?> without clobbering (#577)
+    def test_dataless_pi_parses(self):
+        root = fromstring(b"<?target?><r><a/></r>")
+        assert root.tag == "r"
+        assert root[0].tag == "a"
+
+    def test_toplevel_pis_dataless(self):
+        with Document.parse(b"<?target?><r/>") as doc:
+            assert doc.toplevel_pis() == [("target", "")]
+
+
+class TestDocumentLevelComments:
+    # libleptris 1.9.3 — expose prolog/epilog comments (#578)
+    def test_prolog_and_epilog(self):
+        with Document.parse(b"<!-- pre --><r/><!-- post -->") as doc:
+            assert doc.toplevel_comments() == [" pre ", " post "]
+
+    def test_serialize_preserves_epilog(self):
+        from leptris import tostring
+
+        with Document.parse(b"<!-- pre --><r><a/></r><!-- post -->") as doc:
+            assert tostring(doc) == b"<!-- pre --><r><a/></r><!-- post -->"
+
+    def test_closed_raises(self):
+        doc = Document.parse(b"<!-- c --><r/>")
+        doc.close()
+        with pytest.raises(LeptrisError):
+            doc.toplevel_comments()
+        with pytest.raises(LeptrisError):
+            doc.toplevel_pis()
