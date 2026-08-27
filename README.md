@@ -16,7 +16,7 @@ loader path.
 
 - Python 3.9+
 - `cffi` (installed automatically)
-- libleptris **1.9.2+** as a shared library (1.9.1 has an options-struct ABI break — leptris/leptris#568)
+- libleptris **1.9.3+** as a shared library (1.9.1 has an options-struct ABI break — leptris/leptris#568)
 - libleptris as a shared library (`libleptris.dylib` / `.so` /
   `.dll`) on the loader path, or pointed to by `LEPTRIS_LIB_PATH`
   (which must name the library **file** — the loader `dlopen`s it
@@ -85,6 +85,7 @@ with sax.StreamingParser(handler) as parser:  # push, constant memory
 | `etree.c14n` / `etree.XInclude` | `c14n(…)` / `doc.process_xinclude()` | |
 | `etree.XMLSyntaxError` | `ParseError` | XPath failures raise `XPathError`; both subclass `LeptrisError` |
 | `etree.Element`, `SubElement`, `append`, `set`, `remove` | **not exposed** | libleptris has partial mutation upstream (node content setters, `set_root`, `remove_children`) — not surfaced here; build trees elsewhere |
+| document-level comments / PIs | `doc.toplevel_comments()` / `doc.toplevel_pis()` | prolog then epilog; requires libleptris 1.9.3+ |
 | `etree.iterparse` | `leptris.iterparse(source)` | bounded by the largest subtree; yields `("end", element)`; elements borrowed until the next yield (v1: names are QNames as written). **Known limitations (leptris/leptris#563):** currently ~2× slower than lxml's iterparse, and truncated input ends iteration silently instead of raising — the engine's iterparse has no error channel; use `Document.parse` when the input fits in memory |
 | smart strings | plain `str` | XPath string/attribute results |
 | `elem.nsmap` | **absent** | use `elem.namespace` / `elem.prefix` and `xpath(namespaces=…)` |

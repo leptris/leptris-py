@@ -1,6 +1,22 @@
 # Changelog
 
 
+## 1.15.0 — 2026-08-27
+
+Adopts libleptris 1.9.3:
+
+- `Document.toplevel_comments()` — prolog and epilog comments
+  outside the root (engine #578); serialization already preserved
+  them, and the binding now exposes the content list
+- `Document.toplevel_pis()` — document-level processing
+  instructions as `(target, data)` pairs; `data` is `None` for a
+  dataless `<?target?>` (engine #577)
+- attribute-value normalization (XML 1.0 §3.3.3, engine #576):
+  newlines and tabs in attribute values become spaces — regression
+  test pinned
+- cdef: `document_comment_count` / `document_comment_content`
+
+
 ## 1.14.3 — 2026-08-27
 
 Error text and verification (review #14):

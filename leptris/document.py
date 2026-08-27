@@ -102,6 +102,52 @@ class Document:
     def getroot(self) -> Optional["Element"]:
         return self.root
 
+    def toplevel_comments(self) -> List[str]:
+        """Document-level comments outside the root (prolog then epilog).
+
+        Requires libleptris 1.9.3+. Contents are the text between the
+        markers; the markers themselves are not included.
+        """
+        if self._freed:
+            raise LeptrisError("operation on a closed document")
+        lib, ffi = _ffi.lib, _ffi.ffi
+        doc = self._cd()
+        count = lib.leptris_document_comment_count(doc)
+        items = []
+        for index in range(count):
+            ptr = lib.leptris_document_comment_content(doc, index)
+            items.append(
+                ffi.string(ptr).decode("utf-8") if ptr != ffi.NULL else ""
+            )
+        return items
+
+    def toplevel_pis(self) -> List[Tuple[str, Optional[str]]]:
+        """Document-level processing instructions outside the root.
+
+        Returns (target, data) pairs. A dataless PI (<?target?>)
+        yields data as the empty string (libleptris 1.9.3+).
+        """
+        if self._freed:
+            raise LeptrisError("operation on a closed document")
+        lib, ffi = _ffi.lib, _ffi.ffi
+        doc = self._cd()
+        count = lib.leptris_document_pi_count(doc)
+        items = []
+        for index in range(count):
+            target = lib.leptris_document_pi_target(doc, index)
+            data = lib.leptris_document_pi_data(doc, index)
+            items.append(
+                (
+                    ffi.string(target).decode("utf-8") if target != ffi.NULL else "",
+                    (
+                        ffi.string(data).decode("utf-8")
+                        if data != ffi.NULL
+                        else None
+                    ),
+                )
+            )
+        return items
+
     def xpath(self, expression: str, *, context=None, namespaces=None, variables=None):
         if self._freed:
             raise LeptrisError("operation on a closed document")
