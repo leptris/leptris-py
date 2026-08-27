@@ -31,5 +31,9 @@ def status_message(status: int) -> str:
     if last != ffi.NULL:
         detail = ffi.string(last).decode("utf-8", "replace")
         if detail:
+            # the thread-local detail often starts with the generic
+            # status text; return it alone rather than doubling
+            if detail == text or detail.startswith(text + " "):
+                return detail
             return f"{text}: {detail}"
     return text

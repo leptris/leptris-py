@@ -184,3 +184,29 @@ class TestEdges:
         doc.close()
         with pytest.raises(LeptrisError):
             root.tag
+
+
+class TestNestingBoundary:
+    # The engine caps document depth (default 256); lxml's expat has
+    # its own recursion limit at a similar point — parity, not a gap.
+    def test_depth_200_parses(self):
+        xml = "<d>" * 200 + "x" + "</d>" * 200
+        assert fromstring(xml).tag == "d"
+
+    def test_depth_300_raises_cleanly(self):
+        xml = "<d>" * 300 + "x" + "</d>" * 300
+        with pytest.raises(ParseError):
+            fromstring(xml)
+
+
+class TestErrorMessageQuality:
+    def test_no_doubled_generic_text(self):
+        # status_message appends the thread-local last error; when it
+        # is the same generic text, the message used to double it.
+        from leptris.error import status_message
+
+        assert status_message(1) != ""
+        try:
+            fromstring("<d>" * 300 + "x" + "</d>" * 300)
+        except ParseError as e:
+            assert str(e).count("XML parse error") <= 1
