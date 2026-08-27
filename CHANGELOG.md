@@ -1,6 +1,20 @@
 # Changelog
 
 
+## 1.15.1 — 2026-08-27
+
+SAX one-shot parse routed through the streaming state machine:
+
+- `leptris.sax.parse` now drives `StreamingParser` in ~8 KB chunks
+  instead of the engine's legacy `leptris_sax_parse` (which buffers
+  the whole document) — ~2.3x faster for byte-identical events
+  (verified: event streams and error behavior match exactly)
+- one SAX code path remains instead of two (the module's own
+  deletion test)
+- the remaining SAX deficit vs lxml (~4x) is the per-event libffi
+  callback tax the module docstring documents — not binding-side
+
+
 ## 1.15.0 — 2026-08-27
 
 Adopts libleptris 1.9.3:
