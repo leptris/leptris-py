@@ -86,7 +86,7 @@ with sax.StreamingParser(handler) as parser:  # push, constant memory
 | `etree.XMLSyntaxError` | `ParseError` | XPath failures raise `XPathError`; both subclass `LeptrisError` |
 | `etree.Element`, `SubElement`, `append`, `set`, `remove` | **not exposed** | libleptris has partial mutation upstream (node content setters, `set_root`, `remove_children`) — not surfaced here; build trees elsewhere |
 | document-level comments / PIs | `doc.toplevel_comments()` / `doc.toplevel_pis()` | prolog then epilog; requires libleptris 1.9.3+ |
-| `etree.iterparse` | `leptris.iterparse(source)` | bounded by the largest subtree; yields `("end", element)`; elements borrowed until the next yield (v1: names are QNames as written). **Known limitations (leptris/leptris#563):** currently ~2× slower than lxml's iterparse, and truncated input ends iteration silently instead of raising — the engine's iterparse has no error channel; use `Document.parse` when the input fits in memory |
+| `etree.iterparse` | `leptris.iterparse(source, full_document=False)` | bounded by the largest subtree; yields `("end", element)`; elements borrowed until the next yield; names are QNames as written. **Truncated or malformed input raises ParseError** (libleptris 1.9.4 error channel). `full_document=True` yields every element in completion order — error detection is unreliable in that mode pending leptris/leptris#592. Still ~2× slower than lxml's iterparse (leptris/leptris#563) |
 | smart strings | plain `str` | XPath string/attribute results |
 | `elem.nsmap` | **absent** | use `elem.namespace` / `elem.prefix` and `xpath(namespaces=…)` |
 | `etree.XPath` compiled objects | `leptris.XPath(expression)` | compile once, evaluate many; contexts and namespaces supported |

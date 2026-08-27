@@ -72,3 +72,42 @@ class TestIterparse:
 
         with pytest.raises(ParseError):
             iterparse("/nonexistent/doc.xml")
+
+
+class TestErrorChannel:
+    # libleptris 1.9.4 (#586): iterparse reports parse failures instead
+    # of ending iteration silently on truncated input.
+    def test_truncated_input_raises(self):
+        with pytest.raises(ParseError):
+            for _ in iterparse(io.BytesIO(b"<root><item>1</item><item>2</it")):
+                pass
+
+    def test_mismatched_tag_raises(self):
+        with pytest.raises(ParseError):
+            for _ in iterparse(io.BytesIO(b"<root><a></b></root>")):
+                pass
+
+    def test_wellformed_does_not_raise(self):
+        events = list(iterparse(io.BytesIO(b"<root><a/></root>")))
+        assert len(events) == 1
+
+
+class TestFullDocumentMode:
+    def test_yields_every_element_in_completion_order(self):
+        xml = b"<r><a><b/></a><c/></r>"
+        tags = [el.tag for _, el in iterparse(io.BytesIO(xml), full_document=True)]
+        assert tags == ["b", "a", "c", "r"]
+
+    def test_top_level_default_unchanged(self):
+        xml = b"<r><a><b/></a><c/></r>"
+        tags = [el.tag for _, el in iterparse(io.BytesIO(xml))]
+        assert tags == ["a", "c"]
+
+
+class TestFullDocumentErrorMode:
+    def test_fulldoc_clean_drain_no_raise(self):
+        # leptris/leptris#592: full-document mode's error channel
+        # reports "truncated" on clean drains; the binding skips the
+        # check there until the engine fixes it.
+        tags = list(iterparse(io.BytesIO(b"<r><a/></r>\n"), full_document=True))
+        assert tags

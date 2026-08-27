@@ -1,13 +1,13 @@
-"""SAX parsing over the libleptris push parser (Ruby-parity surface).
+"""SAX parsing over the libleptris event recorder (Ruby-parity surface).
 
-Every event crosses the FFI boundary through a libffi callback, so
-per-event cost is far higher than the DOM API; use SAX for huge
+Events are buffered C-side and drained in bulk (records + a packed
+arena, one transfer per chunk — libleptris 1.9.4+): no per-event
+libffi callbacks, which measured ~2.5 µs each. Use SAX for huge
 documents where you must not hold the tree.
 
-Error model: raising inside a callback does not propagate (cffi
-swallows it). The default SAXHandler.error records the failure and
-leptris.sax raises ParseError after the C call returns; override
-error() only if you want different behavior.
+Error model: parse failures surface as a recorded ERROR event; the
+default SAXHandler.error stores it and leptris.sax raises ParseError
+after the drain completes.
 """
 
 from __future__ import annotations
@@ -63,145 +63,131 @@ def _decode(value) -> Optional[str]:
     return _ffi.ffi.string(value).decode("utf-8", "replace")
 
 
-def _wrap(handler: SAXHandler):
-    """Build the C handler struct; keeps every ffi.callback alive."""
-    ffi = _ffi.ffi
-    keepalive = []
-
-    def callback(ctype, fn):
-        c = ffi.callback(ctype, fn)
-        keepalive.append(c)
-        return c
-
-    def attrs(pairs) -> dict:
-        attributes = {}
-        index = 0
-        while pairs[index] != ffi.NULL:
-            attributes[
-                ffi.string(pairs[index]).decode("utf-8", "replace")
-            ] = ffi.string(pairs[index + 1]).decode("utf-8", "replace")
-            index += 2
-        return attributes
-
-    struct = ffi.new("LeptrisSAXHandler*")
-    struct.start_document = callback(
-        "void(*)(void*)", lambda ud: handler.start_document()
-    )
-    struct.end_document = callback(
-        "void(*)(void*)", lambda ud: handler.end_document()
-    )
-    struct.start_element = callback(
-        "void(*)(void*, const char*, const char**)",
-        lambda ud, name, pairs: handler.start_element(
-            _decode(name), attrs(pairs)
-        ),
-    )
-    struct.end_element = callback(
-        "void(*)(void*, const char*)",
-        lambda ud, name: handler.end_element(_decode(name)),
-    )
-    struct.characters = callback(
-        "void(*)(void*, const char*, size_t)",
-        lambda ud, text, length: handler.characters(
-            ffi.string(text, length).decode("utf-8", "replace")
-        ),
-    )
-    struct.comment = callback(
-        "void(*)(void*, const char*)",
-        lambda ud, text: handler.comment(_decode(text)),
-    )
-    struct.cdata = callback(
-        "void(*)(void*, const char*)",
-        lambda ud, text: handler.cdata(_decode(text)),
-    )
-    struct.processing_instruction = callback(
-        "void(*)(void*, const char*, const char*)",
-        lambda ud, target, data: handler.processing_instruction(
-            _decode(target), _decode(data)
-        ),
-    )
-    struct.start_prefix_mapping = callback(
-        "void(*)(void*, const char*, const char*)",
-        lambda ud, prefix, uri: handler.start_prefix_mapping(
-            _decode(prefix), _decode(uri)
-        ),
-    )
-    struct.end_prefix_mapping = callback(
-        "void(*)(void*, const char*)",
-        lambda ud, prefix: handler.end_prefix_mapping(_decode(prefix)),
-    )
-    struct.error = callback(
-        "void(*)(void*, const char*, int, int)",
-        lambda ud, message, line, column: handler.error(
-            _decode(message), line, column
-        ),
-    )
-    return struct, keepalive
+_KIND_START_DOCUMENT = 0
+_KIND_END_DOCUMENT = 1
+_KIND_START_ELEMENT = 2
+_KIND_END_ELEMENT = 3
+_KIND_CHARACTERS = 4
+_KIND_COMMENT = 5
+_KIND_CDATA = 6
+_KIND_PI = 7
+_KIND_START_PREFIX = 8
+_KIND_END_PREFIX = 9
+_KIND_ERROR = 10
 
 
-def _raise_if_failed(handler: SAXHandler, rc: int) -> None:
+def _drain(handler: SAXHandler, recorder, chunk_label: str) -> None:
+    """Read one chunk's buffered records and dispatch them."""
+    lib, ffi = _ffi.lib, _ffi.ffi
+    count = ffi.new("size_t*")
+    records = lib.leptris_sax_recorder_records(recorder, count)
+    if records == ffi.NULL or count[0] == 0:
+        return
+    arena_len = ffi.new("size_t*")
+    arena = bytes(
+        ffi.buffer(lib.leptris_sax_recorder_arena(recorder, arena_len), arena_len[0])
+    )
+
+    def slice_(offset: int, length: int) -> str:
+        return arena[offset : offset + length].decode("utf-8", "replace") if length else ""
+
+    for index in range(count[0]):
+        record = records[index]
+        kind = record.kind
+        name = slice_(record.name_off, record.name_len)
+        text = slice_(record.text_off, record.text_len)
+        if kind == _KIND_START_DOCUMENT:
+            handler.start_document()
+        elif kind == _KIND_END_DOCUMENT:
+            handler.end_document()
+        elif kind == _KIND_START_ELEMENT:
+            attributes = {}
+            offset = record.attrs_off
+            for _ in range(record.attr_count):
+                end = arena.index(b"\x00", offset)
+                attr_name = arena[offset:end].decode("utf-8", "replace")
+                value_start = end + 1
+                value_end = arena.index(b"\x00", value_start)
+                attributes[attr_name] = arena[value_start:value_end].decode(
+                    "utf-8", "replace"
+                )
+                offset = value_end + 1
+            handler.start_element(name, attributes)
+        elif kind == _KIND_END_ELEMENT:
+            handler.end_element(name)
+        elif kind == _KIND_CHARACTERS:
+            handler.characters(text)
+        elif kind == _KIND_COMMENT:
+            handler.comment(text)
+        elif kind == _KIND_CDATA:
+            handler.cdata(text)
+        elif kind == _KIND_PI:
+            handler.processing_instruction(name, text)
+        elif kind == _KIND_START_PREFIX:
+            handler.start_prefix_mapping(name, text)
+        elif kind == _KIND_END_PREFIX:
+            handler.end_prefix_mapping(name)
+        elif kind == _KIND_ERROR:
+            handler.error(text, record.line, record.column)
+
+
+def _raise_if_failed(handler: SAXHandler) -> None:
     if handler.last_error is not None:
         message, line, column = handler.last_error
         raise ParseError(f"{message} (line {line}, column {column})")
-    if rc != 0:
-        raise ParseError("SAX parse failed")
 
 
 def parse(xml, handler: SAXHandler) -> None:
-    """One-shot SAX parse of a complete document.
-
-    Routed through the streaming state machine in ~8 KB chunks: the
-    engine's legacy one-shot path buffers the whole document, and a
-    single whole-document feed re-buffers internally — chunking
-    measures ~2.3x faster end-to-end for identical events (verified
-    byte-for-byte, including error behavior).
-    """
+    """One-shot SAX parse of a complete document."""
     if isinstance(xml, str):
         xml = xml.encode("utf-8")
-    chunk_size = 8192
-    with StreamingParser(handler) as parser:
-        for start in range(0, len(xml), chunk_size):
-            parser.feed(
-                xml[start : start + chunk_size],
-                final=start + chunk_size >= len(xml),
-            )
+    handler.last_error = None
+    lib, ffi = _ffi.lib, _ffi.ffi
+    recorder = lib.leptris_sax_recorder_new()
+    if recorder == ffi.NULL:
+        raise ParseError("could not create SAX recorder")
+    try:
+        rc = lib.leptris_sax_recorder_feed(recorder, xml, len(xml), 1)
+        _drain(handler, recorder, "document")
+        _raise_if_failed(handler)
+        if rc != 0 and handler.last_error is None:
+            raise ParseError("SAX parse failed")
+    finally:
+        lib.leptris_sax_recorder_free(recorder)
 
 
 class StreamingParser:
     """Push parser: feed() chunks, mark the last one final=True.
 
-    With streaming=True (default) events are emitted as chunks
-    arrive, with memory bounded by nesting depth, not document
-    size; set_streaming must run before the first feed, which the
-    constructor guarantees.
+    Events for each chunk are buffered C-side and drained in bulk on
+    return (libleptris 1.9.4+ recorder); memory stays bounded by the
+    largest chunk's event backlog, not the document size.
     """
 
     def __init__(self, handler: SAXHandler, *, streaming: bool = True):
         self._handler = handler
         handler.last_error = None  # same reuse contract as sax.parse
-        # The C parser stores the handler POINTER (parser.c), so both
-        # the struct and every callback must outlive it.
-        self._struct, self._keepalive = _wrap(handler)
-        self._parser = _ffi.lib.leptris_sax_parser_create(self._struct, _ffi.ffi.NULL)
-        if self._parser == _ffi.ffi.NULL:
-            raise ParseError("could not create SAX parser")
-        if streaming:
-            _ffi.lib.leptris_sax_parser_set_streaming(self._parser, 1)
+        self._recorder = _ffi.lib.leptris_sax_recorder_new()
+        if self._recorder == _ffi.ffi.NULL:
+            raise ParseError("could not create SAX recorder")
 
     def feed(self, chunk, *, final: bool = False) -> None:
-        if self._parser is None:
+        if self._recorder is None:
             raise ParseError("parser is closed")
         if isinstance(chunk, str):
             chunk = chunk.encode("utf-8")
-        rc = _ffi.lib.leptris_sax_parser_feed(
-            self._parser, chunk, len(chunk), 1 if final else 0
+        rc = _ffi.lib.leptris_sax_recorder_feed(
+            self._recorder, chunk, len(chunk), 1 if final else 0
         )
-        _raise_if_failed(self._handler, rc)
+        _drain(self._handler, self._recorder, "chunk")
+        _raise_if_failed(self._handler)
+        if rc != 0 and self._handler.last_error is None:
+            raise ParseError("SAX parse failed")
 
     def close(self) -> None:
-        if self._parser is not None:
-            _ffi.lib.leptris_sax_parser_free(self._parser)
-            self._parser = None
+        if self._recorder is not None:
+            _ffi.lib.leptris_sax_recorder_free(self._recorder)
+            self._recorder = None
 
     def __enter__(self) -> "StreamingParser":
         return self

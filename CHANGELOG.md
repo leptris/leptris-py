@@ -1,6 +1,26 @@
 # Changelog
 
 
+## 1.16.0 — 2026-08-27
+
+Adopts libleptris 1.9.4 — the event recorder and iterparse v2:
+
+- **SAX on the recorder**: `sax.parse` and `StreamingParser` drain
+  buffered events in bulk (records + packed arena, one transfer per
+  chunk) instead of one libffi callback per event — measured
+  ~5.5x faster (246 -> 44 ms for 10k items / 90k events); event
+  semantics pinned unchanged by the existing suite
+- **iterparse error channel**: truncated or malformed input now
+  raises ParseError instead of ending iteration silently
+  (red-first tests); full-document mode's channel reports a
+  spurious error on clean drains (filed leptris/leptris#592) —
+  the binding skips the check there until fixed
+- **iterparse full_document=True**: yields every element in
+  completion order (children before parents)
+- iterparse perf is unchanged (~2x behind lxml, leptris/leptris#563)
+- pin 1.9.3 -> 1.9.4; cdef +recorder/iterparse_ex/error symbols
+
+
 ## 1.15.1 — 2026-08-27
 
 SAX one-shot parse routed through the streaming state machine:
