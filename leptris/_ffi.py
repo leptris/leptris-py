@@ -51,6 +51,7 @@ ffi.cdef(
     } LeptrisSAXHandler;
 
     LeptrisDocument leptris_parse_string(const char* xml, size_t len, int* status);
+    LeptrisDocument leptris_parse_string_inplace(char* xml, size_t len, int* status);
     LeptrisDocument leptris_parse_file(const char* filepath, int* status);
     void           leptris_document_free(LeptrisDocument doc);
     LeptrisElement  leptris_document_root(LeptrisDocument doc);

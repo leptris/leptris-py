@@ -43,15 +43,19 @@ def serialize_options(
 
 
 class Document:
-    __slots__ = ("_ptr", "_freed", "_accel_registry", "_raw_addr")
+    __slots__ = ("_ptr", "_freed", "_accel_registry", "_raw_addr", "_buffer")
 
     @classmethod
-    def _from_parts(cls, address, registry):
+    def _from_parts(cls, address, registry, buffer=None):
         doc = cls.__new__(cls)
         doc._ptr = _ffi.ffi.NULL
         doc._freed = False
         doc._accel_registry = registry
         doc._raw_addr = address
+        # In-place parses retain pointers into the input buffer until
+        # document_free; the view (which owns the bytearray) must
+        # outlive the document. Dropped in close(), after the free.
+        doc._buffer = buffer
         return doc
 
     @classmethod
@@ -64,12 +68,18 @@ class Document:
             xml = xml.encode("utf-8")
         if not isinstance(xml, (bytes, bytearray, memoryview)):
             raise TypeError("xml must be str or bytes")
+        data = bytearray(xml)  # writable copy: the engine may parse in place
+        if not data:
+            raise ParseError("parse error: empty input")
         from .element import _accel
 
-        address, registry, status = _accel.parse(bytes(xml), recover)
+        view = _ffi.ffi.from_buffer("char[]", data)
+        address, registry, status = _accel.parse_inplace(
+            int(_ffi.ffi.cast("uintptr_t", view)), len(data), recover
+        )
         if address is None:
             raise ParseError(status_message(status))
-        return cls._from_parts(address, registry)
+        return cls._from_parts(address, registry, view)
 
     @classmethod
     def parse_file(cls, path) -> "Document":
@@ -81,7 +91,7 @@ class Document:
         address, registry, status = _accel.parse_file(path)
         if address is None:
             raise ParseError(status_message(status))
-        return cls._from_parts(address, registry)
+        return cls._from_parts(address, registry)  # file parse copies internally
 
     def _cd(self):
         """cffi handle for cold cffi paths, created lazily."""
@@ -212,6 +222,7 @@ class Document:
             _accel.close_document(self._raw_addr)
             self._freed = True
             self._ptr = _ffi.ffi.NULL
+            self._buffer = None
 
     @property
     def closed(self) -> bool:

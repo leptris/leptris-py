@@ -1,6 +1,35 @@
 # Changelog
 
 
+## 1.17.0 — 2026-08-28
+
+Adopts libleptris 1.9.5 — two walls fall, one adoption:
+
+- **in-place parsing is now the Document.parse fast path** (#561
+  un-gated the close-tag masked compare): the engine parses a
+  private writable copy in place and retains pointers into it, so
+  the Document owns the buffer view for its lifetime and drops it
+  at close; user input is never mutated. Fns protocol 45 -> 46
+  (`leptris_parse_string_inplace`)
+- **namespaced XPath: the last query-shaped loss to lxml is gone**
+  (#564 VM fast paths) — raw ns-eval 17.5 -> 6.9 µs; the binding's
+  namespaced `//x:book` now runs AHEAD of lxml (9.9 vs 11.7 µs
+  measured) with no binding change
+- iterparse reuses one subtree arena across yields (#563): the
+  50k-item bare loop drops 315 -> 114 ms — still above the DOM
+  floor, tracking continues on the engine side
+- #550 and #557 workarounds RETAINED: raw fresh-document
+  serialization still returns NULL without the promote touch, and
+  descendant-or-self still omits a namespaced root for prefixed
+  name tests (both re-verified against 1.9.5; the release's
+  "regression contracts" line added engine tests, not fixes)
+- batch-context eval (#560) and batched pull delivery (#589/#562)
+  shipped upstream but are not bound — no binding operation
+  evaluates one expression over N contexts yet, and the pull
+  parser is not part of the surface
+- pin 1.9.4 -> 1.9.5; cdef +inplace
+
+
 ## 1.16.1 — 2026-08-27
 
 Finishing the iterparse v2 surface (libleptris 1.9.4):
