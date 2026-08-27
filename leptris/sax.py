@@ -162,9 +162,23 @@ class StreamingParser:
     Events for each chunk are buffered C-side and drained in bulk on
     return (libleptris 1.9.4+ recorder); memory stays bounded by the
     largest chunk's event backlog, not the document size.
+
+    The `streaming` keyword is accepted for backward compatibility
+    and ignored: the recorder always streams (the legacy buffering
+    mode it used to select no longer exists); passing False emits a
+    DeprecationWarning.
     """
 
     def __init__(self, handler: SAXHandler, *, streaming: bool = True):
+        if not streaming:
+            import warnings
+
+            warnings.warn(
+                "streaming=False is deprecated: the event recorder "
+                "always streams (legacy buffering mode is gone)",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         self._handler = handler
         handler.last_error = None  # same reuse contract as sax.parse
         self._recorder = _ffi.lib.leptris_sax_recorder_new()
