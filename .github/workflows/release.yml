@@ -35,7 +35,15 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
+      # SELF-CHECKOUT: as a workflow_call the default checkout is the
+      # CALLER's repo (leptris/leptris) — where neither the binding
+      # sources nor libleptris-version.txt exist (the wheel job died
+      # on `cat: libleptris-version.txt: No such file or directory`).
+      # Always check out THIS repository.
       - uses: actions/checkout@v4
+        with:
+          repository: leptris/leptris-py
+          ref: main
 
       - uses: actions/setup-python@v5
         with:
@@ -47,7 +55,9 @@ jobs:
           set -e
           LIBLEPTRIS_VERSION=$(cat libleptris-version.txt)
           mkdir -p tmp/libleptris && cd tmp/libleptris
-          curl -sL "https://api.github.com/repos/leptris/leptris/tarball/v${LIBLEPTRIS_VERSION}" | tar xz --strip-components=1
+          # codeload (not api.github.com): the API endpoint is
+          # unauthenticated-rate-limited and 403s on shared runners.
+          curl -sL "https://codeload.github.com/leptris/leptris/tar.gz/refs/tags/v${LIBLEPTRIS_VERSION}" | tar xz --strip-components=1
           cmake -B build -S . \
             -DCMAKE_BUILD_TYPE=Release \
             -DLEPTRIS_BUILD_SHARED=ON -DLEPTRIS_BUILD_STATIC=OFF \
@@ -86,7 +96,15 @@ jobs:
           - os: windows-latest
             cibw: "cp39-win_amd64"
     steps:
+      # SELF-CHECKOUT: as a workflow_call the default checkout is the
+      # CALLER's repo (leptris/leptris) — where neither the binding
+      # sources nor libleptris-version.txt exist (the wheel job died
+      # on `cat: libleptris-version.txt: No such file or directory`).
+      # Always check out THIS repository.
       - uses: actions/checkout@v4
+        with:
+          repository: leptris/leptris-py
+          ref: main
 
       - uses: actions/setup-python@v5
         with:
