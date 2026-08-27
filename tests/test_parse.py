@@ -250,3 +250,29 @@ class TestDocumentLevelComments:
             doc.toplevel_comments()
         with pytest.raises(LeptrisError):
             doc.toplevel_pis()
+
+
+class TestInplaceBufferLifetime:
+    # libleptris 1.9.5 (#561) made in-place parsing the fast path; the
+    # engine retains pointers into the buffer until document_free, so
+    # the Document owns a private copy and drops it at close.
+    def test_document_outlives_input(self):
+        doc = Document.parse("<catalog>" + "<r><a>text</a></r>" * 100 + "</catalog>")
+        import gc
+
+        gc.collect()
+        assert doc.xpath("count(//a)") == 100.0
+        root = doc.getroot()
+        assert root[0][0].text == "text"
+        doc.close()
+
+    def test_close_releases_buffer(self):
+        doc = Document.parse("<r/>")
+        assert doc._buffer is not None
+        doc.close()
+        assert doc._buffer is None
+
+    def test_user_input_never_mutated(self):
+        original = b"<r><a/></r>"
+        Document.parse(original)
+        assert original == b"<r><a/></r>"
