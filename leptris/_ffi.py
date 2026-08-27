@@ -24,6 +24,7 @@ ffi.cdef(
     typedef struct leptris_element*  LeptrisElement;
     typedef struct leptris_node*     LeptrisNodeRef;
     typedef struct leptris_attribute* LeptrisAttribute;
+    typedef struct leptris_sax_recorder* LeptrisSaxRecorder;
     typedef struct leptris_xpath_result* LeptrisXPathResult;
     typedef struct leptris_xpath_variable_set* LeptrisXPathVariableSet;
     typedef struct leptris_xpath_ns_map* LeptrisXPathNsSet;
@@ -155,6 +156,29 @@ ffi.cdef(
 
     typedef struct leptris_iterparse* LeptrisIterparse;
     LeptrisIterparse leptris_iterparse_new(const char* xml, size_t len);
+    typedef enum {
+        LEPTRIS_ITERPARSE_TOP_LEVEL = 0,
+        LEPTRIS_ITERPARSE_FULL_DOCUMENT = 1
+    } LeptrisIterparseMode;
+    LeptrisIterparse leptris_iterparse_new_ex(const char* xml, size_t len, int mode);
+    LeptrisIterparse leptris_iterparse_new_file_ex(const char* path, int mode);
+    const char* leptris_iterparse_error(LeptrisIterparse it);
+    size_t leptris_iterparse_ns_count(LeptrisIterparse it);
+    const char* leptris_iterparse_ns_uri(LeptrisIterparse it, const char* prefix);
+    typedef struct {
+        uint8_t kind;
+        uint8_t reserved[7];
+        uint32_t name_off, name_len;
+        uint32_t text_off, text_len;
+        uint32_t attrs_off;
+        uint32_t attr_count;
+        uint32_t line, column;
+    } LeptrisSaxEventRecord;
+    LeptrisSaxRecorder leptris_sax_recorder_new(void);
+    int leptris_sax_recorder_feed(LeptrisSaxRecorder r, const char* xml, size_t len, int is_final);
+    const LeptrisSaxEventRecord* leptris_sax_recorder_records(LeptrisSaxRecorder r, size_t* count);
+    const char* leptris_sax_recorder_arena(LeptrisSaxRecorder r, size_t* len);
+    void leptris_sax_recorder_free(LeptrisSaxRecorder r);
     LeptrisIterparse leptris_iterparse_new_file(const char* path);
     LeptrisElement leptris_iterparse_next(LeptrisIterparse it);
     void leptris_iterparse_free(LeptrisIterparse it);

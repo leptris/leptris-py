@@ -163,18 +163,22 @@ class _BorrowedDocument:
         pass
 
 
-def iterparse(source, events=("end",)):
+def iterparse(source, events=("end",), *, full_document: bool = False):
     """Incrementally parse XML with bounded memory (lxml parity).
 
-    Yields ("end", element) pairs for each completed top-level child
-    of the root; each element (and its subtree) stays valid only
-    until the next yield — the engine releases it then, keeping
-    memory bounded by the largest subtree, not the document.
+    Yields ("end", element) pairs as elements complete; each element
+    (and its subtree) stays valid only until the next yield — the
+    engine releases it then, keeping memory bounded by the largest
+    subtree, not the document.
+
+    By default only the root's top-level children are yielded; with
+    full_document=True every element is (in completion order —
+    children before parents).
 
     Accepts a file path or an XML str/bytes. Only "end" events are
-    supported. Names are the QNames as written (namespace prefixes
-    are not re-resolved — use the DOM path when namespace URIs
-    matter).
+    supported. Names are the QNames as written. Malformed or
+    truncated input raises ParseError when iteration ends
+    (libleptris 1.9.4+).
     """
     requested = tuple(events) if not isinstance(events, str) else (events,)
     if requested != ("end",):
@@ -182,18 +186,19 @@ def iterparse(source, events=("end",)):
     from . import _ffi as _binding
 
     lib, ffi = _binding.lib, _binding.ffi
+    mode = 1 if full_document else 0
     if hasattr(source, "read"):
         data = source.read()
         if isinstance(data, str):
             data = data.encode("utf-8")
-        iterator = lib.leptris_iterparse_new(data, len(data))
+        iterator = lib.leptris_iterparse_new_ex(data, len(data), mode)
     else:
         import os
 
         path = os.fspath(source)
         if isinstance(path, str):
             path = path.encode("utf-8")
-        iterator = lib.leptris_iterparse_new_file(path)
+        iterator = lib.leptris_iterparse_new_file_ex(path, mode)
     if iterator == ffi.NULL:
         raise ParseError("iterparse could not start")
 
@@ -206,6 +211,18 @@ def iterparse(source, events=("end",)):
             while True:
                 element_ptr = lib.leptris_iterparse_next(iterator)
                 if element_ptr == ffi.NULL:
+                    if not full_document:
+                        # The error channel is reliable in top-level
+                        # mode only: full-document mode reports a
+                        # spurious "truncated XML document" on clean
+                        # drains (leptris/leptris#592).
+                        error = lib.leptris_iterparse_error(iterator)
+                        if error != ffi.NULL:
+                            message = ffi.string(error).decode(
+                                "utf-8", "replace"
+                            )
+                            if message:
+                                raise ParseError(message)
                     return
                 # The element is borrowed: valid until the next call.
                 # Wrap with the raw address for the C fast paths.
