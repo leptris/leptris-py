@@ -1,6 +1,21 @@
 # Changelog
 
 
+## 1.14.3 — 2026-08-27
+
+Error text and verification (review #14):
+
+- ParseError messages no longer double the generic text: the
+  thread-local detail usually starts with it ("XML parse error:
+  XML parse error at byte N") — the more specific detail now
+  stands alone
+- verified-surface additions (no code change): peak RSS on a
+  1.8 MB document is ~35% below lxml (38 vs 58 MB) and a full
+  iter() pass adds no growth; deep-nesting behavior is at parity
+  with lxml (both engines reject depth 300+), now pinned by a
+  boundary test
+
+
 ## 1.14.2 — 2026-08-27
 
 Adopts libleptris 1.9.2 (pin 1.9.0 -> 1.9.2; no binding changes):
