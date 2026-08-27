@@ -169,3 +169,12 @@ class TestHandlerReuse:
                 parser.feed("<broken>", final=True)
         with sax.StreamingParser(handler) as parser:
             parser.feed("<r><a/></r>", final=True)  # must not raise
+
+
+class TestStreamingKwarg:
+    def test_streaming_false_warns_deprecated(self):
+        # The recorder always streams; the legacy buffering mode the
+        # kwarg selected no longer exists.
+        with pytest.warns(DeprecationWarning):
+            with sax.StreamingParser(sax.SAXHandler(), streaming=False):
+                pass

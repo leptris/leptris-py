@@ -111,3 +111,19 @@ class TestFullDocumentErrorMode:
         # check there until the engine fixes it.
         tags = list(iterparse(io.BytesIO(b"<r><a/></r>\n"), full_document=True))
         assert tags
+
+
+class TestNamespaceResolution:
+    # libleptris 1.9.4 iterparse v2: borrowed elements carry namespace
+    # resolution — Clark-notation tags, prefix, namespace, attributes.
+    def test_namespaced_elements_resolve(self):
+        xml = b"<x:catalog xmlns:x='urn:x'><x:book id='1'>T</x:book><plain/></x:catalog>"
+        seen = [(el.tag, el.prefix, el.namespace) for _, el in iterparse(io.BytesIO(xml))]
+        assert seen == [
+            ("{urn:x}book", "x", "urn:x"),
+            ("plain", None, None),
+        ]
+
+    def test_attributes_and_text_on_borrowed(self):
+        for _, el in iterparse(io.BytesIO(b"<r><a x='1'>hello</a></r>")):
+            assert (el.tag, el.get("x"), el.text) == ("a", "1", "hello")

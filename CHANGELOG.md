@@ -1,6 +1,20 @@
 # Changelog
 
 
+## 1.16.1 — 2026-08-27
+
+Finishing the iterparse v2 surface (libleptris 1.9.4):
+
+- borrowed iterparse elements resolve namespaces — Clark-notation
+  tag, prefix, namespace, attributes, text all work; the README's
+  stale "names are QNames as written" caveat is corrected and the
+  behavior pinned by regression tests
+- `StreamingParser(streaming=False)` now emits DeprecationWarning:
+  the event recorder always streams and the legacy buffering mode
+  the kwarg selected no longer exists (it was a silent no-op since
+  1.16.0)
+
+
 ## 1.16.0 — 2026-08-27
 
 Adopts libleptris 1.9.4 — the event recorder and iterparse v2:
