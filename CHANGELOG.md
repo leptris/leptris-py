@@ -1,6 +1,23 @@
 # Changelog
 
 
+## 1.14.2 — 2026-08-27
+
+Adopts libleptris 1.9.2 (pin 1.9.0 -> 1.9.2; no binding changes):
+
+- 1.9.1 appended fields to the public LeptrisSerializeOptions
+  struct; FFI callers allocating the frozen 1.9.0 layout got
+  read-past-buffer — tostring(doc, pretty_print=True) segfaulted
+  or silently dropped indentation (leptris/leptris#568, blocked
+  the 1.9.1 adoption). Fixed upstream in #569: the struct is
+  frozen with a compile-time size pin; extended settings moved
+  behind an internal seam
+- verified against the v1.9.2 tag build: 178/178 tests, drift
+  gate clean (230 public symbols), all repro shapes produce
+  correctly indented output; no new leptris_* API functions
+- README prerequisite now says 1.9.2+ and warns off 1.9.1
+
+
 ## 1.14.1 — 2026-08-27
 
 find(): correctness and a 6.5x speedup (review #11):
