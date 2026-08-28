@@ -1,6 +1,26 @@
 # Changelog
 
 
+## 1.22.2 — 2026-08-29
+
+Adopts libleptris 1.9.10-1.9.13 (pin 1.9.9 -> 1.9.13):
+
+- the XSLT conformance sprint lands through leptris.XSLT: libxslt
+  suite 152 -> 181/205 — xsl:copy excludes attributes (7.5) and
+  the built-in TEXT rule for selected text items are pinned by
+  new tests; dozens more fixes flow through untested-by-name
+- **transform perf regression measured and filed** (leptris/leptris
+  #624): raw apply 864 -> 1492 µs across the sprint on a
+  select-heavy fixture — the ledger row slides 0.69x -> 0.38x
+  binding-level; conformance over speed until the tier's fast
+  paths return (precedent: #564 restored namespaced XPath)
+- sax_recorder_reset (v1.9.10) not bound: the binding's recorder
+  lifecycle is one-per-parse/stream and create+free is cheap —
+  nothing to reuse
+- document-level whitespace chains (v1.9.13) verified through the
+  existing toplevel_comments/PIs tests
+
+
 ## 1.22.1 — 2026-08-28
 
 Adopts libleptris 1.9.9 (pin 1.9.8 -> 1.9.9):
