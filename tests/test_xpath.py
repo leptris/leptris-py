@@ -285,3 +285,39 @@ class TestUpstreamV197:
         ) as doc:
             assert doc.xpath("//comment()") == [" pre ", " inner ", " post "]
             assert doc.xpath("//processing-instruction()") == ["d"]
+
+
+class TestCompiledXPathVariables:
+    def test_scalar_and_nodeset(self):
+        from leptris import XPath, fromstring
+
+        root = fromstring(BOOKS)
+        query = XPath("//book[@id=$id]")
+        assert query(root, variables={"id": "2"})[0].text == "B"
+        assert XPath("$n + 1")(root, variables={"n": 41}) == 42.0
+        assert XPath("$flag")(root, variables={"flag": True}) is True
+
+    def test_matches_uncompiled_semantics(self):
+        from leptris import XPath, fromstring
+
+        root = fromstring(BOOKS)
+        query = XPath("//book[@price > $min]")
+        assert [b.text for b in query(root, variables={"min": 50})] == [
+            b.text for b in root.xpath("//book[@price > 50]")
+        ]
+
+    def test_type_error_on_unsupported(self):
+        from leptris import XPath, fromstring
+
+        root = fromstring(BOOKS)
+        with pytest.raises(TypeError):
+            XPath("$x")(root, variables={"x": object()})
+
+    def test_ns_plus_vars_falls_back_cleanly(self):
+        from leptris import XPath, fromstring
+
+        root = fromstring("<x:r xmlns:x='urn:x'><x:a>1</x:a></x:r>")
+        query = XPath("count(//x:a)")
+        assert query(
+            root, namespaces={"x": "urn:x"}, variables={"unused": 0}
+        ) == 1.0
