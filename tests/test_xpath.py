@@ -321,3 +321,20 @@ class TestCompiledXPathVariables:
         assert query(
             root, namespaces={"x": "urn:x"}, variables={"unused": 0}
         ) == 1.0
+
+
+class TestUpstreamV199:
+    def test_attribute_axis_expands_entities(self):
+        # leptris 1.9.9 (bug-59): the attribute axis returns expanded
+        # values, matching @attr access.
+        root = fromstring("<e t='a &amp; b'/>")
+        assert root.xpath("//e/@t") == ["a & b"]
+
+    def test_top_level_variables_with_namespaces(self):
+        # leptris 1.9.9 (bug-36): top-level variables evaluate with
+        # the declaring element's namespace context.
+        NS = {"x": "urn:x"}
+        root = fromstring("<x:r xmlns:x='urn:x'><x:a>1</x:a></x:r>")
+        assert root.xpath(
+            "count(//x:a)", namespaces=NS, variables={"u": 0}
+        ) == 1.0

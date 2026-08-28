@@ -1,6 +1,24 @@
 # Changelog
 
 
+## 1.22.1 — 2026-08-28
+
+Adopts libleptris 1.9.9 (pin 1.9.8 -> 1.9.9):
+
+- attribute axis expands entities (engine bug-59) and top-level
+  variables evaluate with their declaring element's namespace
+  context (engine bug-36) — both pinned by regression tests
+- cdata `]]>` splitting (bug-132/90) fixes internally-created runs;
+  not reachable through the read-only parse surface — verified
+  round-trip instead
+- serialize_ext's indent_text (display-form text indentation)
+  DECLINED for the binding: measured lxml behavior — libxml2's
+  formatter also skips mixed-content indentation, so the existing
+  pretty_print output is already at lxml parity; indent_text is a
+  beyond-lxml display mode with no round-trip guarantee
+- XSLT suite progress upstream: 144 -> 152/205
+
+
 ## 1.22.0 — 2026-08-28
 
 XSLT 1.0 transformation (the engine's flagship, exposed):
