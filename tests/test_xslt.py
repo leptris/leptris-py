@@ -83,3 +83,37 @@ class TestXSLT:
             result = transform(source)
             assert result.getroot().text == "9"
             result.close()
+
+
+class TestUpstreamV199Conformance:
+    def test_xsl_copy_excludes_attributes(self):
+        # libleptris 1.9.12 (bug-32-): xsl:copy copies the element
+        # and namespaces but NOT attributes — they flow only through
+        # apply-templates/@* (XSLT 7.5).
+        style = """<xsl:stylesheet version="1.0"
+          xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template match="/"><out>
+            <xsl:for-each select="/r/e"><xsl:copy/></xsl:for-each>
+          </out></xsl:template>
+        </xsl:stylesheet>"""
+        transform = XSLT(style)
+        with Document.parse("<r><e a='1'>t</e></r>") as source:
+            result = transform(source)
+            copied = result.getroot()[0]
+            assert copied.tag == "e" and copied.get("a") is None
+            result.close()
+
+    def test_apply_templates_text_rule(self):
+        # libleptris 1.9.12 (bug-161): apply-templates over a
+        # selected text item applies the built-in TEXT rule.
+        style = """<xsl:stylesheet version="1.0"
+          xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template match="/"><out>
+            <xsl:apply-templates select="/r/t/text()"/>
+          </out></xsl:template>
+        </xsl:stylesheet>"""
+        transform = XSLT(style)
+        with Document.parse("<r><t>kept</t></r>") as source:
+            result = transform(source)
+            assert result.getroot().text.strip() == "kept"
+            result.close()
