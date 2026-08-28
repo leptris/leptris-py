@@ -1,6 +1,24 @@
 # Changelog
 
 
+## 1.20.0 — 2026-08-28
+
+`Document.parse(xml, remove_blank_text=True)` — lxml's parser
+option as a parse kwarg:
+
+- whitespace-only text nodes are dropped at parse time
+  (LEPTRIS_PARSE_DROP_WS_TEXT); measured ~35% faster on
+  pretty-printed documents (6.36 -> 4.16 ms for a 60k-node
+  indented fixture)
+- combinable with `attribute_defaults` and `recover` (the
+  accelerator now takes the engine flags as one int)
+- lxml keeps ws nodes but skips building them lazily at 2x our
+  plain-parse cost — this option makes the whitespace-heavy
+  shapes a 16x win
+- 3 new tests: default keeps whitespace, opt-in drops ws-only
+  text/tail, combination with attribute_defaults
+
+
 ## 1.19.0 — 2026-08-28
 
 Adopts libleptris 1.9.8 — ATTLIST defaults become opt-in:
