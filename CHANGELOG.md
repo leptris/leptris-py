@@ -1,6 +1,27 @@
 # Changelog
 
 
+## 1.18.0 — 2026-08-28
+
+Compiled XPath gains variables (review #23; engine surface from
+v1.9.6's #565):
+
+- `XPath(expr)(element_or_document, variables={...})` — the compiled
+  class evaluates variable-bound expressions through the engine's
+  `leptris_xpath_compiled_eval_vars` with the variable set built in
+  C (Fns protocol 46 -> 52: the five variable-set functions plus
+  the compiled eval). bool/int/float/str values; TypeError on
+  anything else, same as the uncompiled path
+- measured: compiled+variables runs at ~4.2 µs vs 17.3 uncompiled
+  and 66.9 for lxml's variable path — 16x ahead of lxml
+- namespaces+variables combined falls back to the engine path (the
+  engine has no compiled ns+vars call); pinned by test
+- #557 follow-up filed: the v1.9.6 fix covers absolute
+  /descendant:: from document context, but the filed shape —
+  relative descendant-or-self with a prefixed name test from
+  element context — still omits the namespaced root on 1.9.7
+
+
 ## 1.17.1 — 2026-08-28
 
 Adopts libleptris 1.9.6 + 1.9.7 (pin 1.9.5 -> 1.9.7):

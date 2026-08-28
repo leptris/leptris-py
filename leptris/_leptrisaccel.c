@@ -107,9 +107,15 @@ static struct {
     void *(*xpath_compiled_eval)(void *, void *, void *);
     void *(*xpath_compiled_eval_ns)(void *, void *, void *, void *);
     void *(*parse_string_inplace_fn)(char *, size_t, int *);
+    void *(*variable_set_new)(void);
+    void (*variable_set_free)(void *);
+    int (*variable_set_boolean)(void *, const char *, int);
+    int (*variable_set_number)(void *, const char *, double);
+    int (*variable_set_string)(void *, const char *, const char *);
+    void *(*xpath_compiled_eval_vars)(void *, void *, void *, void *);
 } Fns;
 
-#define FN_COUNT 46
+#define FN_COUNT 52
 
 static int bound = 0;
 static PyObject *LeptrisErrorType = NULL;
@@ -1014,6 +1020,12 @@ accel_bind(PyObject *module, PyObject *args)
     (void **)&Fns.xpath_compiled_eval,
     (void **)&Fns.xpath_compiled_eval_ns,
     (void **)&Fns.parse_string_inplace_fn,
+    (void **)&Fns.variable_set_new,
+    (void **)&Fns.variable_set_free,
+    (void **)&Fns.variable_set_boolean,
+    (void **)&Fns.variable_set_number,
+    (void **)&Fns.variable_set_string,
+    (void **)&Fns.xpath_compiled_eval_vars,
     };
     for (Py_ssize_t i = 0; i < FN_COUNT; i++) {
         PyObject *item = PyList_Check(fast)
@@ -1576,20 +1588,89 @@ accel_serialize_doc(PyObject *module, PyObject *args)
     return out;
 }
 
+/* Build an engine variable set from a flat [name, tag, value, ...]
+ * sequence (tag 0 = bool, 1 = number, 2 = string). Returns NULL with
+ * an exception set, or (void *)0 sentinel for "no variables". */
+static void *build_variable_set(PyObject *vars_flat)
+{
+    if (vars_flat == Py_None)
+        return (void *)0;
+    PyObject *fast = PySequence_Fast(vars_flat, "variables must be a sequence");
+    if (fast == NULL)
+        return (void *)-1;
+    Py_ssize_t n = PySequence_Size(fast);
+    void *set = Fns.variable_set_new();
+    if (set == NULL) {
+        Py_DECREF(fast);
+        return (void *)-1;
+    }
+    for (Py_ssize_t i = 0; i + 2 < n + 1 && i + 2 < n + 1; i += 3) {
+        PyObject *name_item = PySequence_GetItem(fast, i);
+        PyObject *tag_item = PySequence_GetItem(fast, i + 1);
+        PyObject *value = PySequence_GetItem(fast, i + 2);
+        if (!name_item || !tag_item || !value) {
+            Py_XDECREF(name_item); Py_XDECREF(tag_item); Py_XDECREF(value);
+            goto fail;
+        }
+        PyObject *nbytes = PyUnicode_AsUTF8String(name_item);
+        long tag = PyLong_AsLong(tag_item);
+        int rc = -1;
+        if (nbytes != NULL && !PyErr_Occurred()) {
+            const char *name = PyBytes_AsString(nbytes);
+            if (tag == 0) {
+                rc = Fns.variable_set_boolean(set, name ? name : "", value == Py_True);
+            } else if (tag == 1) {
+                double d = PyFloat_AsDouble(value);
+                if (!PyErr_Occurred())
+                    rc = Fns.variable_set_number(set, name ? name : "", d);
+            } else if (tag == 2) {
+                PyObject *vbytes = PyUnicode_AsUTF8String(value);
+                if (vbytes != NULL) {
+                    rc = Fns.variable_set_string(
+                        set, name ? name : "",
+                        PyBytes_AsString(vbytes) ? PyBytes_AsString(vbytes) : "");
+                    Py_DECREF(vbytes);
+                }
+            }
+            Py_DECREF(nbytes);
+        }
+        Py_DECREF(name_item); Py_DECREF(tag_item); Py_DECREF(value);
+        if (rc != 0) {
+            PyErr_SetString(LeptrisErrorType, "could not bind variable");
+            goto fail;
+        }
+    }
+    Py_DECREF(fast);
+    return set;
+fail:
+    Py_DECREF(fast);
+    Fns.variable_set_free(set);
+    return (void *)-1;
+}
+
 /* compiled_eval(compiled_address, document_address, context_address,
- * document, bindings) -> list | scalar | None (None: fall back to the
- * engine path — mixed nodeset or evaluation failure). bindings is a
- * flat [prefix, uri, ...] sequence or None. */
+ * document, bindings, vars_flat) -> list | scalar | None (None: fall
+ * back to the engine path — mixed nodeset or evaluation failure).
+ * bindings: flat [prefix, uri, ...] or None. vars_flat: flat
+ * [name, tag, value, ...] (0=bool, 1=number, 2=string) or None;
+ * when BOTH are given, returns None (no compiled ns+vars engine
+ * call — the engine path below handles it). */
 static PyObject *
 accel_compiled_eval(PyObject *module, PyObject *args)
 {
     unsigned long long compiled, document_address, context_address;
-    PyObject *document, *bindings;
-    if (!PyArg_ParseTuple(args, "KKKOO", &compiled, &document_address,
-                          &context_address, &document, &bindings))
+    PyObject *document, *bindings, *vars_flat;
+    if (!PyArg_ParseTuple(args, "KKKOOO", &compiled, &document_address,
+                          &context_address, &document, &bindings,
+                          &vars_flat))
         return NULL;
     if (!bound)
         Py_RETURN_NONE;
+    void *var_set = build_variable_set(vars_flat);
+    if (var_set == (void *)-1)
+        return NULL;
+    if (var_set != (void *)0 && bindings != Py_None)
+        Py_RETURN_NONE; /* compiled ns+vars: engine path owns it */
     void *ns_set = NULL;
     PyObject *fast = NULL;
     if (bindings != Py_None) {
@@ -1630,10 +1711,16 @@ accel_compiled_eval(PyObject *module, PyObject *args)
         result = Fns.xpath_compiled_eval_ns(
             (void *)(uintptr_t)compiled, (void *)(uintptr_t)document_address,
             ctx, ns_set);
+    else if (var_set != (void *)0)
+        result = Fns.xpath_compiled_eval_vars(
+            (void *)(uintptr_t)compiled, (void *)(uintptr_t)document_address,
+            ctx, var_set);
     else
         result = Fns.xpath_compiled_eval(
             (void *)(uintptr_t)compiled, (void *)(uintptr_t)document_address,
             ctx);
+    if (var_set != (void *)0)
+        Fns.variable_set_free(var_set);
     Py_XDECREF(fast);
     if (ns_set != NULL)
         Fns.ns_set_free(ns_set);
@@ -1819,7 +1906,7 @@ static PyMethodDef accel_methods[] = {
     {"document_root", accel_document_root, METH_VARARGS,
      "document_root(address, document) -> Element | None"},
     {"compiled_eval", accel_compiled_eval, METH_VARARGS,
-     "compiled_eval(compiled_address, document_address, context_address, document, bindings) -> list | scalar | None"},
+     "compiled_eval(compiled_address, document_address, context_address, document, bindings, vars_flat) -> list | scalar | None"},
     {"find_path", accel_find_path, METH_VARARGS,
      "find_path(address, steps, document) -> Element | None"},
     {"subtree_iter", accel_subtree_iter, METH_VARARGS,

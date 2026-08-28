@@ -233,7 +233,7 @@ class XPath:
     def expression(self) -> str:
         return self._expression
 
-    def __call__(self, element_or_document, *, namespaces=None):
+    def __call__(self, element_or_document, *, namespaces=None, variables=None):
         from .document import Document
         from .element import Element, _accel
 
@@ -248,7 +248,8 @@ class XPath:
             raise XPathError("document is closed")
         # All-C fast path: eval + result conversion in one call. None
         # falls back to the engine path below (mixed nodeset, eval
-        # failure, or a borrowed document without a raw address).
+        # failure, ns+vars combined, or a borrowed document without
+        # a raw address).
         doc_addr = getattr(document, "_raw_addr", None)
         if doc_addr is not None:
             context_addr = getattr(element, "_raw", None) or 0
@@ -257,8 +258,24 @@ class XPath:
                 if namespaces
                 else None
             )
+            vars_flat = None
+            if variables:
+                vars_flat = []
+                for name, value in variables.items():
+                    if isinstance(value, bool):
+                        vars_flat.extend((name, 0, value))
+                    elif isinstance(value, (int, float)):
+                        vars_flat.extend((name, 1, value))
+                    elif isinstance(value, str):
+                        vars_flat.extend((name, 2, value))
+                    else:
+                        raise TypeError(
+                            f"XPath variable {name!r} must be bool, "
+                            "int, float or str"
+                        )
             items = _accel.compiled_eval(
-                self._compiled_addr, doc_addr, context_addr, document, flat
+                self._compiled_addr, doc_addr, context_addr, document, flat,
+                vars_flat
             )
             if items is not None:
                 return items

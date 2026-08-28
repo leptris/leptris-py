@@ -154,6 +154,7 @@ ffi.cdef(
     LeptrisXPathCompiled leptris_xpath_compile(const char* expression);
     LeptrisXPathResult leptris_xpath_compiled_eval(LeptrisXPathCompiled compiled, LeptrisDocument doc, LeptrisElement context);
     LeptrisXPathResult leptris_xpath_compiled_eval_ns(LeptrisXPathCompiled compiled, LeptrisDocument doc, LeptrisElement context, LeptrisXPathNsSet ns);
+    LeptrisXPathResult leptris_xpath_compiled_eval_vars(LeptrisXPathCompiled compiled, LeptrisDocument doc, LeptrisElement context, LeptrisXPathVariableSet variables);
     void leptris_xpath_compiled_free(LeptrisXPathCompiled compiled);
 
     typedef struct leptris_iterparse* LeptrisIterparse;
