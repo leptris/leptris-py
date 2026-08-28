@@ -1,6 +1,24 @@
 # Changelog
 
 
+## 1.22.0 — 2026-08-28
+
+XSLT 1.0 transformation (the engine's flagship, exposed):
+
+- `leptris.XSLT(stylesheet)` — compile once (str/bytes), apply to
+  any Document or Element via `transform(doc)`; returns a Document
+  (getroot/xpath/tostring all work on the result); EXSLT function
+  registration enabled per apply (measured free: 0.2 µs)
+- full XSLT 1.0 core + EXSLT math/set/str/date functions
+  (libleptris 1.9.1+); reusability across documents pinned by test
+- honest ledger entry: transform perf is ~0.69x binding-level /
+  ~0.83x engine-level vs lxml/libxslt on a select-heavy fixture
+  (500-book for-each) — capability first; the engine's XSLT tier
+  is under active development upstream
+- serializer note: results normalize attribute quotes to double
+  quotes (pinned in tests as tree comparisons)
+
+
 ## 1.21.0 — 2026-08-28
 
 Bytes encoding detection — UTF-16/32 parse like lxml:

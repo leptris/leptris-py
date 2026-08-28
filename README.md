@@ -90,6 +90,7 @@ with sax.StreamingParser(handler) as parser:  # push, constant memory
 | smart strings | plain `str` | XPath string/attribute results |
 | `elem.nsmap` | **absent** | use `elem.namespace` / `elem.prefix` and `xpath(namespaces=…)` |
 | `etree.XPath` compiled objects | `leptris.XPath(expression)` | compile once, evaluate many; contexts, namespaces, and variables supported |
+| `etree.XSLT` | `leptris.XSLT(stylesheet)` | compile once, apply to any Document; full XSLT 1.0 + EXSLT (math/set/str/date) via libleptris |
 | parser options (`resolve_entities`, …) | **absent** | libleptris 1.2.0 has no per-parse options |
 | `elem.sourceline` | same | requires libleptris 1.3.0+ |
 | undeclared XPath prefix | raises in lxml | evaluates to an empty nodeset here |
