@@ -1,6 +1,25 @@
 # Changelog
 
 
+## 1.21.0 — 2026-08-28
+
+Bytes encoding detection — UTF-16/32 parse like lxml:
+
+- `Document.parse` retries inputs that fail the UTF-8 fast path
+  (BOM'd or NUL-interleaved — UTF-16/32 in practice) through the
+  engine's `leptris_parse_string_with_encoding`: UTF-16 documents
+  now parse and read correctly where they raised ParseError
+  before, at ZERO fast-path cost (the retry only runs on failure;
+  Fns protocol 52 -> 53)
+- single-byte encodings are NOT retried: the engine parses
+  declared latin-1 without converting content to UTF-8, and its
+  UTF-8 path does not validate — either way the tree can carry
+  invalid UTF-8 (filed leptris/leptris#613; .text surfaces it as
+  UnicodeDecodeError, pinned by test)
+- tests: UTF-16 with and without declaration, latin-1 leniency
+  pinned, UTF-8 fast path unchanged
+
+
 ## 1.20.0 — 2026-08-28
 
 `Document.parse(xml, remove_blank_text=True)` — lxml's parser

@@ -323,3 +323,34 @@ class TestRemoveBlankText:
             root = doc.getroot()
             assert root.get("a") == "d"
             assert root.text is None
+
+
+class TestEncodingDetection:
+    def test_utf16_bom(self):
+        xml = "<?xml version='1.0'?><r><a>café</a></r>".encode("utf-16")
+        root = fromstring(xml)
+        assert root.tag == "r" and root[0].text == "café"
+
+    def test_utf16_declared(self):
+        xml = "<?xml version='1.0' encoding='UTF-16'?><r/>".encode("utf-16")
+        assert fromstring(xml).tag == "r"
+
+    def test_latin1_engine_leniency(self):
+        # The engine's UTF-8 path accepts the raw latin-1 byte (it
+        # does not validate), and with_encoding parses declared
+        # single-byte encodings WITHOUT converting content
+        # (leptris/leptris#613) — either way the tree carries
+        # invalid UTF-8, and .text surfaces it as UnicodeDecodeError.
+        xml = "<?xml version='1.0' encoding='ISO-8859-1'?><r>café</r>".encode(
+            "iso-8859-1"
+        )
+        root = fromstring(xml)
+        with pytest.raises(UnicodeDecodeError):
+            root.text
+
+    def test_utf8_fast_path_unchanged(self):
+        assert fromstring("<r><a/></r>").tag == "r"
+
+    def test_garbage_still_raises(self):
+        with pytest.raises(ParseError):
+            fromstring(b"\xff\xfe garbage not xml")

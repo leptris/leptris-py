@@ -271,6 +271,7 @@ _BIND_NAMES = (
     "leptris_xpath_variable_set_number",
     "leptris_xpath_variable_set_string",
     "leptris_xpath_compiled_eval_vars",
+    "leptris_parse_string_with_encoding",
 )
 _accel.bind(
     [

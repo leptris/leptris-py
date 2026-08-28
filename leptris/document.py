@@ -96,6 +96,24 @@ class Document:
             (1 if remove_blank_text else 0)
             | (2 if attribute_defaults else 0),
         )
+        if address is None and not recover:
+            # UTF-16/32 inputs (BOM'd or NUL-interleaved) always fail
+            # the UTF-8 fast path; retry through the engine's
+            # encoding auto-detection: lxml parity at zero fast-path
+            # cost. Single-byte encodings are NOT retried — the
+            # engine currently parses them without converting the
+            # content to UTF-8 (leptris/leptris#610).
+            head = bytes(data[:4])
+            looks_utf16_32 = head[:2] in (
+                b"\xff\xfe", b"\xfe\xff", b"\x00<", b"<\x00",
+                b"\x00\xff", b"\xff\x00",
+            ) or head[:4] in (b"\x00\x00\x00<", b"<\x00\x00\x00")
+            if looks_utf16_32:
+                address, registry, status = _accel.parse_with_encoding(
+                    bytes(data), recover
+                )
+                if address is not None:
+                    return cls._from_parts(address, registry)
         if address is None:
             raise ParseError(status_message(status))
         return cls._from_parts(address, registry, view)
