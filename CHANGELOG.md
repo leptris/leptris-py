@@ -1,6 +1,21 @@
 # Changelog
 
 
+## 1.19.0 — 2026-08-28
+
+Adopts libleptris 1.9.8 — ATTLIST defaults become opt-in:
+
+- plain parse now EXCLUDES DTD ATTLIST default (and #FIXED)
+  attribute values (libleptris 1.9.8; XML 1.0 §5 permits either
+  — ElementTree-shaped, and W3C C14N 1.1's canonical form excludes
+  them). `Document.parse(xml, attribute_defaults=True)` opts in,
+  matching lxml's apply-by-default for code that wants it; both
+  flags route through the options struct (the fast in-place path
+  stays the default parse route)
+- new README differences row documents the lxml divergence
+- pin 1.9.7 -> 1.9.8; no new engine symbols (flag only)
+
+
 ## 1.18.0 — 2026-08-28
 
 Compiled XPath gains variables (review #23; engine surface from

@@ -93,6 +93,7 @@ with sax.StreamingParser(handler) as parser:  # push, constant memory
 | parser options (`resolve_entities`, …) | **absent** | libleptris 1.2.0 has no per-parse options |
 | `elem.sourceline` | same | requires libleptris 1.3.0+ |
 | undeclared XPath prefix | raises in lxml | evaluates to an empty nodeset here |
+| ATTLIST default attributes | applied by lxml's default parser | excluded by default (ElementTree-like; XML 1.0 §5 permits either) — `Document.parse(xml, attribute_defaults=True)` opts in |
 
 ## Layout
 

@@ -276,3 +276,24 @@ class TestInplaceBufferLifetime:
         original = b"<r><a/></r>"
         Document.parse(original)
         assert original == b"<r><a/></r>"
+
+
+class TestAttributeDefaults:
+    # libleptris 1.9.8: plain parse excludes ATTLIST defaults (XML 1.0
+    # §5 permits either; lxml includes them, ElementTree has no DTD).
+    DOC = b"""<!DOCTYPE r [<!ATTLIST r attr CDATA "default">]><r/>"""
+
+    def test_excluded_by_default(self):
+        assert fromstring(TestAttributeDefaults.DOC).get("attr") is None
+
+    def test_opt_in_materializes(self):
+        with Document.parse(self.__class__.DOC, attribute_defaults=True) as doc:
+            assert doc.getroot().get("attr") == "default"
+
+    def test_opt_in_with_recover(self):
+        with Document.parse(
+            b"""<!DOCTYPE r [<!ATTLIST r attr CDATA "d">]><r/>""",
+            recover=True,
+            attribute_defaults=True,
+        ) as doc:
+            assert doc.getroot().get("attr") == "d"

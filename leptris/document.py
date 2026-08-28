@@ -59,11 +59,18 @@ class Document:
         return doc
 
     @classmethod
-    def parse(cls, xml, *, recover: bool = False) -> "Document":
+    def parse(
+        cls, xml, *, recover: bool = False, attribute_defaults: bool = False
+    ) -> "Document":
         """Parse XML. With recover=True a malformed document yields an
         empty (rootless) Document instead of raising ParseError
         (libleptris 1.9.0 recover mode — partial-tree recovery is not
-        yet implemented upstream)."""
+        yet implemented upstream). With attribute_defaults=True,
+        DTD ATTLIST default (and #FIXED) values materialize on
+        matching elements (lxml applies them by default; the XML 1.0
+        spec permits either — libleptris 1.9.8 defaults to excluding
+        them, like ElementTree, and this binding follows unless
+        asked)."""
         if isinstance(xml, str):
             xml = xml.encode("utf-8")
         if not isinstance(xml, (bytes, bytearray, memoryview)):
@@ -75,7 +82,10 @@ class Document:
 
         view = _ffi.ffi.from_buffer("char[]", data)
         address, registry, status = _accel.parse_inplace(
-            int(_ffi.ffi.cast("uintptr_t", view)), len(data), recover
+            int(_ffi.ffi.cast("uintptr_t", view)),
+            len(data),
+            recover,
+            attribute_defaults,
         )
         if address is None:
             raise ParseError(status_message(status))
