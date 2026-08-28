@@ -1,6 +1,30 @@
 # Changelog
 
 
+## 1.17.1 — 2026-08-28
+
+Adopts libleptris 1.9.6 + 1.9.7 (pin 1.9.5 -> 1.9.7):
+
+- **the variables wall fell** (#565, v1.9.6): VM-first
+  variable-bound evaluation — `//book[@id=$id]` 63.5 -> 16.4 µs
+  through the existing binding path, no binding change. Follow-up
+  noted: the engine's compiled-with-vars path runs at ~3.2 µs;
+  a binding-side compiled-XPath-with-variables surface could
+  close the remaining marshaling gap (needs an API addition,
+  deferred from this patch)
+- `/descendant::` seeds the document node and offers the root
+  element; `$var/step` heads no longer drop (bug-76) — pinned by
+  tests
+- document-level comments and PIs are tree children (libxml2
+  model, #580 v1.9.7): `//comment()` and
+  `//processing-instruction()` see prolog and epilog nodes through
+  the existing xpath surface; `toplevel_comments()`/`toplevel_pis()`
+  unchanged; cdef declares `leptris_document_node` (unbound)
+- #557 (descendant-or-self prefixed name test omits the ns root)
+  and #550's serialize half are NOT fixed by these releases —
+  workarounds re-verified and retained
+
+
 ## 1.17.0 — 2026-08-28
 
 Adopts libleptris 1.9.5 — two walls fall, one adoption:
