@@ -1802,9 +1802,9 @@ accel_parse_inplace(PyObject *module, PyObject *args)
 {
     unsigned long long address;
     Py_ssize_t length;
-    int recover, dtdattr;
-    if (!PyArg_ParseTuple(args, "Knpp", &address, &length, &recover,
-                          &dtdattr))
+    int recover, flags;
+    if (!PyArg_ParseTuple(args, "Knpi", &address, &length, &recover,
+                          &flags))
         return NULL;
     if (!bound) {
         PyErr_SetString(LeptrisErrorType, "accelerator is not bound");
@@ -1812,10 +1812,11 @@ accel_parse_inplace(PyObject *module, PyObject *args)
     }
     int status = 0;
     void *doc;
-    if (recover || dtdattr) {
-        /* flags: 2 = LEPTRIS_PARSE_DTDATTR (types.h). The in-place
-         * path takes no options; optioned parses copy via _ex. */
-        CParseOptions opts = {dtdattr ? 2 : 0, -1, 0, recover ? 1 : 0};
+    if (recover || flags) {
+        /* Engine flags (types.h): 1 = LEPTRIS_PARSE_DROP_WS_TEXT,
+         * 2 = LEPTRIS_PARSE_DTDATTR. The in-place path takes no
+         * options; optioned parses copy via _ex. */
+        CParseOptions opts = {flags, -1, 0, recover ? 1 : 0};
         doc = Fns.parse_string_ex(
             (const char *)(uintptr_t)address, (size_t)length, &opts, &status);
     } else {
@@ -1901,7 +1902,7 @@ static PyMethodDef accel_methods[] = {
     {"parse", accel_parse, METH_VARARGS,
      "parse(data, recover) -> (address|None, registry|None, status)"},
     {"parse_inplace", accel_parse_inplace, METH_VARARGS,
-     "parse_inplace(address, length, recover, dtdattr) -> (address|None, registry|None, status)"},
+     "parse_inplace(address, length, recover, flags) -> (address|None, registry|None, status)"},
     {"parse_file", accel_parse_file, METH_VARARGS,
      "parse_file(path_bytes) -> (address|None, registry|None, status)"},
     {"close_document", accel_close_document, METH_VARARGS,

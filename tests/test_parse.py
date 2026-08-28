@@ -297,3 +297,29 @@ class TestAttributeDefaults:
             attribute_defaults=True,
         ) as doc:
             assert doc.getroot().get("attr") == "d"
+
+
+class TestRemoveBlankText:
+    PRETTY = "<r>\n  <a>1</a>\n  <b/>\n</r>\n"
+
+    def test_default_keeps_whitespace(self):
+        root = fromstring(self.PRETTY)
+        assert root.text == "\n  "
+        assert root[0].tail == "\n  "
+
+    def test_opt_in_drops_ws_only_nodes(self):
+        with Document.parse(self.PRETTY, remove_blank_text=True) as doc:
+            root = doc.getroot()
+            assert root.text is None
+            assert root[0].tail is None
+            assert root[0].text == "1"
+            assert len(root) == 2
+
+    def test_combines_with_attribute_defaults(self):
+        xml = b"""<!DOCTYPE r [<!ATTLIST r a CDATA "d">]>\n<r>\n  <x/>\n</r>"""
+        with Document.parse(
+            xml, attribute_defaults=True, remove_blank_text=True
+        ) as doc:
+            root = doc.getroot()
+            assert root.get("a") == "d"
+            assert root.text is None
