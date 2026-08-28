@@ -113,9 +113,10 @@ static struct {
     int (*variable_set_number)(void *, const char *, double);
     int (*variable_set_string)(void *, const char *, const char *);
     void *(*xpath_compiled_eval_vars)(void *, void *, void *, void *);
+    void *(*parse_with_encoding)(const char *, size_t, int *);
 } Fns;
 
-#define FN_COUNT 52
+#define FN_COUNT 53
 
 static int bound = 0;
 static PyObject *LeptrisErrorType = NULL;
@@ -1026,6 +1027,7 @@ accel_bind(PyObject *module, PyObject *args)
     (void **)&Fns.variable_set_number,
     (void **)&Fns.variable_set_string,
     (void **)&Fns.xpath_compiled_eval_vars,
+    (void **)&Fns.parse_with_encoding,
     };
     for (Py_ssize_t i = 0; i < FN_COUNT; i++) {
         PyObject *item = PyList_Check(fast)
@@ -1832,6 +1834,39 @@ accel_parse_inplace(PyObject *module, PyObject *args)
     return Py_BuildValue("(NOi)", PyLong_FromVoidPtr(doc), registry, status);
 }
 
+/* parse_with_encoding(data, recover) -> (address | None, registry |
+ * None, status). Encoding auto-detection (BOM, XML declaration,
+ * heuristic) with conversion to UTF-8 — the retry path for inputs
+ * that fail the UTF-8 fast path. */
+static PyObject *
+accel_parse_with_encoding(PyObject *module, PyObject *args)
+{
+    const char *data;
+    Py_ssize_t length;
+    int recover;
+    if (!PyArg_ParseTuple(args, "y#p", &data, &length, &recover))
+        return NULL;
+    if (!bound) {
+        PyErr_SetString(LeptrisErrorType, "accelerator is not bound");
+        return NULL;
+    }
+    int status = 0;
+    void *doc;
+    if (recover) {
+        CParseOptions opts = {0, -1, 0, 1};
+        doc = Fns.parse_string_ex(data, (size_t)length, &opts, &status);
+    } else {
+        doc = Fns.parse_with_encoding((const char *)data, (size_t)length, &status);
+    }
+    if (doc == NULL)
+        return Py_BuildValue("(OOi)", Py_None, Py_None, status);
+    Fns.document_root(doc);
+    PyObject *registry = make_registry_capsule();
+    if (registry == NULL)
+        return NULL;
+    return Py_BuildValue("(NOi)", PyLong_FromVoidPtr(doc), registry, status);
+}
+
 /* parse_file(path_bytes) -> (address | None, registry | None, status) */
 static PyObject *
 accel_parse_file(PyObject *module, PyObject *args)
@@ -1901,6 +1936,8 @@ static PyMethodDef accel_methods[] = {
      "serialize_elem(address, indent, declaration) -> bytes | None"},
     {"parse", accel_parse, METH_VARARGS,
      "parse(data, recover) -> (address|None, registry|None, status)"},
+    {"parse_with_encoding", accel_parse_with_encoding, METH_VARARGS,
+     "parse_with_encoding(data, recover) -> (address|None, registry|None, status)"},
     {"parse_inplace", accel_parse_inplace, METH_VARARGS,
      "parse_inplace(address, length, recover, flags) -> (address|None, registry|None, status)"},
     {"parse_file", accel_parse_file, METH_VARARGS,
