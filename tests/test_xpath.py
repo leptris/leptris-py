@@ -259,3 +259,29 @@ class TestCompiledXPathFastPath:
             e.tag for e in root.xpath("//x:a", namespaces=ns)
         ]
         assert XPath("count(//x:a)")(root, namespaces=ns) == 2.0
+
+
+class TestUpstreamV196:
+    # leptris 1.9.6: /descendant:: seeds the document node and offers
+    # the root element; $var/step heads no longer drop (bug-76).
+    def test_absolute_descendant_includes_root(self):
+        root = fromstring("<r><a/></r>")
+        assert [e.tag for e in root.xpath("/descendant::r")] == ["r"]
+        assert [e.tag for e in root.xpath("/descendant::a")] == ["a"]
+
+    def test_variables_still_evaluate(self):
+        root = fromstring(BOOKS)
+        assert root.xpath(
+            "//book[@id=$id]", variables={"id": "2"}
+        )[0].text == "B"
+
+
+class TestUpstreamV197:
+    # leptris 1.9.7: document-level comments/PIs are tree children —
+    # XPath //comment() and //processing-instruction() see them.
+    def test_comment_sees_document_level(self):
+        with Document.parse(
+            b"<?pi d?><!-- pre --><r><a/><!-- inner --></r><!-- post -->"
+        ) as doc:
+            assert doc.xpath("//comment()") == [" pre ", " inner ", " post "]
+            assert doc.xpath("//processing-instruction()") == ["d"]
