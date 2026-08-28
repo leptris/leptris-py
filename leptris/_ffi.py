@@ -53,6 +53,13 @@ ffi.cdef(
     LeptrisDocument leptris_parse_string(const char* xml, size_t len, int* status);
     LeptrisDocument leptris_parse_string_inplace(char* xml, size_t len, int* status);
     LeptrisDocument leptris_parse_string_with_encoding(const char* xml, size_t len, int* status);
+    typedef struct leptris_xslt* LeptrisXslt;
+    LeptrisXslt leptris_xslt_parse(const char* stylesheet_xml, size_t len);
+    LeptrisXslt leptris_xslt_parse_file(const char* path);
+    LeptrisDocument leptris_xslt_apply(LeptrisXslt xslt, LeptrisDocument doc);
+    char* leptris_xslt_apply_string(LeptrisXslt xslt, LeptrisDocument doc);
+    void leptris_xslt_free(LeptrisXslt xslt);
+    int leptris_exslt_enable(LeptrisDocument doc);
     LeptrisDocument leptris_parse_file(const char* filepath, int* status);
     void           leptris_document_free(LeptrisDocument doc);
     LeptrisElement  leptris_document_root(LeptrisDocument doc);
