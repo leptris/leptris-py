@@ -108,6 +108,9 @@ def _make_benchmarks():
             "xpath //book[@id='50']": lambda: doc.xpath("//book[@id='50']"),
             "xpath //book[price > 50]": lambda: doc.xpath("//book[price > 50]"),
             "xpath //author | //title": lambda: doc.xpath("//author | //title"),
+            "xpath //book[@id=$id]": lambda: doc.xpath(
+                "//book[@id=$id]", variables={"id": "50"}
+            ),
             "traversal": _traverse_iter(root.iter),
             "serialize": lambda: tostring(doc),
         }
@@ -128,6 +131,7 @@ def _make_benchmarks():
             "xpath //book[@id='50']": lambda: lroot.xpath("//book[@id='50']"),
             "xpath //book[price > 50]": lambda: lroot.xpath("//book[price > 50]"),
             "xpath //author | //title": lambda: lroot.xpath("//author | //title"),
+            "xpath //book[@id=$id]": lambda: lroot.xpath("//book[@id=$id]", id="50"),
             "traversal": _traverse_iter(lroot.iter),
             "serialize": lambda: etree.tostring(lroot),
         }
@@ -208,6 +212,7 @@ OPERATIONS = [
     ("xpath //book[@id='50']", N_QUERY),
     ("xpath //book[price > 50]", N_QUERY),
     ("xpath //author | //title", N_QUERY),
+    ("xpath //book[@id=$id]", N_QUERY),
     ("traversal", N_TRAVERSE),
     ("serialize", N_SERIALIZE),
 ]

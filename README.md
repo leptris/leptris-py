@@ -89,7 +89,7 @@ with sax.StreamingParser(handler) as parser:  # push, constant memory
 | `etree.iterparse` | `leptris.iterparse(source, full_document=False)` | bounded by the largest subtree; yields `("end", element)`; elements borrowed until the next yield; tags resolve namespaces (Clark notation, libleptris 1.9.4+). **Truncated or malformed input raises ParseError** (libleptris 1.9.4 error channel). `full_document=True` yields every element in completion order — error detection is unreliable in that mode pending leptris/leptris#592. Still ~2× slower than lxml's iterparse (leptris/leptris#563) |
 | smart strings | plain `str` | XPath string/attribute results |
 | `elem.nsmap` | **absent** | use `elem.namespace` / `elem.prefix` and `xpath(namespaces=…)` |
-| `etree.XPath` compiled objects | `leptris.XPath(expression)` | compile once, evaluate many; contexts and namespaces supported |
+| `etree.XPath` compiled objects | `leptris.XPath(expression)` | compile once, evaluate many; contexts, namespaces, and variables supported |
 | parser options (`resolve_entities`, …) | **absent** | libleptris 1.2.0 has no per-parse options |
 | `elem.sourceline` | same | requires libleptris 1.3.0+ |
 | undeclared XPath prefix | raises in lxml | evaluates to an empty nodeset here |
