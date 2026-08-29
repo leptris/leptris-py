@@ -338,3 +338,17 @@ class TestUpstreamV199:
         assert root.xpath(
             "count(//x:a)", namespaces=NS, variables={"u": 0}
         ) == 1.0
+
+
+class TestRelativeNamespacedDescendant:
+    # leptris/leptris#630: relative descendant paths with prefixed
+    # name tests from element context return zero results (raw
+    # eval_ns); absolute //ns:x and child steps work. Pinned as
+    # current behavior; scripts/differential_fuzz.py tracks the fix.
+    def test_current_behavior_pinned(self):
+        NS = {"ns": "urn:ns"}
+        root = fromstring("<root xmlns:ns='urn:ns'><ns:x p='8'>t</ns:x></root>")
+        assert [e.tag for e in root.findall("ns:x", NS)] == ["{urn:ns}x"]  # child step works
+        assert [e.tag for e in root.xpath("//ns:x", namespaces=NS)] == ["{urn:ns}x"]
+        assert root.findall(".//ns:x", NS) == []  # filed shape — empty today
+        assert root.xpath("descendant::ns:x", namespaces=NS) == []
