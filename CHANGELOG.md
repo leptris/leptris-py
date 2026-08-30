@@ -1,6 +1,24 @@
 # Changelog
 
 
+## 1.23.1 — 2026-08-30
+
+Two perf/tooling fixes from the near-quiet benchmark record:
+
+- **iterparse wrapper collapsed into C**: next + element wrap in
+  one call (`_accel.iterparse_next`, Fns 55) — the Python generator
+  only resumes and yields. Measured 20k items: the binding share
+  drops from 0.73 to ~0.3 µs/item; leptris iterparse goes from
+  0.79x BEHIND lxml to 1.21x AHEAD (engine floor 1.5 µs/item)
+- benchmarks/matrix.py: the variables row (1.18.1) crashed the
+  matrix with a KeyError for libraries that skip it — lookups are
+  now tolerant; this would have crashed the CI pipeline the moment
+  the upstream benchmark workflow fix (#575) merges
+- near-quiet full-matrix record captured (all rows ahead; the
+  matrix's fixed-iteration parse-small reading was load noise —
+  careful medians: 4.35 µs vs lxml 8.01)
+
+
 ## 1.23.0 — 2026-08-30
 
 Adopts libleptris 1.9.14-1.9.18 — every open bug fixed, three

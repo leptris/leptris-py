@@ -203,14 +203,16 @@ def iterparse(source, events=("end",), *, full_document: bool = False):
         raise ParseError("iterparse could not start")
 
     sentinel = _BorrowedDocument()
-
-    from .element import _make
+    iterator_addr = int(ffi.cast("uintptr_t", iterator))
+    from .element import _accel
 
     def generate():
         try:
             while True:
-                element_ptr = lib.leptris_iterparse_next(iterator)
-                if element_ptr == ffi.NULL:
+                # next + wrap in one C call; the element is borrowed
+                # until the following call (the iterator's contract)
+                element = _accel.iterparse_next(iterator_addr, sentinel)
+                if element is None:
                     error = lib.leptris_iterparse_error(iterator)
                     if error != ffi.NULL:
                         message = ffi.string(error).decode(
@@ -219,9 +221,6 @@ def iterparse(source, events=("end",), *, full_document: bool = False):
                         if message:
                             raise ParseError(message)
                     return
-                # The element is borrowed: valid until the next call.
-                # Wrap with the raw address for the C fast paths.
-                element = _make(element_ptr, sentinel)
                 yield ("end", element)
         finally:
             lib.leptris_iterparse_free(iterator)

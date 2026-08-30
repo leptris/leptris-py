@@ -259,7 +259,7 @@ def main():
                 results.append({"lib": lib, "op": op, "skipped": skips[lib]})
                 row[lib] = "skip"
                 continue
-            fn = benchmarks[lib][op]
+            fn = benchmarks[lib].get(op)
             if fn is None:
                 reason = "XPath subset" if lib == "ElementTree" else "no XPath"
                 results.append({"lib": lib, "op": op, "skipped": reason})

@@ -116,9 +116,10 @@ static struct {
     void *(*parse_with_encoding)(const char *, size_t, int *);
     void *(*xpath_compiled_eval_ns_vars)(
         void *, void *, void *, void *, void *);
+    void *(*iterparse_next)(void *);
 } Fns;
 
-#define FN_COUNT 54
+#define FN_COUNT 55
 
 static int bound = 0;
 static PyObject *LeptrisErrorType = NULL;
@@ -1031,6 +1032,7 @@ accel_bind(PyObject *module, PyObject *args)
     (void **)&Fns.xpath_compiled_eval_vars,
     (void **)&Fns.parse_with_encoding,
     (void **)&Fns.xpath_compiled_eval_ns_vars,
+    (void **)&Fns.iterparse_next,
     };
     for (Py_ssize_t i = 0; i < FN_COUNT; i++) {
         PyObject *item = PyList_Check(fast)
@@ -1385,6 +1387,26 @@ accel_invalidate(PyObject *module, PyObject *capsule)
     reg->first = NULL;
     reg->last = NULL;
     Py_RETURN_NONE;
+}
+
+/* iterparse_next(iterator_address, sentinel) -> Element | None.
+ * Drives leptris_iterparse_next and wraps the borrowed element in
+ * one C call — the Python generator only resumes and yields. The
+ * sentinel owns nothing; elements are borrowed until the next call
+ * (the iterator's own contract). */
+static PyObject *
+accel_iterparse_next(PyObject *module, PyObject *args)
+{
+    unsigned long long address;
+    PyObject *sentinel;
+    if (!PyArg_ParseTuple(args, "KO", &address, &sentinel))
+        return NULL;
+    if (!bound)
+        Py_RETURN_NONE;
+    void *el = Fns.iterparse_next((void *)(uintptr_t)address);
+    if (el == NULL)
+        Py_RETURN_NONE;
+    return element_from_parts_reg(el, Py_None, sentinel, NULL);
 }
 
 /* ---- subtree cursor: a walk, not a query ---------------------------- */
@@ -1953,6 +1975,8 @@ static PyMethodDef accel_methods[] = {
      "document_root(address, document) -> Element | None"},
     {"compiled_eval", accel_compiled_eval, METH_VARARGS,
      "compiled_eval(compiled_address, document_address, context_address, document, bindings, vars_flat) -> list | scalar | None"},
+    {"iterparse_next", accel_iterparse_next, METH_VARARGS,
+     "iterparse_next(iterator_address, sentinel) -> Element | None"},
     {"find_path", accel_find_path, METH_VARARGS,
      "find_path(address, steps, document) -> Element | None"},
     {"subtree_iter", accel_subtree_iter, METH_VARARGS,
