@@ -1,6 +1,31 @@
 # Changelog
 
 
+## 1.23.2 — 2026-08-31
+
+Adopts libleptris 1.9.19-1.9.21 (pin 1.9.18 -> 1.9.21):
+
+- **scalar XPath transformed** (#645b, 1.9.20): the fused
+  child::NAME[k] opcode and specialized //name[pred] compilation
+  take `string(//item[1000]/@n)` from 4.6 ms to 20 µs at the
+  binding level — **3.1× ahead of lxml** (libxml2 4.35 ms)
+- **XSLT ledger row improves to 0.88×** (544 vs 477 µs binding
+  level; #624's engine recovery lands through) — still the one
+  row behind, engine-tracked
+- SAX duplicate attributes now surface as recoverable errors with
+  positions through the recorder channel (#647)
+- pull-batch staging arena dangle fixed (#648) — pull is not part
+  of the binding surface, noted for completeness
+- `leptris_node_visit` (#645a) DECLINED for the Python binding:
+  its callback channel is the per-node libffi dispatch we replaced
+  with the recorder in 1.16.0 — the C cursor already streams
+  elements wrap-free at 1.65× vs lxml; the API is right for Ruby
+  (its per-node wrap dominates) and wrong for us
+- `leptris_document_serialize_ext_sized` (1.9.19) not bound: a
+  caller-side sizeof guard for Ruby's FFI struct; our zero-copy
+  `_into` paths already handle sizing engine-side
+
+
 ## 1.23.1 — 2026-08-30
 
 Two perf/tooling fixes from the near-quiet benchmark record:
