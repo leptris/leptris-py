@@ -1,6 +1,19 @@
 # Changelog
 
 
+## 1.23.3 — 2026-08-31
+
+Adopts libleptris 1.9.22 (pin 1.9.21 -> 1.9.22; spec-only release):
+
+- the #653 verdict pinned through the binding: well-formed
+  self-closing-then-text shapes parse (lxml parity), and the
+  report's repro — a stray `</y>` after a self-closed `<y/>` — is
+  ill-formed, rejected identically to libxml2's tag-mismatch error
+- no functional change upstream; suite, drift gate, and the
+  differential fuzz all unchanged (240 tests, 255 symbols, 0/2000
+  divergences)
+
+
 ## 1.23.2 — 2026-08-31
 
 Adopts libleptris 1.9.19-1.9.21 (pin 1.9.18 -> 1.9.21):

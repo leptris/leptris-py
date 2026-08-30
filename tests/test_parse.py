@@ -349,3 +349,18 @@ class TestEncodingDetection:
     def test_garbage_still_raises(self):
         with pytest.raises(ParseError):
             fromstring(b"\xff\xfe garbage not xml")
+
+
+class TestSelfClosingThenText:
+    # leptris 1.9.22 pinned the #653 verdict in engine specs; these
+    # pin it through the binding. Well-formed self-closing-then-text
+    # shapes parse (lxml parity); the report's repro carries a stray
+    # </y> after a self-closed <y/> — ill-formed, rejected by both
+    # leptris and libxml2 identically.
+    def test_well_formed_shapes_parse(self):
+        assert fromstring(b"<div><p><br/>hello</p></div>").tag == "div"
+        assert fromstring(b"<r><y/>t</r>").tag == "r"
+
+    def test_stray_close_tag_rejected_like_libxml2(self):
+        with pytest.raises(ParseError):
+            fromstring(b"<r><b><y/>t</y></b></r>")
