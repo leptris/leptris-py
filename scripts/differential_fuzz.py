@@ -10,8 +10,8 @@ erroring (any classes) is parity. Anything else is a finding.
 
 Requires lxml (pip install .[bench]).
 
-Known open divergence: relative namespaced descendant paths
-(.//ns:x — leptris/leptris#630); the fuzz goes green when it lands.
+Currently: 0 divergences (libleptris 1.9.18, #630 fixed). Rerun per
+adoption as a standing regression gate.
 """
 
 from __future__ import annotations

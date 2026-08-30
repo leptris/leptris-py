@@ -163,6 +163,7 @@ ffi.cdef(
     LeptrisXPathResult leptris_xpath_compiled_eval(LeptrisXPathCompiled compiled, LeptrisDocument doc, LeptrisElement context);
     LeptrisXPathResult leptris_xpath_compiled_eval_ns(LeptrisXPathCompiled compiled, LeptrisDocument doc, LeptrisElement context, LeptrisXPathNsSet ns);
     LeptrisXPathResult leptris_xpath_compiled_eval_vars(LeptrisXPathCompiled compiled, LeptrisDocument doc, LeptrisElement context, LeptrisXPathVariableSet variables);
+    LeptrisXPathResult leptris_xpath_compiled_eval_ns_vars(LeptrisXPathCompiled compiled, LeptrisDocument doc, LeptrisElement context, LeptrisXPathNsSet ns, LeptrisXPathVariableSet variables);
     void leptris_xpath_compiled_free(LeptrisXPathCompiled compiled);
 
     typedef struct leptris_iterparse* LeptrisIterparse;
@@ -190,6 +191,7 @@ ffi.cdef(
     const LeptrisSaxEventRecord* leptris_sax_recorder_records(LeptrisSaxRecorder r, size_t* count);
     const char* leptris_sax_recorder_arena(LeptrisSaxRecorder r, size_t* len);
     void leptris_sax_recorder_free(LeptrisSaxRecorder r);
+    void leptris_sax_recorder_reset(LeptrisSaxRecorder r);
     LeptrisIterparse leptris_iterparse_new_file(const char* path);
     LeptrisElement leptris_iterparse_next(LeptrisIterparse it);
     void leptris_iterparse_free(LeptrisIterparse it);

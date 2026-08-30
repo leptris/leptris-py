@@ -1,6 +1,43 @@
 # Changelog
 
 
+## 1.23.0 — 2026-08-30
+
+Adopts libleptris 1.9.14-1.9.18 — every open bug fixed, three
+workarounds removed:
+
+- **#630/#557 fixed** (1.9.15): relative `.//ns:x` and
+  `descendant::ns:x` from element context, and
+  descendant-or-self's namespaced root — pins flipped to correct
+  expectations; the differential fuzz now runs **0 divergences in
+  2000 trials**
+- **#592 fixed**: the full-document iterparse error channel works —
+  the binding's mode gate REMOVED; truncated/malformed input raises
+  in both modes (new test)
+- **#613 fixed**: declared single-byte encodings convert properly —
+  the encoding retry widened beyond BOM/NUL, plus a declaration
+  sniff (the plain path leniently accepts, so failures alone can't
+  trigger the retry); latin-1 pin flipped to success
+- **#627 fixed**: unknown functions in stylesheets raise (pinned)
+- **#628 fixed**: last() carries the for-each context size
+  (1/3, 2/3, 3/3 — pin flipped)
+- **#625 fixed**: streaming SAX attr corruption (arena realloc
+  invalidation) — verified on nested streams
+- **#633**: pretty-print output now matches libxml2's indent forms
+  (comments/PIs on their own lines) — byte-parity pinned except the
+  root-close trailing newline
+- **#608 closed**: `leptris_xpath_compiled_eval_ns_vars` bound (Fns
+  54) — the compiled fast path no longer falls back for
+  namespaces+variables combined
+- **#624 re-measured and closed**: raw apply 653 µs on 1.9.18 — 24%
+  FASTER than 1.9.8 ever was; the regression fully reversed
+  (numbers posted)
+- **#594 adopted**: sax.parse reuses a module-level recorder
+  (reset) — 21% of engine-level churn; ~1% end-to-end where Python
+  dispatch dominates, larger on small documents
+- pin 1.9.13 -> 1.9.18; fuzz tool note updated
+
+
 ## 1.22.2 — 2026-08-29
 
 Adopts libleptris 1.9.10-1.9.13 (pin 1.9.9 -> 1.9.13):
