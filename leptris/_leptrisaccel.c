@@ -114,9 +114,11 @@ static struct {
     int (*variable_set_string)(void *, const char *, const char *);
     void *(*xpath_compiled_eval_vars)(void *, void *, void *, void *);
     void *(*parse_with_encoding)(const char *, size_t, int *);
+    void *(*xpath_compiled_eval_ns_vars)(
+        void *, void *, void *, void *, void *);
 } Fns;
 
-#define FN_COUNT 53
+#define FN_COUNT 54
 
 static int bound = 0;
 static PyObject *LeptrisErrorType = NULL;
@@ -1028,6 +1030,7 @@ accel_bind(PyObject *module, PyObject *args)
     (void **)&Fns.variable_set_string,
     (void **)&Fns.xpath_compiled_eval_vars,
     (void **)&Fns.parse_with_encoding,
+    (void **)&Fns.xpath_compiled_eval_ns_vars,
     };
     for (Py_ssize_t i = 0; i < FN_COUNT; i++) {
         PyObject *item = PyList_Check(fast)
@@ -1671,8 +1674,6 @@ accel_compiled_eval(PyObject *module, PyObject *args)
     void *var_set = build_variable_set(vars_flat);
     if (var_set == (void *)-1)
         return NULL;
-    if (var_set != (void *)0 && bindings != Py_None)
-        Py_RETURN_NONE; /* compiled ns+vars: engine path owns it */
     void *ns_set = NULL;
     PyObject *fast = NULL;
     if (bindings != Py_None) {
@@ -1709,7 +1710,11 @@ accel_compiled_eval(PyObject *module, PyObject *args)
     }
     void *ctx = context_address ? (void *)(uintptr_t)context_address : NULL;
     void *result;
-    if (ns_set != NULL)
+    if (ns_set != NULL && var_set != (void *)0)
+        result = Fns.xpath_compiled_eval_ns_vars(
+            (void *)(uintptr_t)compiled, (void *)(uintptr_t)document_address,
+            ctx, ns_set, var_set);
+    else if (ns_set != NULL)
         result = Fns.xpath_compiled_eval_ns(
             (void *)(uintptr_t)compiled, (void *)(uintptr_t)document_address,
             ctx, ns_set);

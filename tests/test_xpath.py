@@ -341,14 +341,21 @@ class TestUpstreamV199:
 
 
 class TestRelativeNamespacedDescendant:
-    # leptris/leptris#630: relative descendant paths with prefixed
-    # name tests from element context return zero results (raw
-    # eval_ns); absolute //ns:x and child steps work. Pinned as
-    # current behavior; scripts/differential_fuzz.py tracks the fix.
-    def test_current_behavior_pinned(self):
+    # Fixed in libleptris 1.9.15 (#630 + the #557 reopen family):
+    # relative descendant paths with prefixed name tests resolve
+    # namespace-aware from element context.
+    def test_relative_ns_descendant(self):
         NS = {"ns": "urn:ns"}
-        root = fromstring("<root xmlns:ns='urn:ns'><ns:x p='8'>t</ns:x></root>")
-        assert [e.tag for e in root.findall("ns:x", NS)] == ["{urn:ns}x"]  # child step works
-        assert [e.tag for e in root.xpath("//ns:x", namespaces=NS)] == ["{urn:ns}x"]
-        assert root.findall(".//ns:x", NS) == []  # filed shape — empty today
-        assert root.xpath("descendant::ns:x", namespaces=NS) == []
+        root = fromstring(
+            "<root xmlns:ns='urn:ns'><a><ns:x p='8'>t</ns:x></a></root>"
+        )
+        assert [e.tag for e in root.findall(".//ns:x", NS)] == ["{urn:ns}x"]
+        assert [
+            e.tag for e in root.xpath("descendant::ns:x", namespaces=NS)
+        ] == ["{urn:ns}x"]
+
+    def test_descendant_or_self_includes_ns_root(self):
+        n = fromstring("<x:r xmlns:x='urn:x'><x:a/></x:r>")
+        assert [
+            e.tag for e in n.xpath("descendant-or-self::x:r", namespaces={"x": "urn:x"})
+        ] == ["{urn:x}r"]

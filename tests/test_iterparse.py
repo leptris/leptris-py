@@ -106,11 +106,14 @@ class TestFullDocumentMode:
 
 class TestFullDocumentErrorMode:
     def test_fulldoc_clean_drain_no_raise(self):
-        # leptris/leptris#592: full-document mode's error channel
-        # reports "truncated" on clean drains; the binding skips the
-        # check there until the engine fixes it.
         tags = list(iterparse(io.BytesIO(b"<r><a/></r>\n"), full_document=True))
         assert tags
+
+    def test_fulldoc_malformed_raises(self):
+        # Fixed in libleptris 1.9.15 (#592): the full-document error
+        # channel reports real errors without spurious truncation.
+        with pytest.raises(ParseError):
+            list(iterparse(io.BytesIO(b"<r><a></b></r>"), full_document=True))
 
 
 class TestNamespaceResolution:

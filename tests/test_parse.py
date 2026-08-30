@@ -335,18 +335,13 @@ class TestEncodingDetection:
         xml = "<?xml version='1.0' encoding='UTF-16'?><r/>".encode("utf-16")
         assert fromstring(xml).tag == "r"
 
-    def test_latin1_engine_leniency(self):
-        # The engine's UTF-8 path accepts the raw latin-1 byte (it
-        # does not validate), and with_encoding parses declared
-        # single-byte encodings WITHOUT converting content
-        # (leptris/leptris#613) — either way the tree carries
-        # invalid UTF-8, and .text surfaces it as UnicodeDecodeError.
+    def test_latin1_declared(self):
+        # Fixed in libleptris 1.9.15 (#613): with_encoding converts
+        # declared single-byte encodings; the retry now covers them.
         xml = "<?xml version='1.0' encoding='ISO-8859-1'?><r>café</r>".encode(
             "iso-8859-1"
         )
-        root = fromstring(xml)
-        with pytest.raises(UnicodeDecodeError):
-            root.text
+        assert fromstring(xml).text == "café"
 
     def test_utf8_fast_path_unchanged(self):
         assert fromstring("<r><a/></r>").tag == "r"

@@ -86,7 +86,7 @@ with sax.StreamingParser(handler) as parser:  # push, constant memory
 | `etree.XMLSyntaxError` | `ParseError` | XPath failures raise `XPathError`; both subclass `LeptrisError` |
 | `etree.Element`, `SubElement`, `append`, `set`, `remove` | **not exposed** | libleptris has partial mutation upstream (node content setters, `set_root`, `remove_children`) — not surfaced here; build trees elsewhere |
 | document-level comments / PIs | `doc.toplevel_comments()` / `doc.toplevel_pis()` | prolog then epilog; requires libleptris 1.9.3+ |
-| `etree.iterparse` | `leptris.iterparse(source, full_document=False)` | bounded by the largest subtree; yields `("end", element)`; elements borrowed until the next yield; tags resolve namespaces (Clark notation, libleptris 1.9.4+). **Truncated or malformed input raises ParseError** (libleptris 1.9.4 error channel). `full_document=True` yields every element in completion order — error detection is unreliable in that mode pending leptris/leptris#592. Still ~2× slower than lxml's iterparse (leptris/leptris#563) |
+| `etree.iterparse` | `leptris.iterparse(source, full_document=False)` | bounded by the largest subtree; yields `("end", element)`; elements borrowed until the next yield; tags resolve namespaces (Clark notation, libleptris 1.9.4+). **Truncated or malformed input raises ParseError** (both modes, libleptris 1.9.15+). `full_document=True` yields every element in completion order |
 | smart strings | plain `str` | XPath string/attribute results |
 | `elem.nsmap` | **absent** | use `elem.namespace` / `elem.prefix` and `xpath(namespaces=…)` |
 | `etree.XPath` compiled objects | `leptris.XPath(expression)` | compile once, evaluate many; contexts, namespaces, and variables supported |
@@ -95,6 +95,7 @@ with sax.StreamingParser(handler) as parser:  # push, constant memory
 | `elem.sourceline` | same | requires libleptris 1.3.0+ |
 | undeclared XPath prefix | raises in lxml | evaluates to an empty nodeset here |
 | ATTLIST default attributes | applied by lxml's default parser | excluded by default (ElementTree-like; XML 1.0 §5 permits either) — `Document.parse(xml, attribute_defaults=True)` opts in |
+| declared non-UTF-8 bytes (UTF-16, latin-1, …) | auto-detected | auto-detected — declared encodings route through the converter, others retry on failure (libleptris 1.9.15+) |
 | parser options (`remove_blank_text`, …) | `etree.XMLParser(remove_blank_text=True)` | `Document.parse(xml, remove_blank_text=True)` — ~35% faster on pretty-printed input; also `attribute_defaults=True`, `recover=True` |
 
 ## Layout

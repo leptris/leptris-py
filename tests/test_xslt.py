@@ -176,10 +176,9 @@ class TestGoldenTransforms:
             assert e.tag == "e" and e.get("a") == "2" and e[0].tag == "d"
             r.close()
 
-    def test_position_and_last_current_behavior(self):
-        # last() always evaluates to 1 inside for-each (context size
-        # not propagated — leptris/leptris#628); position() is
-        # correct. Pinned as current behavior until the engine fix.
+    def test_position_and_last(self):
+        # Fixed in libleptris 1.9.15 (#628): last() carries the
+        # for-each context size.
         style = """<xsl:stylesheet version="1.0"
           xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
           <xsl:template match="/"><o><xsl:for-each select="//b">
@@ -188,8 +187,33 @@ class TestGoldenTransforms:
         </xsl:stylesheet>"""
         with Document.parse("<r><b/><b/><b/></r>") as src:
             r = XSLT(style)(src)
-            assert [p.text for p in r.getroot()] == ["1/1", "2/1", "3/1"]
+            assert [p.text for p in r.getroot()] == ["1/3", "2/3", "3/3"]
             r.close()
+
+    def test_unknown_function_raises(self):
+        # Fixed in libleptris 1.9.15 (#627): unknown unprefixed
+        # functions in stylesheet expressions are rejected.
+        with pytest.raises(Exception):
+            XSLT(
+                "<xsl:stylesheet version='1.0' "
+                "xmlns:xsl='http://www.w3.org/1999/XSL/Transform'>"
+                "<xsl:template match='/'><o>"
+                "<xsl:value-of select=\"upper-case('ab')\"/>"
+                "</o></xsl:template></xsl:stylesheet>"
+            )(fromstring("<r/>").document)
+
+    def test_pretty_print_parity_with_lxml(self):
+        # libleptris 1.9.16 (#633): comments and PIs under non-mixed
+        # parents get their own indented line — byte-identical to
+        # libxml2's xmlIndentTreeOutput.
+        xml = b"<r><!-- c --><a/><!-- d --><b>t</b><!-- e --></r>"
+        with Document.parse(xml) as doc:
+            out = tostring(doc, pretty_print=True, encoding="unicode")
+        # libxml2 appends a trailing newline after the root close;
+        # the engine does not — the one byte-level difference
+        assert out == (
+            "<r>\n  <!-- c -->\n  <a/>\n  <!-- d -->\n  <b>t</b>\n  <!-- e -->\n</r>"
+        )
 
     def test_call_template_with_param(self):
         style = """<xsl:stylesheet version="1.0"

@@ -211,18 +211,13 @@ def iterparse(source, events=("end",), *, full_document: bool = False):
             while True:
                 element_ptr = lib.leptris_iterparse_next(iterator)
                 if element_ptr == ffi.NULL:
-                    if not full_document:
-                        # The error channel is reliable in top-level
-                        # mode only: full-document mode reports a
-                        # spurious "truncated XML document" on clean
-                        # drains (leptris/leptris#592).
-                        error = lib.leptris_iterparse_error(iterator)
-                        if error != ffi.NULL:
-                            message = ffi.string(error).decode(
-                                "utf-8", "replace"
-                            )
-                            if message:
-                                raise ParseError(message)
+                    error = lib.leptris_iterparse_error(iterator)
+                    if error != ffi.NULL:
+                        message = ffi.string(error).decode(
+                            "utf-8", "replace"
+                        )
+                        if message:
+                            raise ParseError(message)
                     return
                 # The element is borrowed: valid until the next call.
                 # Wrap with the raw address for the C fast paths.
