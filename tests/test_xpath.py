@@ -359,3 +359,47 @@ class TestRelativeNamespacedDescendant:
         assert [
             e.tag for e in n.xpath("descendant-or-self::x:r", namespaces={"x": "urn:x"})
         ] == ["{urn:x}r"]
+
+
+class TestXPath31:
+    # libleptris 1.9.29 (XPath 3.1 Lane 0, increments 7-8): let
+    # expressions, simple map !, arrow =>, string concat ||.
+    SRC = (
+        "<r><item v='1'>alpha</item>"
+        "<item v='2'>beta</item><item v='3'>gamma</item></r>"
+    )
+
+    def test_let_binds_visible_result(self):
+        root = fromstring(self.SRC)
+        assert root.xpath("let $x := //item[1] return $x/@v") == ["1"]
+
+    def test_let_shadowing_bindings(self):
+        root = fromstring(self.SRC)
+        assert root.xpath(
+            "let $y := (//item ! string(.)) return count($y)"
+        ) == 3.0
+
+    def test_simple_map(self):
+        root = fromstring(self.SRC)
+        assert root.xpath("//item ! string(.)") == ["alpha", "beta", "gamma"]
+
+    def test_simple_map_chained(self):
+        root = fromstring(self.SRC)
+        assert root.xpath("//item ! @v ! string()") == ["1", "2", "3"]
+
+    def test_arrow_operator(self):
+        root = fromstring(self.SRC)
+        assert root.xpath(
+            "string-join((//item ! string(.)), ' ') => upper-case()"
+        ) == "ALPHA BETA GAMMA"
+
+    def test_string_concat(self):
+        root = fromstring(self.SRC)
+        assert root.xpath("//item[1] || '-' || //item[3]") == "alpha-gamma"
+
+    def test_combined_form(self):
+        # The release-notes composite: sequence build, map, arrow, sum.
+        root = fromstring(self.SRC)
+        assert root.xpath(
+            "let $x := 5 return ($x to 7) ! (. * 2) => sum()"
+        ) == 36.0
