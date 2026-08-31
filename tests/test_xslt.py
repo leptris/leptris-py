@@ -324,7 +324,7 @@ class TestXSLT30Increment45:
         style = """<xsl:stylesheet version="3.0"
           xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
           <xsl:template match="/"><o>
-            <xsl:try><ok/></xsl:try><xsl:catch><c/></xsl:catch>
+            <xsl:try><ok/><xsl:catch><c/></xsl:catch></xsl:try>
           </o></xsl:template>
         </xsl:stylesheet>"""
         with Document.parse("<r/>") as src:
@@ -332,23 +332,56 @@ class TestXSLT30Increment45:
             assert [c.tag for c in r.getroot()] == ["ok"]
             r.close()
 
-    def test_error_in_select_not_yet_caught(self):
-        # leptris/leptris#669: error() inside xsl:value-of/@select
-        # escapes the catch boundary — the transform fails instead
-        # of running xsl:catch. Pinned as current behavior; Saxon-HE
-        # runs the catch.
+    def test_error_in_select_caught(self):
+        # Fixed in libleptris 1.9.30 (leptris/leptris#669): in the
+        # canonical form (catch as a child of try) error() inside a
+        # value-of select runs the catch; $err:description carries
+        # the message.
+        for select in ("error('boom')", "error(concat('b','oom'))"):
+            style = """<xsl:stylesheet version="3.0"
+              xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/"><o>
+                <xsl:try><xsl:value-of select="%s"/>
+                  <xsl:catch><caught><xsl:value-of select="$err:description"/></caught></xsl:catch>
+                </xsl:try>
+              </o></xsl:template>
+            </xsl:stylesheet>""" % select
+            with Document.parse("<r/>") as src:
+                r = XSLT(style)(src)
+                caught = r.getroot()[0]
+                assert caught.tag == "caught" and caught.text == "boom"
+                r.close()
+
+    def test_error_variable_argument_caught(self):
         style = """<xsl:stylesheet version="3.0"
           xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
           <xsl:template match="/"><o>
-            <xsl:try><xsl:value-of select="error('boom')"/></xsl:try>
-            <xsl:catch><caught/></xsl:catch>
+            <xsl:variable name="msg" select="'va boom'"/>
+            <xsl:try><xsl:value-of select="error($msg)"/>
+              <xsl:catch><caught><xsl:value-of select="$err:description"/></caught></xsl:catch>
+            </xsl:try>
+          </o></xsl:template>
+        </xsl:stylesheet>"""
+        with Document.parse("<r/>") as src:
+            r = XSLT(style)(src)
+            caught = r.getroot()[0]
+            assert caught.tag == "caught" and caught.text == "va boom"
+            r.close()
+
+    def test_misplaced_catch_is_compile_error(self):
+        # leptris/leptris#669 follow-up (1.9.30): a catch anywhere
+        # but a child of xsl:try is a compile error — Saxon's
+        # XTSE0010. The old silently-skipped sibling form.
+        style = """<xsl:stylesheet version="3.0"
+          xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template match="/"><o>
+            <xsl:try><ok/></xsl:try><xsl:catch><c/></xsl:catch>
           </o></xsl:template>
         </xsl:stylesheet>"""
         from leptris.error import LeptrisError
 
-        with Document.parse("<r/>") as src:
-            with pytest.raises(LeptrisError):
-                XSLT(style)(src)
+        with pytest.raises(LeptrisError):
+            XSLT(style)
 
     def test_on_empty_fallback(self):
         style = """<xsl:stylesheet version="3.0"
@@ -361,3 +394,70 @@ class TestXSLT30Increment45:
             r = XSLT(style)(src)
             assert r.getroot()[0].text == "fallback"
             r.close()
+
+
+class TestXSLT30Increment6:
+    """libleptris 1.9.28: xsl:accumulator (3.0 §18.2) — pinned
+    through the binding."""
+
+    def test_accumulator_depth(self):
+        # libleptris 1.9.28 (sixth increment, 18.2): xsl:accumulator
+        # before/after folds over the event stream; the mode's
+        # use-accumulators gate makes the accumulator applicable.
+        style = """<xsl:stylesheet version="3.0"
+          xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:mode use-accumulators="depth"/>
+          <xsl:accumulator name="depth" initial-value="0">
+            <xsl:accumulator-rule match="*" phase="start" select="$value + 1"/>
+            <xsl:accumulator-rule match="*" phase="end" select="$value - 1"/>
+          </xsl:accumulator>
+          <xsl:template match="/"><out>
+            <xsl:for-each select="//item"><i n="{@n}"
+              b="{accumulator-before('depth')}" a="{accumulator-after('depth')}"/>
+            </xsl:for-each>
+          </out></xsl:template>
+        </xsl:stylesheet>"""
+        with Document.parse("<r><a><item n='1'/><item n='2'/></a><b><item n='3'/></b></r>") as src:
+            r = XSLT(style)(src)
+            assert [(i.get("n"), i.get("b"), i.get("a")) for i in r.getroot()] == [
+                ("1", "3", "2"), ("2", "3", "2"), ("3", "3", "2"),
+            ]
+            r.close()
+
+    def test_accumulator_running_sum(self):
+        style = """<xsl:stylesheet version="3.0"
+          xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:mode use-accumulators="total"/>
+          <xsl:accumulator name="total" initial-value="0">
+            <xsl:accumulator-rule match="item" select="$value + @n"/>
+          </xsl:accumulator>
+          <xsl:template match="/"><out>
+            <xsl:for-each select="//item"><t n="{@n}"
+              b="{accumulator-before('total')}" a="{accumulator-after('total')}"/>
+            </xsl:for-each>
+          </out></xsl:template>
+        </xsl:stylesheet>"""
+        with Document.parse("<r><a><item n='1'/><item n='2'/></a><b><item n='3'/></b></r>") as src:
+            r = XSLT(style)(src)
+            assert [(t.get("n"), t.get("b"), t.get("a")) for t in r.getroot()] == [
+                ("1", "1", "1"), ("2", "3", "3"), ("3", "6", "6"),
+            ]
+            r.close()
+
+    def test_accumulator_requires_mode_gate(self):
+        # Without xsl:mode use-accumulators the accumulator is not
+        # applicable to the principal document (XTDE3362).
+        style = """<xsl:stylesheet version="3.0"
+          xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:accumulator name="depth" initial-value="0">
+            <xsl:accumulator-rule match="*" phase="start" select="$value + 1"/>
+          </xsl:accumulator>
+          <xsl:template match="/"><out>
+            <xsl:value-of select="accumulator-before('depth')"/>
+          </out></xsl:template>
+        </xsl:stylesheet>"""
+        from leptris.error import LeptrisError
+
+        with Document.parse("<r/>") as src:
+            with pytest.raises(LeptrisError):
+                XSLT(style)(src)
