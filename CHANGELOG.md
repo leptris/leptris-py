@@ -1,6 +1,22 @@
 # Changelog
 
 
+## 1.24.1 — 2026-08-31
+
+Adopts libleptris 1.9.26-1.9.27 (pin 1.9.25 -> 1.9.27):
+
+- xsl:try/xsl:catch scaffolding (1.9.26) and xsl:on-empty
+  (1.9.27) flow through leptris.XSLT — the non-error try path and
+  on-empty fallback pinned
+- **engine gap found and filed** (leptris/leptris#669): error()
+  inside xsl:value-of/@select escapes the catch boundary — the
+  transform fails instead of running xsl:catch (Saxon-HE runs the
+  catch); current behavior pinned with the reference
+- #550 re-verified on 1.9.27: the serialize/flat-path half still
+  reproduces raw (comment posted); the binding's promote touch
+  stays — it is ~free and correct
+
+
 ## 1.24.0 — 2026-08-31
 
 Adopts libleptris 1.9.23-1.9.25 (pin 1.9.22 -> 1.9.25) — XSLT 3.0
