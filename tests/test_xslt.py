@@ -192,15 +192,30 @@ class TestGoldenTransforms:
 
     def test_unknown_function_raises(self):
         # Fixed in libleptris 1.9.15 (#627): unknown unprefixed
-        # functions in stylesheet expressions are rejected.
+        # functions in stylesheet expressions are rejected. NOTE:
+        # upper-case became a REAL XPath 2.0 function in 1.9.24 —
+        # the probe uses a name no spec defines.
         with pytest.raises(Exception):
             XSLT(
                 "<xsl:stylesheet version='1.0' "
                 "xmlns:xsl='http://www.w3.org/1999/XSL/Transform'>"
                 "<xsl:template match='/'><o>"
-                "<xsl:value-of select=\"upper-case('ab')\"/>"
+                "<xsl:value-of select=\"definitely-not-a-fn(1)\"/>"
                 "</o></xsl:template></xsl:stylesheet>"
             )(fromstring("<r/>").document)
+
+    def test_xpath20_upper_case(self):
+        # libleptris 1.9.24: upper-case/lower-case are real XPath
+        # 2.0 functions (they previously triggered the unknown-fn
+        # rejection pinned above).
+        style = """<xsl:stylesheet version="1.0"
+          xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template match="/"><o><xsl:value-of select="upper-case(/r/t)"/></o></xsl:template>
+        </xsl:stylesheet>"""
+        with Document.parse("<r><t>shout</t></r>") as src:
+            r = XSLT(style)(src)
+            assert r.getroot().text == "SHOUT"
+            r.close()
 
     def test_pretty_print_parity_with_lxml(self):
         # libleptris 1.9.16 (#633): comments and PIs under non-mixed
@@ -253,4 +268,49 @@ class TestGoldenTransforms:
             r = XSLT(style)(src)
             g = r.getroot()[0]
             assert len(r.getroot()) == 1 and len(g) == 2
+            r.close()
+
+
+class TestXSLT30:
+    """XSLT 3.0 / XPath 2.0+ features (libleptris 1.9.23-1.9.25) —
+    they flow through leptris.XSLT with no binding change."""
+
+    def test_if_then_else(self):
+        style = """<xsl:stylesheet version="3.0"
+          xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template match="/"><o>
+            <xsl:value-of select="if (count(//i) > 1) then 'many' else 'few'"/>
+          </o></xsl:template>
+        </xsl:stylesheet>"""
+        with Document.parse("<r><i>a</i><i>b</i></r>") as src:
+            r = XSLT(style)(src)
+            assert r.getroot().text == "many"
+            r.close()
+        with Document.parse("<r><i>a</i></r>") as src:
+            r = XSLT(style)(src)
+            assert r.getroot().text == "few"
+            r.close()
+
+    def test_iterate(self):
+        style = """<xsl:stylesheet version="3.0"
+          xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template match="/"><o>
+            <xsl:iterate select="//i"><k><xsl:value-of select="."/></k></xsl:iterate>
+          </o></xsl:template>
+        </xsl:stylesheet>"""
+        with Document.parse("<r><i>a</i><i>b</i></r>") as src:
+            r = XSLT(style)(src)
+            assert [k.text for k in r.getroot()] == ["a", "b"]
+            r.close()
+
+    def test_for_return_sequence(self):
+        style = """<xsl:stylesheet version="3.0"
+          xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template match="/"><o>
+            <xsl:value-of select="string-join(for $i in (1 to 3) return concat('n', $i), ',')"/>
+          </o></xsl:template>
+        </xsl:stylesheet>"""
+        with Document.parse("<r/>") as src:
+            r = XSLT(style)(src)
+            assert r.getroot().text == "n1,n2,n3"
             r.close()

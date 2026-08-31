@@ -1,6 +1,26 @@
 # Changelog
 
 
+## 1.24.0 — 2026-08-31
+
+Adopts libleptris 1.9.23-1.9.25 (pin 1.9.22 -> 1.9.25) — XSLT 3.0
+arrives through leptris.XSLT with zero binding change:
+
+- XPath 2.0+ expression core: `if/then/else`, `for ... return`,
+  `A to B` ranges; `upper-case`/`lower-case` are now real
+  functions (the 1.9.15-era unknown-fn pin moved to a name no spec
+  defines, and upper-case is pinned as working)
+- sequences with 3.0 separators, `xsl:iterate` with
+  `xsl:next-iteration`/`xsl:break`, the grouping set
+  (`group-adjacent`, `group-ending-with`), and
+  `xsl:analyze-string` regex processing — Saxon-HE 12.7 verified
+  upstream
+- #550 re-verified on 1.9.25: fresh-document serialization still
+  returns NULL without the promote touch — the workaround stays
+- XSLT ledger row unchanged at ~0.87-0.88x (the 3.0 program did
+  not move the 1.0 fast path); still engine-tracked
+
+
 ## 1.23.3 — 2026-08-31
 
 Adopts libleptris 1.9.22 (pin 1.9.21 -> 1.9.22; spec-only release):
