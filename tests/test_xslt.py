@@ -314,3 +314,50 @@ class TestXSLT30:
             r = XSLT(style)(src)
             assert r.getroot().text == "n1,n2,n3"
             r.close()
+
+
+class TestXSLT30Increment45:
+    """libleptris 1.9.26-1.9.27: xsl:try/catch scaffolding and
+    xsl:on-empty — pinned through the binding."""
+
+    def test_try_non_error_path(self):
+        style = """<xsl:stylesheet version="3.0"
+          xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template match="/"><o>
+            <xsl:try><ok/></xsl:try><xsl:catch><c/></xsl:catch>
+          </o></xsl:template>
+        </xsl:stylesheet>"""
+        with Document.parse("<r/>") as src:
+            r = XSLT(style)(src)
+            assert [c.tag for c in r.getroot()] == ["ok"]
+            r.close()
+
+    def test_error_in_select_not_yet_caught(self):
+        # leptris/leptris#669: error() inside xsl:value-of/@select
+        # escapes the catch boundary — the transform fails instead
+        # of running xsl:catch. Pinned as current behavior; Saxon-HE
+        # runs the catch.
+        style = """<xsl:stylesheet version="3.0"
+          xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template match="/"><o>
+            <xsl:try><xsl:value-of select="error('boom')"/></xsl:try>
+            <xsl:catch><caught/></xsl:catch>
+          </o></xsl:template>
+        </xsl:stylesheet>"""
+        from leptris.error import LeptrisError
+
+        with Document.parse("<r/>") as src:
+            with pytest.raises(LeptrisError):
+                XSLT(style)(src)
+
+    def test_on_empty_fallback(self):
+        style = """<xsl:stylesheet version="3.0"
+          xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template match="/"><o><e>
+            <xsl:on-empty>fallback</xsl:on-empty>
+          </e></o></xsl:template>
+        </xsl:stylesheet>"""
+        with Document.parse("<r/>") as src:
+            r = XSLT(style)(src)
+            assert r.getroot()[0].text == "fallback"
+            r.close()
