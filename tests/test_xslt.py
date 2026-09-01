@@ -542,3 +542,53 @@ class TestXSLTVersionCoverage:
         assert self._run(
             "<xsl:value-of select=\"(3,1,2)\" separator='|'/>"
         ) == "<o>3 1 2</o>"
+
+    def test_expand_text_tvt(self):
+        # 3.0 expand-text + text value templates.
+        style = (
+            '<xsl:stylesheet version="3.0" expand-text="yes"'
+            ' xmlns:xsl="http://www.w3.org/1999/XSL/Transform">'
+            "<xsl:template match=\"/\"><o>count={count(//item)}</o>"
+            "</xsl:template></xsl:stylesheet>"
+        )
+        with Document.parse(self.SRC) as d:
+            out = XSLT(style)(d)
+            assert tostring(out).decode() == "<o>count=3</o>"
+            out.close()
+
+    def test_mode_on_no_match_dispositions(self):
+        # shallow-skip needs a matching template to see the skip; the
+        # text-only-copy disposition itself copies unmatched text.
+        cases = (
+            ("shallow-skip", True, "<o>I</o>"),
+            ("text-only-copy", False, "<o>alpha</o>"),
+        )
+        for mode, with_item_template, expected in cases:
+            style = (
+                '<xsl:stylesheet version="3.0"'
+                ' xmlns:xsl="http://www.w3.org/1999/XSL/Transform">'
+                f'<xsl:mode on-no-match="{mode}"/>'
+                + ("<xsl:template match='item'>I</xsl:template>"
+                   if with_item_template else "")
+                + "<xsl:template match='/'><o>"
+                "<xsl:apply-templates select='//item[1]'/>"
+                "</o></xsl:template></xsl:stylesheet>"
+            )
+            with Document.parse(self.SRC) as d:
+                out = XSLT(style)(d)
+                assert tostring(out).decode() == expected, mode
+                out.close()
+
+    def test_decimal_format_named(self):
+        style = (
+            '<xsl:stylesheet version="1.0"'
+            ' xmlns:xsl="http://www.w3.org/1999/XSL/Transform">'
+            '<xsl:decimal-format name="df" decimal-separator=","/>'
+            "<xsl:template match=\"/\"><o>"
+            "<xsl:value-of select=\"format-number(12.5, '#,0', 'df')\"/>"
+            "</o></xsl:template></xsl:stylesheet>"
+        )
+        with Document.parse("<r/>") as d:
+            out = XSLT(style)(d)
+            assert tostring(out).decode() == "<o>12,5</o>"
+            out.close()
