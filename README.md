@@ -68,6 +68,58 @@ with sax.StreamingParser(handler) as parser:  # push, constant memory
     parser.feed(chunk, final=last)
 ```
 
+## XSLT and XPath version support
+
+`leptris.XSLT(stylesheet)` compiles once, applies to any Document, and
+returns a Document; `leptris.XPath(expression)` compiles an XPath for
+repeated evaluation. Which language constructs work is decided by the
+engine — the matrix below is **measured against libleptris 1.9.32**
+(audited through this binding; the upstream gap ledger is
+[leptris/leptris#685](https://github.com/leptris/leptris/issues/685)).
+
+| language | status | notes |
+|---|---|---|
+| XSLT 1.0 | **full** | libxslt conformance suite 205/205 upstream; EXSLT math/set/str/date included |
+| XSLT 2.0 | partial | ✓ `for-each-group`, `analyze-string` + `regex-group()`, `xsl:number` formats, `xsl:assert` · ✗ `xsl:function`, tunnel parameters, shadow attributes, `xsl:sequence`, `xsl:perform-sort`, `xsl:result-document`, `@separator` |
+| XSLT 3.0 | increments | ✓ `try`/`catch` (with `$err:description`), `accumulator` (gated by `xsl:mode use-accumulators`), `iterate` + `break`, `on-empty`, `evaluate`, grouping, modes · ✗ `merge`, `fork`, `next-match`, `package`, `where-populated` |
+| XPath 1.0 | **full** | complete core function library |
+| XPath 2.0 | partial | ✓ composition grammar: `for`, `if/then/else`, `to` ranges · ✗ quantified (`some`/`every`), `except`/`intersect`, `instance of`, `cast`/`castable`, value comparisons (`eq`…), node order (`is`, `<<`); 2.0 functions (`matches`, `replace`, `tokenize`, `ends-with`, `avg`/`min`/`max`, `exists`/`empty`, `distinct-values`, …) |
+| XPath 3.1 | lane 0 | ✓ `let`, simple map `!`, arrow `=>`, string concat `\|\|` — through both `XPath()` and XSLT · ✗ function items, inline functions, maps, arrays, string constructors |
+| XQuery | **not available** | not implemented by the engine in any version — capability request: [leptris/leptris#684](https://github.com/leptris/leptris/issues/684) |
+
+XPath 3.1 composition and XSLT 3.0 instructions flow through the
+existing API with zero binding change:
+
+```python
+from leptris import Document, XPath, XSLT, tostring
+
+with Document.parse("<r><item v='1'>alpha</item><item v='5'>beta</item></r>") as doc:
+    doc.getroot().xpath("let $n := //item[2] return $n/@v")      # ['5']
+    doc.getroot().xpath("(//item ! string(.)) => count()")        # 2.0
+
+    style = XSLT("""<xsl:stylesheet version="3.0"
+        xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+      <xsl:mode use-accumulators="depth"/>
+      <xsl:accumulator name="depth" initial-value="0">
+        <xsl:accumulator-rule match="*" phase="start" select="$value + 1"/>
+        <xsl:accumulator-rule match="*" phase="end" select="$value - 1"/>
+      </xsl:accumulator>
+      <xsl:template match="/"><o>
+        <xsl:iterate select="//item">
+          <i d="{accumulator-before('depth')}"/>
+        </xsl:iterate>
+      </o></xsl:template>
+    </xsl:stylesheet>""")
+    print(tostring(style(doc), encoding="unicode"))
+    # <o><i d="2"/><i d="2"/></o>   # items sit at depth 2 (r → item)
+```
+
+Unsupported constructs fail at `XSLT()` compile time or at evaluation
+with `LeptrisError` — except a known family of instructions that
+currently produce empty output instead of an error (`sequence`,
+`perform-sort`, `next-match`, `merge`, `fork`, `result-document`,
+`where-populated`); tracked in the #685 ledger above.
+
 ## Migrating from lxml
 
 | lxml | leptris | Notes |
@@ -90,7 +142,7 @@ with sax.StreamingParser(handler) as parser:  # push, constant memory
 | smart strings | plain `str` | XPath string/attribute results |
 | `elem.nsmap` | **absent** | use `elem.namespace` / `elem.prefix` and `xpath(namespaces=…)` |
 | `etree.XPath` compiled objects | `leptris.XPath(expression)` | compile once, evaluate many; contexts, namespaces, and variables supported |
-| `etree.XSLT` | `leptris.XSLT(stylesheet)` | compile once, apply to any Document; full XSLT 1.0 + EXSLT (math/set/str/date) via libleptris, plus XSLT/XPath 3.0 increments (try/catch, xsl:accumulator, let / `!` / `=>` / `||`) |
+| `etree.XSLT` | `leptris.XSLT(stylesheet)` | compile once, apply to any Document — see the [version support matrix](#xslt-and-xpath-version-support) above |
 | parser options (`resolve_entities`, …) | **absent** | libleptris 1.2.0 has no per-parse options |
 | `elem.sourceline` | same | requires libleptris 1.3.0+ |
 | undeclared XPath prefix | raises in lxml | evaluates to an empty nodeset here |

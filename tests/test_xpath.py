@@ -403,3 +403,28 @@ class TestXPath31:
         assert root.xpath(
             "let $x := 5 return ($x to 7) ! (. * 2) => sum()"
         ) == 36.0
+
+
+class TestXPath20Composition:
+    # The 2.0 composition grammar shipped with the XSLT 3.0
+    # increments (for/if/to) — verified through plain XPath too.
+    SRC = (
+        "<r><item v='1'>alpha</item>"
+        "<item v='5'>beta</item><item v='9'>gamma</item></r>"
+    )
+
+    def test_for_expression(self):
+        root = fromstring(self.SRC)
+        assert root.xpath("for $i in //item return string($i/@v)") == [
+            "1", "5", "9",
+        ]
+
+    def test_if_expression(self):
+        root = fromstring(self.SRC)
+        assert root.xpath(
+            "if (count(//item) > 2) then 'many' else 'few'"
+        ) == "many"
+
+    def test_range_expression(self):
+        root = fromstring(self.SRC)
+        assert root.xpath("count(1 to 10)") == 10.0
