@@ -80,10 +80,10 @@ engine — the matrix below is **measured against libleptris 1.9.32**
 | language | status | notes |
 |---|---|---|
 | XSLT 1.0 | **full** | libxslt conformance suite 205/205 upstream; EXSLT math/set/str/date included |
-| XSLT 2.0 | partial | ✓ `for-each-group`, `analyze-string` + `regex-group()`, `xsl:number` formats, `xsl:assert` · ✗ `xsl:function`, tunnel parameters, shadow attributes, `xsl:sequence`, `xsl:perform-sort`, `xsl:result-document`, `@separator` |
+| XSLT 2.0 | partial | ✓ `for-each-group`, `analyze-string` + `regex-group()`, `xsl:number` formats, `xsl:assert`, `xsl:sequence` (multi-item), `xsl:perform-sort` · ✗ `xsl:function`, tunnel parameters, shadow attributes, `xsl:result-document`, `@separator` |
 | XSLT 3.0 | increments | ✓ `try`/`catch` (with `$err:description`), `accumulator` (gated by `xsl:mode use-accumulators`), `iterate` + `break`, `on-empty`, `evaluate`, grouping, modes · ✗ `merge`, `fork`, `next-match`, `package`, `where-populated` |
 | XPath 1.0 | **full** | complete core function library |
-| XPath 2.0 | partial | ✓ composition grammar: `for`, `if/then/else`, `to` ranges · ✗ quantified (`some`/`every`), `except`/`intersect`, `instance of`, `cast`/`castable`, value comparisons (`eq`…), node order (`is`, `<<`); 2.0 functions (`matches`, `replace`, `tokenize`, `ends-with`, `avg`/`min`/`max`, `exists`/`empty`, `distinct-values`, …) |
+| XPath 2.0 | partial | ✓ composition grammar: `for`, `if/then/else`, `to` ranges · ✓ function slices 1.9.35+: sequences (`exists`/`empty`/`avg`/`min`/`max`/`distinct-values`/`head`/`remove`/…), regex trio (`matches`/`replace`/`tokenize` — string args; node args pending), `math:*`, `abs`, `format-integer`, codepoints, URI escapes, `node-name` · ✗ quantified (`some`/`every`), `except`/`intersect`, `instance of`, `cast`/`castable`, value comparisons (`eq`…), node order (`is`, `<<`); dates/times, JSON, `map:`/`array:`, higher-order functions |
 | XPath 3.1 | lane 0 | ✓ `let`, simple map `!`, arrow `=>`, string concat `\|\|` — through both `XPath()` and XSLT · ✗ function items, inline functions, maps, arrays, string constructors |
 | XQuery | **not available** | not implemented by the engine in any version — capability request: [leptris/leptris#684](https://github.com/leptris/leptris/issues/684) |
 
@@ -116,9 +116,11 @@ with Document.parse("<r><item v='1'>alpha</item><item v='5'>beta</item></r>") as
 
 Unsupported constructs fail at `XSLT()` compile time or at evaluation
 with `LeptrisError` — except a known family of instructions that
-currently produce empty output instead of an error (`sequence`,
-`perform-sort`, `next-match`, `merge`, `fork`, `result-document`,
-`where-populated`); tracked in the #685 ledger above.
+still produce empty output instead of an error (`next-match`,
+`merge`, `fork`, `result-document`, `where-populated`,
+`on-completion`, `xsl:map`, `xsl:namespace`, `xsl:document`,
+single-item `xsl:sequence`, `@separator`/`@default`/`@start-at`
+attributes); tracked in the #685/#690 ledgers above.
 
 ## Migrating from lxml
 
@@ -149,7 +151,6 @@ currently produce empty output instead of an error (`sequence`,
 | ATTLIST default attributes | applied by lxml's default parser | excluded by default (ElementTree-like; XML 1.0 §5 permits either) — `Document.parse(xml, attribute_defaults=True)` opts in |
 | declared non-UTF-8 bytes (UTF-16, latin-1, …) | auto-detected | auto-detected — declared encodings route through the converter, others retry on failure (libleptris 1.9.15+) |
 | parser options (`remove_blank_text`, …) | `etree.XMLParser(remove_blank_text=True)` | `Document.parse(xml, remove_blank_text=True)` — ~35% faster on pretty-printed input; also `attribute_defaults=True`, `recover=True` |
-| `remove_blank_text` on non-blank text | lxml drops only whitespace-only nodes | the leading boundary whitespace of non-blank text is also trimmed from the tree (libleptris #677) |
 
 ## Layout
 

@@ -430,9 +430,69 @@ class TestXPath20Composition:
         assert root.xpath("count(1 to 10)") == 10.0
 
     def test_try_catch_expression_currently_empty(self):
-        # leptris/leptris#692: try/catch EXPRESSIONS compile but
-        # evaluate to the empty sequence — silently wrong (the
-        # xsl:try INSTRUCTION works). Pinned until the engine
-        # implements the expression form.
+        # leptris/leptris#692: brace syntax now fails LOUDLY in XSLT
+        # expression attributes (1.9.34), but the plain XPath path
+        # still compiles try/catch to the empty sequence. Pinned
+        # until the plain path rejects it too.
         root = fromstring("<r/>")
         assert root.xpath("try { 'plain' } catch * { 'caught' }") == []
+
+
+class TestXPath20Functions:
+    # libleptris 1.9.35-1.9.36 (#691 slices): sequence math, the
+    # regex trio, math:, and the strings/QNames/URIs slice — all
+    # through plain XPath.
+    SRC = "<r><item v='1'>alpha</item><item v='5'>beta</item><item v='9'>gamma</item></r>"
+
+    def test_sequence_existence(self):
+        root = fromstring(self.SRC)
+        assert root.xpath("exists(//item[@v='99'])") is False
+        assert root.xpath("empty(//nope)") is True
+        assert root.xpath("exists(//item[@v='5'])") is True
+
+    def test_sequence_aggregates(self):
+        root = fromstring(self.SRC)
+        assert root.xpath("avg(//item/@v)") == 5.0
+        assert root.xpath("min(//item/@v)") == 1.0
+        assert root.xpath("max(//item/@v)") == 9.0
+        assert root.xpath("count(distinct-values((1, 1, 2)))") == 2.0
+
+    def test_sequence_manipulation(self):
+        root = fromstring(self.SRC)
+        assert root.xpath("head((1, 2, 3))") == ["1"]
+        assert root.xpath("count(remove((1, 2, 3), 1))") == 2.0
+        assert root.xpath("count(subsequence(1 to 100, 10, 5))") == 5.0
+
+    def test_regex_trio(self):
+        root = fromstring(self.SRC)
+        assert root.xpath("matches('alpha', '^al.*a$')") is True
+        assert root.xpath("matches('alpha', '^al+a$')") is False
+        assert root.xpath("replace('a-b-c', '-', '_')") == "a_b_c"
+        assert root.xpath(
+            "string-join(tokenize('a,b,c', ','), '|')"
+        ) == "a|b|c"
+
+    def test_regex_trio_node_args_not_atomized(self):
+        # leptris/leptris#691 comment: the regex trio treats a node
+        # first-argument as the empty string instead of atomizing to
+        # its string value. Pinned until fixed.
+        root = fromstring(self.SRC)
+        assert root.xpath("matches(//item[1], '^al.*a$')") is False
+        assert root.xpath("replace(//item[1], 'al', 'AL')") == ""
+
+    def test_math_namespace(self):
+        root = fromstring(self.SRC)
+        assert root.xpath("math:sqrt(9)") == 3.0
+        assert root.xpath("abs(-3)") == 3.0
+        assert root.xpath("round-half-to-even(2.5)") == 2.0
+        assert root.xpath("math:pi()") == 3.141592653589793
+
+    def test_strings_qnames_uris(self):
+        root = fromstring(self.SRC)
+        assert root.xpath("format-integer(12, 'W')") == "TWELVE"
+        assert root.xpath("format-integer(5, 'a')") == "e"
+        assert root.xpath("contains-token('a b c', 'b')") is True
+        assert root.xpath("codepoints-to-string(65)") == "A"
+        assert root.xpath("escape-html-uri('<a>')") == "&lt;a&gt;"
+        assert root.xpath("encode-for-uri('a b')") == "a%20b"
+        assert root.xpath("string(node-name(//item[1]))") == "item"

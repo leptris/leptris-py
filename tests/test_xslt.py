@@ -5,6 +5,7 @@ import sys
 import pytest
 
 from leptris import Document, XSLT, tostring, fromstring
+from leptris.error import LeptrisError
 
 IDENTITY = """<xsl:stylesheet version="1.0"
   xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
@@ -489,12 +490,22 @@ class TestXSLTVersionCoverage:
             "</xsl:for-each-group>"
         ) == "<o><g>1</g><g>5</g><g>9</g></o>"
 
-    @pytest.mark.skipif(
-        sys.platform == "win32",
-        reason="leptris/leptris#686: analyze-string yields empty "
-        "output on MSVC builds while correct on macOS/Linux",
-    )
     def test_analyze_string_and_regex_group(self):
+        # leptris/leptris#686 fixed in 1.9.33 for non-MSVC builds:
+        # correct output. On MSVC the portable regex engine is still
+        # pending — analyze-string now raises a LOUD, xsl:try-
+        # catchable error there instead of silent empty output.
+        if sys.platform == "win32":
+            with pytest.raises(LeptrisError):
+                self._run(
+                    "<xsl:analyze-string select=\"'ab12cd'\" "
+                    "regex=\"([0-9]+)\"><xsl:matching-substring>"
+                    "<n><xsl:value-of select='regex-group(1)'/></n>"
+                    "</xsl:matching-substring>"
+                    "<xsl:non-matching-substring/>"
+                    "</xsl:analyze-string>"
+                )
+            return
         assert self._run(
             "<xsl:analyze-string select=\"'ab12cd'\" regex=\"([0-9]+)\">"
             "<xsl:matching-substring><n><xsl:value-of select='regex-group(1)'/></n></xsl:matching-substring>"
@@ -592,3 +603,25 @@ class TestXSLTVersionCoverage:
             out = XSLT(style)(d)
             assert tostring(out).decode() == "<o>12,5</o>"
             out.close()
+
+    def test_xsl_sequence_multi(self):
+        # 1.9.35 (#685): xsl:sequence works for multi-item sequences
+        # (single-item atomic sequences are still dropped — pinned
+        # below).
+        assert self._run(
+            "<xsl:sequence select=\"('a', 'b')\"/>"
+        ) == "<o>a b</o>"
+
+    def test_xsl_sequence_single_item_dropped(self):
+        # leptris/leptris#685 remainder: a single-item atomic
+        # sequence emits nothing while multi-item works. Pinned
+        # until fixed.
+        assert self._run("<xsl:sequence select=\"'x'\"/>") == "<o/>"
+
+    def test_xsl_perform_sort(self):
+        # 1.9.35 (#685): xsl:perform-sort now sorts content.
+        assert self._run(
+            """<xsl:perform-sort select="(3, 1, 2)">
+            <xsl:sort select="." data-type="number"/>
+            </xsl:perform-sort>"""
+        ) == "<o>1 2 3</o>"
