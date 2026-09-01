@@ -97,6 +97,7 @@ with sax.StreamingParser(handler) as parser:  # push, constant memory
 | ATTLIST default attributes | applied by lxml's default parser | excluded by default (ElementTree-like; XML 1.0 §5 permits either) — `Document.parse(xml, attribute_defaults=True)` opts in |
 | declared non-UTF-8 bytes (UTF-16, latin-1, …) | auto-detected | auto-detected — declared encodings route through the converter, others retry on failure (libleptris 1.9.15+) |
 | parser options (`remove_blank_text`, …) | `etree.XMLParser(remove_blank_text=True)` | `Document.parse(xml, remove_blank_text=True)` — ~35% faster on pretty-printed input; also `attribute_defaults=True`, `recover=True` |
+| `remove_blank_text` on non-blank text | lxml drops only whitespace-only nodes | the leading boundary whitespace of non-blank text is also trimmed from the tree (libleptris #677) |
 
 ## Layout
 
