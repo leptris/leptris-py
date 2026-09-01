@@ -315,20 +315,18 @@ class TestRemoveBlankText:
             assert root[0].text == "1"
             assert len(root) == 2
 
-    def test_nonblank_boundary_whitespace_trimmed(self):
-        # leptris/leptris#677: unlike libxml2's NOBLANKS (which drops
-        # only whitespace-only nodes), the engine flag also strips the
-        # leading boundary whitespace of NON-blank text at parse —
-        # the bytes are gone from the tree. Pinned until upstream
-        # matches libxml2; lxml keeps " leading" / " after" here.
+    def test_nonblank_boundary_whitespace_kept(self):
+        # leptris/leptris#677 fixed in libleptris 1.9.33: the flag
+        # now drops only whitespace-only runs (libxml2 NOBLANKS
+        # parity) — non-blank text keeps its boundary whitespace.
         with Document.parse("<p> leading</p>", remove_blank_text=True) as doc:
-            assert doc.getroot().text == "leading"
+            assert doc.getroot().text == " leading"
         with Document.parse(
             "<p><b>b</b> after</p>", remove_blank_text=True
         ) as doc:
-            assert doc.getroot()[0].tail == "after"
+            assert doc.getroot()[0].tail == " after"
         with Document.parse("<p> intact </p>", remove_blank_text=True) as doc:
-            assert doc.getroot().text == "intact "
+            assert doc.getroot().text == " intact "
 
     def test_combines_with_attribute_defaults(self):
         xml = b"""<!DOCTYPE r [<!ATTLIST r a CDATA "d">]>\n<r>\n  <x/>\n</r>"""
