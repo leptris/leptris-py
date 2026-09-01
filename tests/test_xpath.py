@@ -485,8 +485,17 @@ class TestXPath20Functions:
     def test_regex_trio_node_args_not_atomized(self):
         # leptris/leptris#691 comment: the regex trio treats a node
         # first-argument as the empty string instead of atomizing to
-        # its string value. Pinned until fixed.
+        # its string value. Pinned until fixed. (MSVC: no regex
+        # engine at all — raises loudly there instead.)
+        import sys
+
         root = fromstring(self.SRC)
+        if sys.platform == "win32":
+            from leptris.error import XPathError
+
+            with pytest.raises(XPathError):
+                root.xpath("matches(//item[1], 'a')")
+            return
         assert root.xpath("matches(//item[1], '^al.*a$')") is False
         assert root.xpath("replace(//item[1], 'al', 'AL')") == ""
 
