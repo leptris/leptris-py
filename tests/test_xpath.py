@@ -464,7 +464,17 @@ class TestXPath20Functions:
         assert root.xpath("count(subsequence(1 to 100, 10, 5))") == 5.0
 
     def test_regex_trio(self):
+        # MSVC builds ship no regex engine — the trio raises loudly
+        # there (leptris/leptris#686 family), like analyze-string.
+        import sys
+
         root = fromstring(self.SRC)
+        if sys.platform == "win32":
+            from leptris.error import XPathError
+
+            with pytest.raises(XPathError):
+                root.xpath("matches('alpha', 'a')")
+            return
         assert root.xpath("matches('alpha', '^al.*a$')") is True
         assert root.xpath("matches('alpha', '^al+a$')") is False
         assert root.xpath("replace('a-b-c', '-', '_')") == "a_b_c"
