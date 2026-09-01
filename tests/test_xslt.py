@@ -461,3 +461,77 @@ class TestXSLT30Increment6:
         with Document.parse("<r/>") as src:
             with pytest.raises(LeptrisError):
                 XSLT(style)(src)
+
+class TestXSLTVersionCoverage:
+    """Gap-coverage goldens for 2.0/3.0 constructs verified working
+    through the binding on libleptris 1.9.32 (audit for #685)."""
+
+    SRC = "<r><item v='1'>alpha</item><item v='5'>beta</item><item v='9'>gamma</item></r>"
+
+    def _run(self, body, src=None):
+        style = (
+            '<xsl:stylesheet version="3.0"'
+            ' xmlns:xsl="http://www.w3.org/1999/XSL/Transform">'
+            "<xsl:template match=\"/\"><o>%s</o></xsl:template></xsl:stylesheet>" % body
+        )
+        with Document.parse(src or self.SRC) as d:
+            out = XSLT(style)(d)
+            result = tostring(out).decode()
+            out.close()
+            return result
+
+    def test_for_each_group_group_by(self):
+        assert self._run(
+            '<xsl:for-each-group select="//item" group-by="@v">'
+            "<g><xsl:value-of select='current-grouping-key()'/></g>"
+            "</xsl:for-each-group>"
+        ) == "<o><g>1</g><g>5</g><g>9</g></o>"
+
+    def test_analyze_string_and_regex_group(self):
+        assert self._run(
+            "<xsl:analyze-string select=\"'ab12cd'\" regex=\"([0-9]+)\">"
+            "<xsl:matching-substring><n><xsl:value-of select='regex-group(1)'/></n></xsl:matching-substring>"
+            "<xsl:non-matching-substring><xsl:value-of select='.'/></xsl:non-matching-substring>"
+            "</xsl:analyze-string>"
+        ) == "<o>ab<n>12</n>cd</o>"
+
+    def test_evaluate_literal_query(self):
+        # xsl:evaluate (3.0 26.1): @xpath is the query itself here
+        # (literal attribute text), evaluated against the context.
+        assert self._run('<xsl:evaluate xpath="count(//item)"/>') == "<o>3</o>"
+
+    def test_assert_passes(self):
+        assert self._run(
+            '<xsl:assert test="count(//item) = 3"/><ok/>'
+        ) == "<o><ok/></o>"
+
+    def test_where_populated_drops_all_content(self):
+        # leptris/leptris#685: xsl:where-populated is a silent no-op
+        # — it drops ALL content (empty and non-empty alike). Pinned
+        # until the engine implements it.
+        for body in (
+            '<xsl:where-populated><xsl:value-of select="\'x\'"/></xsl:where-populated>',
+            "<xsl:where-populated>lit</xsl:where-populated>",
+            "<xsl:where-populated><e/></xsl:where-populated>",
+        ):
+            assert self._run(body + "|ok") == "<o>|ok</o>"
+
+    def test_iterate_break(self):
+        assert self._run(
+            "<xsl:iterate select='//item'>"
+            "<xsl:if test=\"position() = 2\"><xsl:break/></xsl:if><i/>"
+            "</xsl:iterate>"
+        ) == "<o><i/></o>"
+
+    def test_number_letter_format(self):
+        assert self._run(
+            "<xsl:number value='5' format='A.1'/>"
+        ) == "<o>E</o>"
+
+    def test_value_of_separator_currently_ignored(self):
+        # leptris/leptris#685: @separator on xsl:value-of is silently
+        # ignored — the default space separator is used. Pinned until
+        # the engine honors it.
+        assert self._run(
+            "<xsl:value-of select=\"(3,1,2)\" separator='|'/>"
+        ) == "<o>3 1 2</o>"
