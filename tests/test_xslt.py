@@ -1,5 +1,7 @@
 """XSLT 1.0 transformation via the engine's compiled stylesheets."""
 
+import sys
+
 import pytest
 
 from leptris import Document, XSLT, tostring, fromstring
@@ -487,6 +489,11 @@ class TestXSLTVersionCoverage:
             "</xsl:for-each-group>"
         ) == "<o><g>1</g><g>5</g><g>9</g></o>"
 
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="leptris/leptris#686: analyze-string yields empty "
+        "output on MSVC builds while correct on macOS/Linux",
+    )
     def test_analyze_string_and_regex_group(self):
         assert self._run(
             "<xsl:analyze-string select=\"'ab12cd'\" regex=\"([0-9]+)\">"
