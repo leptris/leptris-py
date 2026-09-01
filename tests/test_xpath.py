@@ -428,3 +428,11 @@ class TestXPath20Composition:
     def test_range_expression(self):
         root = fromstring(self.SRC)
         assert root.xpath("count(1 to 10)") == 10.0
+
+    def test_try_catch_expression_currently_empty(self):
+        # leptris/leptris#692: try/catch EXPRESSIONS compile but
+        # evaluate to the empty sequence — silently wrong (the
+        # xsl:try INSTRUCTION works). Pinned until the engine
+        # implements the expression form.
+        root = fromstring("<r/>")
+        assert root.xpath("try { 'plain' } catch * { 'caught' }") == []
