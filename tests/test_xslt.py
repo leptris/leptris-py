@@ -818,3 +818,39 @@ class TestXSLTVersionCoverage:
             out = XSLT(style)(d)
             assert tostring(out).decode() == "<o>tv</o>"
             out.close()
+
+    def test_composite_key_sequence_use(self):
+        # leptris/leptris#720 fixed in 1.9.47 (was a SIGSEGV): the
+        # sequence-use form now matches composite value pairs.
+        style = """<xsl:stylesheet version="3.0"
+          xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:key name="k" match="item" composite="yes" use="@v, ."/>
+          <xsl:template match="/"><o>
+            <xsl:value-of select="count(key('k', ('1', 'alpha')))"/>
+            <xsl:value-of select="count(key('k', ('5', 'beta')))"/>
+          </o></xsl:template>
+        </xsl:stylesheet>"""
+        with Document.parse(self.SRC) as d:
+            out = XSLT(style)(d)
+            assert tostring(out).decode() == "<o>11</o>"
+            out.close()
+
+    def test_next_iteration_chaining(self):
+        # leptris/leptris#729 fixed in 1.9.48: iterate param chaining
+        # through xsl:next-iteration, consumed by on-completion.
+        style = """<xsl:stylesheet version="3.0"
+          xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template match="/"><o>
+            <xsl:iterate select="1 to 3">
+              <xsl:param name="acc" select="0"/>
+              <xsl:next-iteration>
+                <xsl:with-param name="acc" select="$acc + ."/>
+              </xsl:next-iteration>
+              <xsl:on-completion><xsl:value-of select="$acc"/></xsl:on-completion>
+            </xsl:iterate>
+          </o></xsl:template>
+        </xsl:stylesheet>"""
+        with Document.parse("<r/>") as d:
+            out = XSLT(style)(d)
+            assert tostring(out).decode() == "<o>6</o>"
+            out.close()

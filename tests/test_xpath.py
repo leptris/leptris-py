@@ -531,3 +531,27 @@ class TestXPathDateSlice:
         assert root.xpath(
             "year-from-dateTime(xs:dateTime('2020-03-01T10:30:00'))"
         ) == 2020.0
+
+
+class TestXsConstructors:
+    # libleptris 1.9.49 (lane 06): xs: atomic constructors through
+    # plain XPath. xs:boolean string-lexical rules and xs:integer
+    # invalid-lexical handling diverge from XSD — leptris/leptris#739.
+
+    def test_numeric_constructors(self):
+        root = fromstring("<r/>")
+        assert root.xpath("xs:integer('42') + 1") == 43.0
+        assert root.xpath("xs:integer(3.9)") == 3.0
+        assert root.xpath("xs:double('2.5') * 2") == 5.0
+        assert root.xpath("xs:decimal('1.25') + 1") == 2.25
+
+    def test_boolean_constructors(self):
+        root = fromstring("<r/>")
+        assert root.xpath("xs:boolean(' true ')") is True
+        assert root.xpath("xs:boolean(1)") is True
+        assert root.xpath("xs:boolean(xs:double('NaN'))") is False
+
+    def test_string_constructors(self):
+        root = fromstring("<r/>")
+        assert root.xpath("xs:string(42)") == "42"
+        assert root.xpath("string(xs:anyURI('a b'))") == "a b"
