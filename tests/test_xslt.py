@@ -523,16 +523,16 @@ class TestXSLTVersionCoverage:
             '<xsl:assert test="count(//item) = 3"/><ok/>'
         ) == "<o><ok/></o>"
 
-    def test_where_populated_drops_all_content(self):
-        # leptris/leptris#685: xsl:where-populated is a silent no-op
-        # — it drops ALL content (empty and non-empty alike). Pinned
-        # until the engine implements it.
-        for body in (
-            '<xsl:where-populated><xsl:value-of select="\'x\'"/></xsl:where-populated>',
-            "<xsl:where-populated>lit</xsl:where-populated>",
-            "<xsl:where-populated><e/></xsl:where-populated>",
-        ):
-            assert self._run(body + "|ok") == "<o>|ok</o>"
+    def test_where_populated(self):
+        # Implemented in 1.9.42 (leptris/leptris#685): non-empty
+        # content survives, wholly-empty builds vanish.
+        assert self._run(
+            "<xsl:where-populated>lit</xsl:where-populated>|ok"
+        ) == "<o>lit|ok</o>"
+        assert self._run(
+            '<xsl:where-populated><xsl:value-of select="//nope"/>'
+            "</xsl:where-populated>|ok"
+        ) == "<o>|ok</o>"
 
     def test_iterate_break(self):
         assert self._run(
@@ -612,11 +612,9 @@ class TestXSLTVersionCoverage:
             "<xsl:sequence select=\"('a', 'b')\"/>"
         ) == "<o>a b</o>"
 
-    def test_xsl_sequence_single_item_dropped(self):
-        # leptris/leptris#685 remainder: a single-item atomic
-        # sequence emits nothing while multi-item works. Pinned
-        # until fixed.
-        assert self._run("<xsl:sequence select=\"'x'\"/>") == "<o/>"
+    def test_xsl_sequence_single_item(self):
+        # Single-item atomic sequences fixed in 1.9.38.
+        assert self._run("<xsl:sequence select=\"'x'\"/>") == "<o>x</o>"
 
     def test_xsl_perform_sort(self):
         # 1.9.35 (#685): xsl:perform-sort now sorts content.
@@ -625,3 +623,86 @@ class TestXSLTVersionCoverage:
             <xsl:sort select="." data-type="number"/>
             </xsl:perform-sort>"""
         ) == "<o>1 2 3</o>"
+
+    def test_fork(self):
+        # 1.9.43 (#690): non-streaming fork arms run sequentially
+        # into the same destination.
+        assert self._run(
+            "<xsl:fork><xsl:sequence select=\"'f'\"/></xsl:fork>"
+        ) == "<o>f</o>"
+
+    def test_on_non_empty(self):
+        # 1.9.42 (#690): Saxon evaluates on-non-empty content when
+        # the enclosing element got content.
+        assert self._run(
+            "<e><xsl:sequence select=\"//item[1]/@v\"/>"
+            "<xsl:on-non-empty>!</xsl:on-non-empty></e>"
+        ) == "<o><e>1!</e></o>"
+
+    def test_next_match_lower_priority(self):
+        style = """<xsl:stylesheet version="3.0"
+          xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template match="/" priority="5"><o><xsl:text>hi:</xsl:text><xsl:next-match/></o></xsl:template>
+          <xsl:template match="/" priority="1"><base/></xsl:template>
+        </xsl:stylesheet>"""
+        with Document.parse("<r/>") as d:
+            out = XSLT(style)(d)
+            assert tostring(out).decode() == "<o>hi:<base/></o>"
+            out.close()
+
+    def test_number_start_at_positional(self):
+        # 1.9.43 (#690): start-at offsets positional numbering.
+        assert self._run(
+            "<xsl:for-each select='//item'><i>"
+            "<xsl:number start-at='5'/></i></xsl:for-each>"
+        ) == "<o><i>5</i><i>6</i><i>7</i></o>"
+
+    def test_composite_key_single_use(self):
+        # 1.9.43 (#690): composite=yes indexes the node under each
+        # token of the use value. Sequence use forms crash —
+        # leptris/leptris#720 — and are not exercised here.
+        style = """<xsl:stylesheet version="3.0"
+          xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:key name="k" match="item" composite="yes" use="@v"/>
+          <xsl:template match="/"><o>
+            <xsl:value-of select="count(key('k', '5'))"/>
+          </o></xsl:template>
+        </xsl:stylesheet>"""
+        with Document.parse(self.SRC) as d:
+            out = XSLT(style)(d)
+            assert tostring(out).decode() == "<o>1</o>"
+            out.close()
+
+    def test_tunnel_param_call_template(self):
+        # 1.9.37: tunnel parameters through xsl:call-template.
+        # (apply-templates tunnel is still broken upstream.)
+        style = """<xsl:stylesheet version="3.0"
+          xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template match="/"><o>
+            <xsl:call-template name="n">
+              <xsl:with-param name="t" tunnel="yes" select="'tv'"/>
+            </xsl:call-template>
+          </o></xsl:template>
+          <xsl:template name="n">
+            <xsl:param name="t" tunnel="yes"/>
+            <xsl:value-of select="$t"/>
+          </xsl:template>
+        </xsl:stylesheet>"""
+        with Document.parse("<r/>") as d:
+            out = XSLT(style)(d)
+            assert tostring(out).decode() == "<o>tv</o>"
+            out.close()
+
+    def test_copy_of_keeps_comment_pi_children(self):
+        # leptris/leptris#696 fixed in 1.9.39: element copies keep
+        # comment and PI children.
+        style = """<xsl:stylesheet version="1.0"
+          xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template match="/"><o>
+            <xsl:copy-of select="//item[1]/node()"/>
+          </o></xsl:template>
+        </xsl:stylesheet>"""
+        with Document.parse("<r><item v='1'>t<!--c--><?pi data?></item></r>") as d:
+            out = XSLT(style)(d)
+            assert tostring(out).decode() == "<o>t<!--c--><?pi data?></o>"
+            out.close()
