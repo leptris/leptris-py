@@ -555,3 +555,30 @@ class TestXsConstructors:
         root = fromstring("<r/>")
         assert root.xpath("xs:string(42)") == "42"
         assert root.xpath("string(xs:anyURI('a b'))") == "a b"
+
+
+class TestXPathCastFamily:
+    # libleptris 1.9.50 (lane 06): instance of / castable as /
+    # cast as / treat as. Numeric cast targets and element() items
+    # are broken — leptris/leptris#744.
+
+    def test_castable(self):
+        root = fromstring("<r/>")
+        assert root.xpath("'12' castable as xs:integer") is True
+        assert root.xpath("'x' castable as xs:integer") is False
+
+    def test_instance_of(self):
+        root = fromstring("<r><i/></r>")
+        assert root.xpath("//i instance of node()") is True
+        assert root.xpath("42 instance of xs:integer") is True
+
+    def test_instance_of_element_broken(self):
+        # leptris/leptris#744: element() does not match elements —
+        # pinned until fixed (node() does match).
+        root = fromstring("<r><i/></r>")
+        assert root.xpath("//i instance of element()") is False
+
+    def test_cast_string_and_treat(self):
+        root = fromstring("<r><i/></r>")
+        assert root.xpath("42 cast as xs:string") == "42"
+        assert [e.tag for e in root.xpath("//i treat as element()")] == ["i"]
