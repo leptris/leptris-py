@@ -429,13 +429,15 @@ class TestXPath20Composition:
         root = fromstring(self.SRC)
         assert root.xpath("count(1 to 10)") == 10.0
 
-    def test_try_catch_expression_currently_empty(self):
-        # leptris/leptris#692: brace syntax now fails LOUDLY in XSLT
-        # expression attributes (1.9.34), but the plain XPath path
-        # still compiles try/catch to the empty sequence. Pinned
-        # until the plain path rejects it too.
+    def test_try_catch_expression_rejected(self):
+        # leptris/leptris#692: brace syntax is XQuery-only — the
+        # plain XPath path now rejects it at compile time (1.9.41,
+        # Saxon-parity XPST0003), matching the XSLT attribute path.
+        from leptris.error import XPathError
+
         root = fromstring("<r/>")
-        assert root.xpath("try { 'plain' } catch * { 'caught' }") == []
+        with pytest.raises(XPathError):
+            root.xpath("try { 'plain' } catch * { 'caught' }")
 
 
 class TestXPath20Functions:
@@ -482,11 +484,10 @@ class TestXPath20Functions:
             "string-join(tokenize('a,b,c', ','), '|')"
         ) == "a|b|c"
 
-    def test_regex_trio_node_args_not_atomized(self):
-        # leptris/leptris#691 comment: the regex trio treats a node
-        # first-argument as the empty string instead of atomizing to
-        # its string value. Pinned until fixed. (MSVC: no regex
-        # engine at all — raises loudly there instead.)
+    def test_regex_trio_node_args(self):
+        # leptris/leptris#691 comment fixed in 1.9.38: node
+        # first-arguments atomize to the string value. (MSVC: no
+        # regex engine at all — raises loudly there instead.)
         import sys
 
         root = fromstring(self.SRC)
@@ -496,8 +497,8 @@ class TestXPath20Functions:
             with pytest.raises(XPathError):
                 root.xpath("matches(//item[1], 'a')")
             return
-        assert root.xpath("matches(//item[1], '^al.*a$')") is False
-        assert root.xpath("replace(//item[1], 'al', 'AL')") == ""
+        assert root.xpath("matches(//item[1], '^al.*a$')") is True
+        assert root.xpath("replace(//item[1], 'al', 'AL')") == "ALpha"
 
     def test_math_namespace(self):
         root = fromstring(self.SRC)
@@ -515,3 +516,18 @@ class TestXPath20Functions:
         assert root.xpath("escape-html-uri('<a>')") == "&lt;a&gt;"
         assert root.xpath("encode-for-uri('a b')") == "a%20b"
         assert root.xpath("string(node-name(//item[1]))") == "item"
+
+
+class TestXPathDateSlice:
+    # libleptris 1.9.40 (#691-E): xs:date/dateTime constructors and
+    # the component accessors.
+
+    def test_xs_date_constructor(self):
+        root = fromstring("<r/>")
+        assert root.xpath("string(xs:date('2020-03-01'))") == "2020-03-01"
+
+    def test_date_component_accessors(self):
+        root = fromstring("<r/>")
+        assert root.xpath(
+            "year-from-dateTime(xs:dateTime('2020-03-01T10:30:00'))"
+        ) == 2020.0
