@@ -706,3 +706,115 @@ class TestXSLTVersionCoverage:
             out = XSLT(style)(d)
             assert tostring(out).decode() == "<o>t<!--c--><?pi data?></o>"
             out.close()
+
+    def test_copy_select(self):
+        # 1.9.44 (#690): xsl:copy with @select copies the selected
+        # content under a copy of the context node.
+        style = """<xsl:stylesheet version="3.0"
+          xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template match="/r"><o>
+            <xsl:copy select="//item[1]/node()"><c/></xsl:copy>
+          </o></xsl:template>
+        </xsl:stylesheet>"""
+        with Document.parse(self.SRC) as d:
+            out = XSLT(style)(d)
+            assert tostring(out).decode() == "<o>alpha</o>"
+            out.close()
+
+    def test_xsl_namespace(self):
+        # 1.9.44 (#690): namespace nodes land on the enclosing
+        # element.
+        assert self._run(
+            "<xsl:namespace name='n'>urn:x</xsl:namespace>t"
+        ) == '<o xmlns:n="urn:x">t</o>'
+
+    def test_xsl_document(self):
+        # 1.9.44 (#690): document-node construction flattens to its
+        # children in element content.
+        assert self._run(
+            "<xsl:document><d/></xsl:document>"
+        ) == "<o><d/></o>"
+
+    def test_on_completion(self):
+        # 1.9.44 (#690): iterate completion content now runs.
+        assert self._run(
+            "<xsl:iterate select='1 to 3'>"
+            "<xsl:on-completion>done</xsl:on-completion><i/>"
+            "</xsl:iterate>"
+        ) == "<o><i/><i/><i/>done</o>"
+
+    def test_param_default_attribute(self):
+        # 1.9.44 (#690): @default supplies the value when no
+        # with-param arrives (XPath-string form).
+        style = """<xsl:stylesheet version="3.0"
+          xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template match="/"><o>
+            <xsl:call-template name="n"/>
+          </o></xsl:template>
+          <xsl:template name="n">
+            <xsl:param name="y" default="'dy'"/>
+            <xsl:value-of select="$y"/>
+          </xsl:template>
+        </xsl:stylesheet>"""
+        with Document.parse("<r/>") as d:
+            out = XSLT(style)(d)
+            assert tostring(out).decode() == "<o>dy</o>"
+            out.close()
+
+    def test_merge_current_key_empty(self):
+        # 1.9.45 (#690): the merge action fires once per group, but
+        # current-merge-key() evaluates to the empty string (noted
+        # upstream). Pinned as current behavior.
+        assert self._run(
+            """<xsl:merge>
+              <xsl:merge-source select="//item" sort-key="v">
+                <xsl:merge-key select="@v"/>
+              </xsl:merge-source>
+              <xsl:merge-action><m><xsl:value-of select="current-merge-key"/></m></xsl:merge-action>
+            </xsl:merge>"""
+        ) == "<o><m/><m/><m/></o>"
+
+    def test_result_document_writes_file(self):
+        # 1.9.46 (#685): the secondary tree materializes at the
+        # href (resolved against the cwd).
+        import tempfile, os
+
+        style = """<xsl:stylesheet version="3.0"
+          xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template match="/"><o>
+            <xsl:text>main</xsl:text>
+            <xsl:result-document href="out.xml"><r2/></xsl:result-document>
+          </o></xsl:template>
+        </xsl:stylesheet>"""
+        with tempfile.TemporaryDirectory() as tmp:
+            prev = os.getcwd()
+            try:
+                os.chdir(tmp)
+                with Document.parse(self.SRC) as d:
+                    out = XSLT(style)(d)
+                    assert tostring(out).decode() == "<o>main</o>"
+                    out.close()
+                with open(os.path.join(tmp, "out.xml")) as f:
+                    assert "<r2/>" in f.read()
+            finally:
+                os.chdir(prev)
+
+    def test_tunnel_param_apply_templates(self):
+        # Tunnel via apply-templates fixed after 1.9.37 (worked via
+        # call-template only; verified 1.9.46).
+        style = """<xsl:stylesheet version="3.0"
+          xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template match="/"><o>
+            <xsl:apply-templates select="//item[1]">
+              <xsl:with-param name="t" tunnel="yes" select="'tv'"/>
+            </xsl:apply-templates>
+          </o></xsl:template>
+          <xsl:template match="item">
+            <xsl:param name="t" tunnel="yes"/>
+            <xsl:value-of select="$t"/>
+          </xsl:template>
+        </xsl:stylesheet>"""
+        with Document.parse(self.SRC) as d:
+            out = XSLT(style)(d)
+            assert tostring(out).decode() == "<o>tv</o>"
+            out.close()

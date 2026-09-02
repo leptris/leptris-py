@@ -81,7 +81,7 @@ engine — the matrix below is **measured against libleptris 1.9.32**
 |---|---|---|
 | XSLT 1.0 | **full** | libxslt conformance suite 205/205 upstream; EXSLT math/set/str/date included |
 | XSLT 2.0 | partial | ✓ `for-each-group`, `analyze-string` + `regex-group()`, `xsl:number` formats, `xsl:assert`, `xsl:sequence` (multi-item), `xsl:perform-sort` · ✗ `xsl:function`, tunnel parameters, shadow attributes, `xsl:result-document`, `@separator` |
-| XSLT 3.0 | increments | ✓ `try`/`catch` (with `$err:description`), `accumulator` (gated by `xsl:mode use-accumulators`), `iterate` + `break`, `on-empty`, `evaluate`, grouping, modes, `where-populated`, `on-non-empty`, `next-match`, `fork`, `@start-at`, composite keys, tunnel params (`call-template`) · ✗ `merge`, `result-document`, `package`, `on-completion`, `xsl:map` |
+| XSLT 3.0 | increments | ✓ `try`/`catch` (with `$err:description`), `accumulator` (gated by `xsl:mode use-accumulators`), `iterate` + `break` + `on-completion`, `on-empty`, `evaluate`, grouping, modes, `where-populated`, `on-non-empty`, `next-match`, `fork`, `@start-at`, composite keys, tunnel params, `copy/@select`, `xsl:namespace`, `xsl:document`, `@default`, `merge`, `result-document` (writes the href target), character maps · ✗ `package`, `xsl:map`, `xsl:evaluate` with-params, `next-iteration` chaining |
 | XPath 1.0 | **full** | complete core function library |
 | XPath 2.0 | partial | ✓ composition grammar: `for`, `if/then/else`, `to` ranges · ✓ function slices 1.9.35+: date constructors/accessors (`xs:date`, `year-from-dateTime`), sequences (`exists`/`empty`/`avg`/`min`/`max`/`distinct-values`/`head`/`remove`/…), regex trio (`matches`/`replace`/`tokenize` — string args; node args pending), `math:*`, `abs`, `format-integer`, codepoints, URI escapes, `node-name` · ✗ quantified (`some`/`every`), `except`/`intersect`, `instance of`, `cast`/`castable`, value comparisons (`eq`…), node order (`is`, `<<`); dates/times, JSON, `map:`/`array:`, higher-order functions |
 | XPath 3.1 | lane 0 | ✓ `let`, simple map `!`, arrow `=>`, string concat `\|\|` — through both `XPath()` and XSLT · ✗ function items, inline functions, maps, arrays, string constructors |
@@ -115,11 +115,10 @@ with Document.parse("<r><item v='1'>alpha</item><item v='5'>beta</item></r>") as
 ```
 
 Unsupported constructs fail at `XSLT()` compile time or at evaluation
-with `LeptrisError` — except a known family of instructions that
-still produce empty output instead of an error (`merge`,
-`result-document`, `on-completion`, `xsl:map`, `xsl:namespace`,
-`xsl:document`, `xsl:copy/@select`, `@separator`/`@default`
-attributes); tracked in the #685/#690 ledgers above.
+with `LeptrisError` — except two instructions that still produce
+empty output instead of an error (`xsl:map`/`xsl:map-entry`, and
+`xsl:value-of/@separator` is ignored); tracked in the
+#685/#690 ledgers above.
 
 ## Migrating from lxml
 
