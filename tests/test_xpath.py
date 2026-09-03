@@ -804,3 +804,17 @@ class TestXPathTypedContract:
 
         with pytest.raises(TypeError):
             XPath("count(//item)")("not a document or element")
+
+
+class TestXPathFunctionItemBoundary:
+    # leptris/leptris#71 (rebased): a bare function-item result
+    # raises an explicit XPathError — before the rtype-4 guard, the
+    # accelerator surfaced this as SystemError (NULL without
+    # exception).
+
+    def test_bare_function_reference_raises(self):
+        from leptris.error import XPathError
+
+        root = fromstring("<r/>")
+        with pytest.raises(XPathError):
+            root.xpath("upper-case#1")
