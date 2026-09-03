@@ -572,13 +572,23 @@ class TestXPathCastFamily:
         assert root.xpath("//i instance of node()") is True
         assert root.xpath("42 instance of xs:integer") is True
 
-    def test_instance_of_element_broken(self):
-        # leptris/leptris#744: element() does not match elements —
-        # pinned until fixed (node() does match).
+    def test_instance_of_element(self):
+        # leptris/leptris#744 fixed in libleptris v1.9.61: element()
+        # matches elements (per-member kind checks).
         root = fromstring("<r><i/></r>")
-        assert root.xpath("//i instance of element()") is False
+        assert root.xpath("//i instance of element()") is True
 
     def test_cast_string_and_treat(self):
         root = fromstring("<r><i/></r>")
         assert root.xpath("42 cast as xs:string") == "42"
         assert [e.tag for e in root.xpath("//i treat as element()")] == ["i"]
+
+    def test_function_item_result_type(self):
+        # libleptris TODO 07: function items report a distinct public
+        # result type; they cannot cross the FFI boundary yet.
+        from leptris import _ffi
+
+        assert _ffi.XPATH_FUNCTION == 4
+        root = fromstring("<r><i/></r>")
+        with pytest.raises(XPathError, match="cannot cross the FFI boundary"):
+            root.xpath("concat#2")

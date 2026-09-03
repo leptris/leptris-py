@@ -1064,6 +1064,13 @@ finish_result(void *result, PyObject *document)
     int rtype = Fns.xpath_result_type(result);
     if (rtype != 0) {
         PyObject *scalar = NULL;
+        if (rtype == 4) {
+            /* XPath function item: not representable here — hand
+             * back to the engine path, which raises the explicit
+             * XPathError (libleptris TODO 07 lane). */
+            Fns.xpath_result_free(result);
+            Py_RETURN_NONE;
+        }
         if (rtype == 2)
             scalar = PyFloat_FromDouble(Fns.xpath_result_number(result));
         else if (rtype == 1)

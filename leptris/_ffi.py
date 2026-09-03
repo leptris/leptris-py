@@ -240,6 +240,10 @@ XPATH_NODESET = 0
 XPATH_BOOLEAN = 1
 XPATH_NUMBER = 2
 XPATH_STRING = 3
+# XPath 3.0 function item (libleptris TODO 07 lane): a closure or
+# named function reference. Not callable across the FFI boundary
+# yet — _convert raises explicitly.
+XPATH_FUNCTION = 4
 
 XPATH_NODE_ELEMENT = 0
 XPATH_NODE_ATTRIBUTE = 1
