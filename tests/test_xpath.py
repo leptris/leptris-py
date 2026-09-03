@@ -429,15 +429,14 @@ class TestXPath20Composition:
         root = fromstring(self.SRC)
         assert root.xpath("count(1 to 10)") == 10.0
 
-    def test_try_catch_expression_rejected(self):
-        # leptris/leptris#692: brace syntax is XQuery-only — the
-        # plain XPath path now rejects it at compile time (1.9.41,
-        # Saxon-parity XPST0003), matching the XSLT attribute path.
-        from leptris.error import XPathError
-
+    def test_try_catch_expression(self):
+        # leptris/leptris#692: real try/catch expressions landed in
+        # libleptris 1.9.66 (after a 1.9.41 loud-rejection interim).
         root = fromstring("<r/>")
-        with pytest.raises(XPathError):
-            root.xpath("try { 'plain' } catch * { 'caught' }")
+        assert root.xpath("try { 'plain' } catch * { 'caught' }") == "plain"
+        assert root.xpath(
+            "try { error('boom') } catch * { 'caught' }"
+        ) == "caught"
 
 
 class TestXPath20Functions:
@@ -546,10 +545,23 @@ class TestXsConstructors:
         assert root.xpath("xs:decimal('1.25') + 1") == 2.25
 
     def test_boolean_constructors(self):
+        # leptris/leptris#739 fixed in 1.9.61: string arguments
+        # follow the XSD lexical mapping.
         root = fromstring("<r/>")
         assert root.xpath("xs:boolean(' true ')") is True
+        assert root.xpath("xs:boolean('0')") is False
+        assert root.xpath("xs:boolean('false')") is False
         assert root.xpath("xs:boolean(1)") is True
         assert root.xpath("xs:boolean(xs:double('NaN'))") is False
+
+    def test_integer_lexical_errors(self):
+        # leptris/leptris#739: an invalid lexical form raises instead
+        # of producing NaN.
+        from leptris.error import XPathError
+
+        root = fromstring("<r/>")
+        with pytest.raises(XPathError):
+            root.xpath("xs:integer(' -3.9 ')")
 
     def test_string_constructors(self):
         root = fromstring("<r/>")
@@ -572,13 +584,49 @@ class TestXPathCastFamily:
         assert root.xpath("//i instance of node()") is True
         assert root.xpath("42 instance of xs:integer") is True
 
-    def test_instance_of_element_broken(self):
-        # leptris/leptris#744: element() does not match elements —
-        # pinned until fixed (node() does match).
-        root = fromstring("<r><i/></r>")
-        assert root.xpath("//i instance of element()") is False
+    def test_instance_of_node_kinds_and_cardinality(self):
+        # leptris/leptris#744 fixed in 1.9.61: node kinds and
+        # occurrence indicators match.
+        root = fromstring("<r><i/>t</r>")
+        assert root.xpath("//i instance of element()") is True
+        assert root.xpath("('a', 'b') instance of xs:string+") is True
 
     def test_cast_string_and_treat(self):
         root = fromstring("<r><i/></r>")
         assert root.xpath("42 cast as xs:string") == "42"
         assert [e.tag for e in root.xpath("//i treat as element()")] == ["i"]
+
+
+class TestXPathFunctionItems:
+    # libleptris 1.9.60/1.9.63 (lane 07): function items, partial
+    # application, inline functions, dynamic calls, HOFs.
+
+    def test_named_function_reference(self):
+        root = fromstring("<r/>")
+        assert root.xpath(
+            "let $f := upper-case#1 return $f('abc')"
+        ) == "ABC"
+
+    def test_inline_function(self):
+        root = fromstring("<r/>")
+        assert root.xpath(
+            "let $f := function($x) { $x + 1 } return $f(41)"
+        ) == 42.0
+
+    def test_dynamic_call(self):
+        root = fromstring("<r/>")
+        assert root.xpath(
+            "let $f := concat#2 return $f('a', 'b')"
+        ) == "ab"
+
+    def test_fold_left(self):
+        root = fromstring("<r/>")
+        assert root.xpath(
+            "fold-left(1 to 3, 0, function($a, $b) { $a + $b })"
+        ) == "6"
+
+    def test_for_each(self):
+        root = fromstring("<r/>")
+        assert root.xpath(
+            "string-join(for-each(1 to 3, function($x) { $x * 2 }), ',')"
+        ) == "2,4,6"
