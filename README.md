@@ -83,9 +83,9 @@ engine — the matrix below is **measured against libleptris 1.9.32**
 | XSLT 2.0 | partial | ✓ `for-each-group`, `analyze-string` + `regex-group()`, `xsl:number` formats, `xsl:assert`, `xsl:sequence` (multi-item), `xsl:perform-sort` · ✗ `xsl:function`, tunnel parameters, shadow attributes, `xsl:result-document`, `@separator` |
 | XSLT 3.0 | increments | ✓ `try`/`catch` (with `$err:description`), `accumulator` (gated by `xsl:mode use-accumulators`), `iterate` + `break` + `on-completion`, `on-empty`, `evaluate`, grouping, modes, `where-populated`, `on-non-empty`, `next-match`, `fork`, `@start-at`, composite keys, tunnel params, `copy/@select`, `xsl:namespace`, `xsl:document`, `@default`, `merge`, `result-document` (writes the href target), character maps · ✗ `package`, `xsl:map`, `xsl:evaluate` with-params, `next-iteration` chaining |
 | XPath 1.0 | **full** | complete core function library |
-| XPath 2.0 | partial | ✓ composition grammar: `for`, `if/then/else`, `to` ranges · ✓ function slices 1.9.35+: date constructors/accessors (`xs:date`, `year-from-dateTime`), sequences (`exists`/`empty`/`avg`/`min`/`max`/`distinct-values`/`head`/`remove`/…), regex trio (`matches`/`replace`/`tokenize` — string args; node args pending), `math:*`, `abs`, `format-integer`, codepoints, URI escapes, `node-name` · ✓ the full cast family (`instance of` with node kinds + cardinality, `castable as`, `cast as` incl. arithmetic, `treat as`), `xs:` atomic constructors with XSD lexical rules, function items + inline functions + partial application + HOFs (`fold-left`, `for-each`), try/catch expressions · ✗ quantified (`some`/`every`), `except`/`intersect`, value comparisons (`eq`…), node order (`is`, `<<`); `format-date`, duration arithmetic, JSON, `map:`/`array:`, higher-order functions |
+| XPath 2.0 | **grammar complete** | ✓ quantified (`some`/`every`), set algebra (`union`/`intersect`/`except`), node comparisons (`is`, `<<`, `>>`), `()`, `ends-with`, `deep-equal`, value comparisons, `cast`/`castable`/`treat`/`instance of`, function items + HOFs (1.9.73+) · function slices by group (sequences, regex, `math:`, strings/QNames/URIs, dates, `xs:` constructors); remaining: `format-date`, duration arithmetic, JSON, `map:`/`array:` |
 | XPath 3.1 | lane 0 | ✓ `let`, simple map `!`, arrow `=>`, string concat `\|\|` — through both `XPath()` and XSLT · ✗ function items, inline functions, maps, arrays, string constructors |
-| XQuery | **1.0 core** | `leptris.XQuery(query)` — FLWOR (`for`/`let`/`where`/`order by`/`return`/`group by`, positional `at`), prolog (`declare variable`/`namespace`, `declare function local:*`), direct constructors, `doc()`, try/catch — libleptris 1.9.64+; 3.0/3.1 tracked in [#684](https://github.com/leptris/leptris/issues/684) |
+| XQuery | **1.0 core + 3.x increments** | `leptris.XQuery(query)` — FLWOR (`for`/`let`/`where`/`order by`/`return`/`group by`, positional `at`, tumbling/sliding windows), prolog (`declare variable`/`namespace`/`function local:*`), constructors, `doc()`/`collection()`, try/catch, typeswitch — libleptris 1.9.68+; 3.1 remainder (maps/arrays, modules) tracked in [#684](https://github.com/leptris/leptris/issues/684) |
 
 XQuery 1.0 core is a first-class API since libleptris 1.9.64:
 
@@ -130,6 +130,26 @@ with `LeptrisError` — except two instructions that still produce
 empty output instead of an error (`xsl:map`/`xsl:map-entry`, and
 `xsl:value-of/@separator` is ignored); tracked in the
 #685/#690 ledgers above.
+
+## HTML parsing
+
+`leptris.html` (libleptris 1.9.75+) — tolerant HTML in the shape of
+lxml's `etree.HTMLParser`: implied end tags, void elements,
+case-insensitive names, unquoted attributes, the named-entity
+table, and a synthesized `<html>/<head>/<body>` wrapper:
+
+```python
+from leptris import html
+
+r = html.fromstring("<p>hello <b>world")   # <html><head/><body><p>hello <b>world</b></p></body></html>
+with html.document("<td>c") as doc:
+    doc.xpath("count(//td)")               # 1.0
+```
+
+Known divergences from libxml2 (tracked in
+[leptris/leptris#813](https://github.com/leptris/leptris/issues/813)):
+minimized attributes take their own name as value (`<div a>` →
+`a="a"`), and an empty `<head/>` is emitted.
 
 ## Migrating from lxml
 
