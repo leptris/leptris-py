@@ -28,6 +28,14 @@ def convert(document, result):
             return value
         if result_type == _ffi.XPATH_BOOLEAN:
             return bool(_ffi.lib.leptris_xpath_result_boolean(result))
+        if result_type == _ffi.XPATH_FUNCTION:
+            from .error import XPathError
+
+            raise XPathError(
+                "XPath function items cannot cross the FFI boundary yet "
+                "(call them inside the expression, e.g. "
+                "for-each((1,2), function($n){$n+1}))"
+            )
         return None
     finally:
         _ffi.lib.leptris_xpath_result_free(result)
