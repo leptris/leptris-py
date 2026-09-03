@@ -78,3 +78,36 @@ class TestXQuery:
             assert query(d1) == 2.0
         with Document.parse("<r><item/><item/><item/></r>") as d2:
             assert query(d2) == 3.0
+
+
+class TestXQueryGroupBy:
+    # libleptris 1.9.67 (lane 12): XQuery group by — the range
+    # variable rebinds to the group inside the return clause (the
+    # XQuery 3.x form; current-group() is XSLT-only).
+
+    GROUP = (
+        "<r><item cat='a' v='1'>x</item>"
+        "<item cat='b' v='2'>y</item><item cat='a' v='3'>z</item></r>"
+    )
+
+    def test_group_counts(self):
+        with Document.parse(self.GROUP) as d:
+            assert XQuery(
+                "for $i in //item group by $c := $i/@cat "
+                "return concat($c, ':', count($i))"
+            )(d) == ["a:2", "b:1"]
+
+    def test_group_sum_with_order(self):
+        with Document.parse(self.GROUP) as d:
+            assert XQuery(
+                "for $i in //item group by $c := $i/@cat "
+                "order by $c return concat($c, '=', sum($i/@v))"
+            )(d) == ["a=4", "b=2"]
+
+    def test_group_members(self):
+        with Document.parse(self.GROUP) as d:
+            assert XQuery(
+                "for $i in //item group by $c := $i/@cat "
+                "return concat($c, '->', "
+                "string-join(for $x in $i return string($x/@v), '+'))"
+            )(d) == ["a->1+3", "b->2"]
