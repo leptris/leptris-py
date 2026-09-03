@@ -28,6 +28,10 @@ import sys
 from pathlib import Path
 
 REQUIRED_CORE = [
+    # xquery core (libleptris 1.9.64+)
+    "leptris_xquery_parse",
+    "leptris_xquery_eval",
+    "leptris_xquery_free",
     # document lifecycle + parse
     "leptris_parse_string",
     "leptris_parse_file",

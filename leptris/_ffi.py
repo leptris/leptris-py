@@ -60,6 +60,10 @@ ffi.cdef(
     char* leptris_xslt_apply_string(LeptrisXslt xslt, LeptrisDocument doc);
     void leptris_xslt_free(LeptrisXslt xslt);
     int leptris_exslt_enable(LeptrisDocument doc);
+    typedef struct LeptrisXQueryInternal* LeptrisXQuery;
+    LeptrisXQuery leptris_xquery_parse(const char* query, size_t len);
+    LeptrisXPathResult leptris_xquery_eval(LeptrisXQuery query, LeptrisDocument doc, LeptrisElement context_node);
+    void leptris_xquery_free(LeptrisXQuery query);
     LeptrisDocument leptris_parse_file(const char* filepath, int* status);
     void           leptris_document_free(LeptrisDocument doc);
     LeptrisElement  leptris_document_root(LeptrisDocument doc);
