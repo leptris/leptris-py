@@ -111,3 +111,45 @@ class TestXQueryGroupBy:
                 "return concat($c, '->', "
                 "string-join(for $x in $i return string($x/@v), '+'))"
             )(d) == ["a->1+3", "b->2"]
+
+
+class TestXQuery3x:
+    # libleptris 1.9.68-1.9.70: #790 fixes, windows, typeswitch.
+
+    def test_constructor_as_return(self):
+        with Document.parse(SRC) as d:
+            assert XQuery(
+                "for $i in //item return <e v='{$i/@v}'/>"
+            )(d) == ['<e v="1"/>', '<e v="5"/>']
+
+    def test_cast_error_caught(self):
+        with Document.parse(SRC) as d:
+            assert XQuery(
+                "try { 'x' cast as xs:integer } catch * { 'caught' }"
+            )(d) == "caught"
+
+    def test_where_in_fnarg_flwnor_empty_strings(self):
+        # leptris/leptris#814: filtered items contribute empty
+        # strings instead of dropping. Pinned until fixed.
+        with Document.parse(SRC) as d:
+            assert XQuery(
+                "concat(for $i in //item where $i/@v = 2 "
+                "return string($i), '!')"
+            )(d) == "!"
+
+    def test_tumbling_window(self):
+        GROUP = (
+            "<r><i v='1'/><i v='2'/><i v='3'/></r>"
+        )
+        with Document.parse(GROUP) as d:
+            assert XQuery(
+                "for tumbling window $w in //i start $s when true() "
+                "end when true() return concat($s/@v, ':', count($w))"
+            )(d) == ["1:2", "3:1"]
+
+    def test_typeswitch(self):
+        with Document.parse(SRC) as d:
+            assert XQuery(
+                "typeswitch (//item[1]) case element() return 'elem' "
+                "default return 'other'"
+            )(d) == "elem"

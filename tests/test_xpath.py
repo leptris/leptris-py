@@ -630,3 +630,34 @@ class TestXPathFunctionItems:
         assert root.xpath(
             "string-join(for-each(1 to 3, function($x) { $x * 2 }), ',')"
         ) == "2,4,6"
+
+
+class TestXPath20Grammar:
+    # libleptris 1.9.73 (the XPath 2.0 ledger): quantified
+    # expressions, set algebra, node comparisons, ends-with,
+    # deep-equal, and the empty sequence.
+
+    SRC = "<r><item cat='a' v='1'>x</item><item cat='b' v='2'>y</item><item cat='a' v='3'>z</item></r>"
+
+    def test_quantified(self):
+        root = fromstring(self.SRC)
+        assert root.xpath("some $i in //item satisfies $i/@v > 2") is True
+        assert root.xpath("every $i in //item satisfies $i/@v > 0") is True
+        assert root.xpath("every $i in //item satisfies $i/@v > 2") is False
+
+    def test_set_algebra(self):
+        root = fromstring(self.SRC)
+        assert root.xpath("count(//item intersect //item[@cat='a'])") == 2.0
+        assert root.xpath("count(//item except //item[1])") == 2.0
+
+    def test_node_comparisons(self):
+        root = fromstring(self.SRC)
+        assert root.xpath("//item[1] is //item[1]") is True
+        assert root.xpath("boolean(//item[1] << //item[2])") is True
+        assert root.xpath("boolean(//item[2] << //item[1])") is False
+
+    def test_2_0_function_twins(self):
+        root = fromstring(self.SRC)
+        assert root.xpath("ends-with(//item[3], 'z')") is True
+        assert root.xpath("deep-equal(//item[1], //item[1])") is True
+        assert root.xpath("count(())") == 0.0
