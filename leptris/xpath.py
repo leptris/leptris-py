@@ -89,6 +89,12 @@ class _XPathEngine:
                 return value
             if result_type == _ffi.XPATH_BOOLEAN:
                 return bool(_ffi.lib.leptris_xpath_result_boolean(result))
+            if result_type == _ffi.XPATH_FUNCTION:
+                raise XPathError(
+                    "XPath function items cannot cross the FFI boundary yet "
+                    "(libleptris TODO 07; call them inside the expression, "
+                    "e.g. for-each((1,2), function($n){$n+1}))"
+                )
             return None
         finally:
             _ffi.lib.leptris_xpath_result_free(result)
