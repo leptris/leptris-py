@@ -85,3 +85,22 @@ class TestHtmlParsing:
         assert tostring(r, encoding="unicode") == (
             "<html><body><?php echo 1 ??><p>x</p></body></html>"
         )
+
+    def test_head_content_lift(self):
+        # libleptris 1.9.84 (#659): leading title/meta/link/base
+        # lift into a synthesized head — byte-exact lxml shape, and
+        # a LATE title does not lift.
+        assert tostring(
+            html.fromstring("<title>T</title><p>x"), encoding="unicode"
+        ) == "<html><head><title>T</title></head><body><p>x</p></body></html>"
+        assert tostring(
+            html.fromstring("<meta charset='utf-8'><p>x"),
+            encoding="unicode",
+        ) == (
+            '<html><head><meta charset="utf-8"/></head>'
+            "<body><p>x</p></body></html>"
+        )
+        assert tostring(
+            html.fromstring("<p>a</p><title>late</title>"),
+            encoding="unicode",
+        ) == "<html><body><p>a</p><title>late</title></body></html>"
