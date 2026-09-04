@@ -146,10 +146,9 @@ with html.document("<td>c") as doc:
     doc.xpath("count(//td)")               # 1.0
 ```
 
-Known divergences from libxml2 (tracked in
-[leptris/leptris#813](https://github.com/leptris/leptris/issues/813)):
-minimized attributes take their own name as value (`<div a>` →
-`a="a"`), and an empty `<head/>` is emitted.
+Since libleptris 1.9.76 the output is byte-exact with lxml's
+`etree.HTMLParser` (minimized attributes are empty strings; no
+empty `<head/>` is emitted) — leptris/leptris#813.
 
 ## Migrating from lxml
 
