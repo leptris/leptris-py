@@ -727,3 +727,32 @@ class TestXPathFormatNumber:
         ) == "1,234.50"
         assert root.xpath("format-number(0.42, '0%')") == "42%"
         assert root.xpath("format-number(-5, '#;(#)')") == "(5)"
+
+
+class TestXPathSnapshotAndAnalyze:
+    # libleptris 1.9.81-1.9.82 (#691): fn:snapshot (detached deep
+    # copies) and fn:analyze-string.
+
+    def test_snapshot_is_detached_copy(self):
+        root = fromstring("<r><p>ab12cd</p></r>")
+        assert root.xpath("count(snapshot(//p))") == 1.0
+        assert root.xpath("string(snapshot(//p)[1])") == "ab12cd"
+        assert root.xpath("snapshot(//p)[1] is //p[1]") is False
+
+    def test_analyze_string_content_via_local_name(self):
+        # leptris/leptris#846: the match/non-match children are
+        # correct in name and value, but carry NO namespace, so the
+        # spec's /fn:match path cannot select them. Pinned via the
+        # local-name workaround until the namespace lands.
+        root = fromstring("<r/>")
+        assert root.xpath(
+            "string-join(analyze-string('ab12cd', '[0-9]+')"
+            "/node() ! local-name(), ',')"
+        ) == "non-match,match,non-match"
+        assert root.xpath(
+            "string-join(analyze-string('ab12cd', '[0-9]+')"
+            "/node() ! string(.), ',')"
+        ) == "ab,12,cd"
+        assert root.xpath(
+            "count(analyze-string('ab12cd', '[0-9]+')/fn:match)"
+        ) == 0.0
