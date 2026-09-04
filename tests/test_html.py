@@ -75,3 +75,13 @@ class TestHtmlParsing:
             root = d.getroot()
         with pytest.raises(Exception):
             root.tag
+
+    def test_pi_construct_data_includes_trailing_qmark(self):
+        # leptris/leptris#846/#659: <?target data?> parses as a PI
+        # but the trailing ? leaks into the data (serializes as
+        # ??>). iter() is elements-only here, so pin via
+        # serialization. Pinned until fixed.
+        r = html.fromstring("<?php echo 1 ?><p>x</p>")
+        assert tostring(r, encoding="unicode") == (
+            "<html><body><?php echo 1 ??><p>x</p></body></html>"
+        )
