@@ -12,7 +12,7 @@ Requires libleptris on the library search path (or LEPTRIS_LIB_PATH).
 
 from __future__ import annotations
 
-__version__ = "1.9.79.0"
+__version__ = "1.9.80.0"
 
 from . import sax
 from .api import XML, c14n, fromstring, iterparse, libleptris_version, parse, tostring

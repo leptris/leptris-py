@@ -714,3 +714,16 @@ class TestXPathFunctionTail:
         assert root.xpath(
             "string-join(//item ! string(@v) => concat('-'), '')"
         ) == "1-"
+
+
+class TestXPathFormatNumber:
+    # libleptris 1.9.80 (#691): format-number as a plain XPath
+    # function (previously XSLT-context only).
+
+    def test_pictures(self):
+        root = fromstring("<r/>")
+        assert root.xpath(
+            "format-number(1234.5, '#,###.00')"
+        ) == "1,234.50"
+        assert root.xpath("format-number(0.42, '0%')") == "42%"
+        assert root.xpath("format-number(-5, '#;(#)')") == "(5)"
