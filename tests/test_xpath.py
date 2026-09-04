@@ -661,3 +661,56 @@ class TestXPath20Grammar:
         assert root.xpath("ends-with(//item[3], 'z')") is True
         assert root.xpath("deep-equal(//item[1], //item[1])") is True
         assert root.xpath("count(())") == 0.0
+
+
+class TestXPathFunctionTail:
+    # libleptris 1.9.77-1.9.79 (#691 tail + #692): date/duration
+    # accessors, the scalar tail, environment functions, seeded RNG,
+    # and function calls as path steps.
+
+    def test_date_accessors(self):
+        root = fromstring("<r/>")
+        assert root.xpath(
+            "month-from-date(xs:date('2020-03-01'))"
+        ) == 3.0
+        assert root.xpath(
+            "hours-from-dateTime(xs:dateTime('2020-03-01T10:30:00'))"
+        ) == 10.0
+
+    def test_duration_constructors(self):
+        root = fromstring("<r/>")
+        assert root.xpath(
+            "string(xs:dayTimeDuration('PT3H30M'))"
+        ) == "PT3H30M"
+        assert root.xpath(
+            "string(xs:yearMonthDuration('P1Y2M'))"
+        ) == "P1Y2M"
+
+    def test_scalar_tail(self):
+        root = fromstring("<r/>")
+        assert root.xpath("compare('a', 'b')") == -1.0
+        assert root.xpath("codepoint-equal('a', 'a')") is True
+        assert root.xpath("round(2.5678, 2)") == 2.57
+
+    def test_environment_functions(self):
+        root = fromstring("<r/>")
+        assert root.xpath(
+            "boolean(environment-variable('PATH') != '')"
+        ) is True
+        assert root.xpath("unparsed-text-available('nope.txt')") is False
+
+    def test_seeded_random_number_generator(self):
+        root = fromstring("<r/>")
+        assert root.xpath(
+            "random-number-generator(1)?number >= 0"
+        ) is True
+        assert root.xpath(
+            "let $a := random-number-generator(42)?number return "
+            "$a = random-number-generator(42)?number"
+        ) is True
+
+    def test_function_as_path_step(self):
+        root = fromstring("<r><item v='1'>alpha</item></r>")
+        assert root.xpath(
+            "string-join(//item ! string(@v) => concat('-'), '')"
+        ) == "1-"
