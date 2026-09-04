@@ -128,14 +128,18 @@ class TestXQuery3x:
                 "try { 'x' cast as xs:integer } catch * { 'caught' }"
             )(d) == "caught"
 
-    def test_where_in_fnarg_flwnor_empty_strings(self):
-        # leptris/leptris#814: filtered items contribute empty
-        # strings instead of dropping. Pinned until fixed.
+    def test_where_in_fnarg_flwnor(self):
+        # leptris/leptris#814 fixed in 1.9.76: filtered items drop
+        # (previously they contributed empty strings).
         with Document.parse(SRC) as d:
             assert XQuery(
-                "concat(for $i in //item where $i/@v = 2 "
+                "concat(for $i in //item where $i/@v = 5 "
                 "return string($i), '!')"
-            )(d) == "!"
+            )(d) == "beta!"
+            assert XQuery(
+                "string-join(for $i in //item where $i/@v > 1 "
+                "return string($i/@v), ',')"
+            )(d) == "5"
 
     def test_tumbling_window(self):
         GROUP = (
@@ -153,3 +157,16 @@ class TestXQuery3x:
                 "typeswitch (//item[1]) case element() return 'elem' "
                 "default return 'other'"
             )(d) == "elem"
+
+
+class TestXQueryConformanceTail:
+    # libleptris 1.9.76 (#684 tail): version declaration and
+    # top-level empty constructors.
+
+    def test_version_declaration(self):
+        with Document.parse(SRC) as d:
+            assert XQuery("xquery version '1.0'; <a/>")(d) == "<a/>"
+
+    def test_top_level_empty_constructor(self):
+        with Document.parse(SRC) as d:
+            assert XQuery("<e/>")(d) == "<e/>"

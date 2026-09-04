@@ -9,11 +9,11 @@ from leptris.error import ParseError
 
 class TestHtmlParsing:
     def test_implied_end_tags_and_body(self):
-        # Structure matches lxml's etree.HTMLParser: the wrapper is
-        # synthesized, open tags closed.
+        # Byte-exact lxml HTMLParser parity since 1.9.76 (#813):
+        # synthesized wrapper, open tags closed, no empty <head/>.
         r = html.fromstring("<p>hello <b>world")
         assert tostring(r, encoding="unicode") == (
-            "<html><head/><body><p>hello <b>world</b></p></body></html>"
+            "<html><body><p>hello <b>world</b></p></body></html>"
         )
 
     def test_case_folding_and_unquoted_attrs(self):
@@ -23,16 +23,15 @@ class TestHtmlParsing:
         assert div.get("class") == "x"
 
     def test_minimized_attribute_value(self):
-        # leptris/leptris#813: a minimized attribute takes its own
-        # name as the value (libxml2 gives the empty string).
-        # Pinned until fixed.
+        # leptris/leptris#813 fixed in 1.9.76: minimized attributes
+        # take the empty string (libxml2/Nokogiri parity).
         r = html.fromstring("<DIV CLASS=x a>text</DIV>")
-        assert r.find(".//div").get("a") == "a"
+        assert r.find(".//div").get("a") == ""
 
     def test_void_elements_and_li(self):
         r = html.fromstring("<ul><li>a<li>b</ul><img src=x>")
         assert [e.tag for e in r.iter()] == [
-            "html", "head", "body", "ul", "li", "li", "img",
+            "html", "body", "ul", "li", "li", "img",
         ]
 
     def test_table_no_implied_tbody(self):
