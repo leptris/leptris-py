@@ -211,11 +211,13 @@ document is closed raises `LeptrisError`.
 ## Versioning
 
 `libleptris-version.txt` pins the library release the binding is
-built and tested against. From 1.3.0 the package follows its own
-semver: 1.2.0 shipped an interim bespoke API to no adopters, and
-1.3.0 replaces it with the lxml-shaped API (breaking, but
-pre-adoption). `pyproject.toml` and `leptris/__init__.py` must agree
-at release time.
+built and tested against. Since 1.9.76.0 the package version is
+**`{c-full-semver}.{patch}`** — the pinned libleptris version plus
+a binding-local patch counter: lib 1.9.76 → `1.9.76.0`, then
+`1.9.76.1` for binding-only fixes against the same pin, resetting
+the patch whenever the pin moves. (1.2.0–1.27.1 were the interim
+own-semver line.) `pyproject.toml` and `leptris/__init__.py` must
+agree at release time.
 
 ## Publishing
 

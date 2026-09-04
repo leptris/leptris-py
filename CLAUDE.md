@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `leptris` — the Python binding for `libleptris` (C library: XML 1.0 parsing, XPath 1.0), built on `cffi` in **ABI mode**. The API mirrors **lxml** (the way the Ruby binding mirrors Nokogiri): read-path lxml code ports with an import change; mutation/creation/iterparse are not exposed (libleptris has partial mutation upstream — node content setters, `set_root`, `remove_children` — not surfaced here; see README) "Migrating from lxml" table. Sibling repos: `leptris/leptris` (the C library) and `leptris-ruby`.
 
-**Versioning:** `libleptris-version.txt` pins the libleptris release CI builds and tests against. From 1.3.0 the package follows its own semver (1.2.0 was the interim API, replaced pre-adoption by the lxml API). At release time `pyproject.toml` and `leptris/__init__.py` (`__version__`) must agree; bump `libleptris-version.txt` only when the binding targets a new library release.
+**Versioning:** `libleptris-version.txt` pins the libleptris release CI builds and tests against. Since 1.9.76.0 the package version is `{c-full-semver}.{patch}` — the pinned libleptris version plus a binding-local patch counter (lib 1.9.76 → 1.9.76.0, binding-only fix → 1.9.76.1), resetting the patch whenever the pin moves; 1.2.0–1.27.1 were the interim own-semver line. At release time `pyproject.toml` and `leptris/__init__.py` (`__version__`) must agree; bump `libleptris-version.txt` only when the binding targets a new library release.
 
 ## Prerequisite: the shared library
 
