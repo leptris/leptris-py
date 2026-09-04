@@ -743,7 +743,17 @@ class TestXPathSnapshotAndAnalyze:
         # leptris/leptris#846: the match/non-match children are
         # correct in name and value, but carry NO namespace, so the
         # spec's /fn:match path cannot select them. Pinned via the
-        # local-name workaround until the namespace lands.
+        # local-name workaround until the namespace lands. (MSVC:
+        # no regex engine — analyze-string is unregistered there.)
+        import sys
+
+        if sys.platform == "win32":
+            from leptris.error import XPathError
+
+            root = fromstring("<r/>")
+            with pytest.raises(XPathError):
+                root.xpath("analyze-string('a', 'a')")
+            return
         root = fromstring("<r/>")
         assert root.xpath(
             "string-join(analyze-string('ab12cd', '[0-9]+')"
