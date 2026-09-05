@@ -739,12 +739,10 @@ class TestXPathSnapshotAndAnalyze:
         assert root.xpath("string(snapshot(//p)[1])") == "ab12cd"
         assert root.xpath("snapshot(//p)[1] is //p[1]") is False
 
-    def test_analyze_string_content_via_local_name(self):
-        # leptris/leptris#846: the match/non-match children are
-        # correct in name and value, but carry NO namespace, so the
-        # spec's /fn:match path cannot select them. Pinned via the
-        # local-name workaround until the namespace lands. (MSVC:
-        # no regex engine — analyze-string is unregistered there.)
+    def test_analyze_string_spec_paths(self):
+        # leptris/leptris#846 fixed in 1.9.87: the F+O namespace
+        # lands on the synthesized children — /fn:match selects.
+        # (MSVC: no regex engine — analyze-string unregistered.)
         import sys
 
         if sys.platform == "win32":
@@ -756,13 +754,37 @@ class TestXPathSnapshotAndAnalyze:
             return
         root = fromstring("<r/>")
         assert root.xpath(
-            "string-join(analyze-string('ab12cd', '[0-9]+')"
-            "/node() ! local-name(), ',')"
-        ) == "non-match,match,non-match"
-        assert root.xpath(
-            "string-join(analyze-string('ab12cd', '[0-9]+')"
-            "/node() ! string(.), ',')"
-        ) == "ab,12,cd"
-        assert root.xpath(
             "count(analyze-string('ab12cd', '[0-9]+')/fn:match)"
-        ) == 0.0
+        ) == 1.0
+        assert root.xpath(
+            "string(analyze-string('ab12cd', '[0-9]+')"
+            "/fn:non-match[1])"
+        ) == "ab"
+        assert root.xpath(
+            "namespace-uri(analyze-string('ab12cd', '[0-9]+')"
+            "/fn:match[1])"
+        ) == "http://www.w3.org/2005/xpath-functions"
+        # NOTE (#857): match/group STRING VALUES are call-order-
+        # contaminated engine-side — only the order-stable facts
+        # are pinned here; the contaminated sequence is pinned in
+        # the next test.
+
+    def test_analyze_string_group_values_order_dependent(self):
+        # leptris/leptris#857: match/group string values depend on
+        # CALL ORDER (cross-call state contamination) and the first
+        # call's regex is wrong regardless: the match extent runs
+        # into the following non-match. Pinned as current behavior
+        # in the documented order (3-group first).
+        import sys
+
+        if sys.platform == "win32":
+            return
+        root = fromstring("<r/>")
+        assert root.xpath(
+            "string(analyze-string('ab12cd', '([a-z]+)([0-9]+)"
+            "([a-z]+)')/fn:match[1])"
+        ) == "ab12cd"
+        assert root.xpath(
+            "string(analyze-string('ab12cd', '([0-9]+)')"
+            "/fn:match[1])"
+        ) == "12cd"
