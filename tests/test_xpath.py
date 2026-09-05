@@ -769,22 +769,30 @@ class TestXPathSnapshotAndAnalyze:
         # are pinned here; the contaminated sequence is pinned in
         # the next test.
 
-    def test_analyze_string_group_values_order_dependent(self):
-        # leptris/leptris#857: match/group string values depend on
-        # CALL ORDER (cross-call state contamination) and the first
-        # call's regex is wrong regardless: the match extent runs
-        # into the following non-match. Pinned as current behavior
-        # in the documented order (3-group first).
+    def test_analyze_string_group_values(self):
+        # leptris/leptris#857 fixed in 1.9.89: group spans are
+        # subject-relative — single-group matches no longer leak
+        # the following non-match, and values are stable across
+        # call orders. The full-string regex match is 'ab12cd'
+        # (its three groups are ab/12/cd).
         import sys
 
         if sys.platform == "win32":
             return
         root = fromstring("<r/>")
         assert root.xpath(
+            "string(analyze-string('ab12cd', '([0-9]+)')"
+            "/fn:match[1])"
+        ) == "12"
+        assert root.xpath(
+            "string(analyze-string('ab12cd', '([0-9]+)')"
+            "/fn:match[1]/fn:group)"
+        ) == "12"
+        assert root.xpath(
             "string(analyze-string('ab12cd', '([a-z]+)([0-9]+)"
             "([a-z]+)')/fn:match[1])"
         ) == "ab12cd"
         assert root.xpath(
-            "string(analyze-string('ab12cd', '([0-9]+)')"
-            "/fn:match[1])"
-        ) == "12cd"
+            "string-join(analyze-string('ab12cd', '([a-z]+)"
+            "([0-9]+)([a-z]+)')/fn:match[1]/fn:group, ',')"
+        ) == "ab,12,cd"

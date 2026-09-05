@@ -66,9 +66,14 @@ class TestHtmlParsing:
         assert r.tag == "html"
         assert r.find("body").text == "just text"
 
-    def test_empty_raises(self):
-        with pytest.raises(ParseError):
-            html.fromstring("")
+    def test_empty_input_is_document(self):
+        # libleptris 1.9.90 (#659): empty-shape inputs parse to
+        # the wrapper document instead of raising (whitespace-only
+        # keeps its text).
+        assert tostring(html.fromstring(""), encoding="unicode") == "<html><body/></html>"
+        assert tostring(html.fromstring("  "), encoding="unicode") == (
+            "<html><body>  </body></html>"
+        )
 
     def test_document_context_manager_closes(self):
         with html.document("<p>x") as d:
