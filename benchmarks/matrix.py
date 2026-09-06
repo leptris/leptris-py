@@ -88,6 +88,9 @@ def _make_benchmarks():
     # leptris ---------------------------------------------------------
     try:
         from leptris import Document, tostring
+        from leptris import html as _leptris_html
+
+        html_document = _leptris_html.document
 
         def parse_small():
             with Document.parse(SMALL):
@@ -97,12 +100,17 @@ def _make_benchmarks():
             with Document.parse(MEDIUM):
                 pass
 
+        def parse_html():
+            with html_document(HTML_DOC):
+                pass
+
         doc = Document.parse(MEDIUM)
         root = doc.getroot()
 
         benchmarks["leptris"] = {
             "parse small": parse_small,
             "parse medium": parse_medium,
+            "parse html": parse_html,
             "xpath count(//book)": lambda: doc.xpath("count(//book)"),
             "xpath //book": lambda: doc.xpath("//book"),
             "xpath //book[@id='50']": lambda: doc.xpath("//book[@id='50']"),
@@ -126,6 +134,9 @@ def _make_benchmarks():
         benchmarks["lxml"] = {
             "parse small": lambda: etree.fromstring(SMALL.encode()),
             "parse medium": lambda: etree.fromstring(MEDIUM.encode()),
+            "parse html": lambda: etree.fromstring(
+                HTML_DOC.encode(), etree.HTMLParser()
+            ),
             "xpath count(//book)": lambda: lroot.xpath("count(//book)"),
             "xpath //book": lambda: lroot.xpath("//book"),
             "xpath //book[@id='50']": lambda: lroot.xpath("//book[@id='50']"),
@@ -204,6 +215,15 @@ def _time_op(fn, iterations):
     return elapsed / iterations * 1_000_000
 
 
+HTML_DOC = (
+    "<html><head><title>Bench</title></head><body>"
+    + "".join(
+        f"<div id='d{i}' class='c{i % 7}'>cell {i} &amp; text</div>"
+        for i in range(200)
+    )
+    + "</body></html>"
+)
+
 OPERATIONS = [
     ("parse small", N_PARSE_SMALL),
     ("parse medium", N_PARSE_MEDIUM),
@@ -213,6 +233,7 @@ OPERATIONS = [
     ("xpath //book[price > 50]", N_QUERY),
     ("xpath //author | //title", N_QUERY),
     ("xpath //book[@id=$id]", N_QUERY),
+    ("parse html", N_QUERY),
     ("traversal", N_TRAVERSE),
     ("serialize", N_SERIALIZE),
 ]

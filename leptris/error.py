@@ -17,6 +17,15 @@ class XPathError(LeptrisError):
     """XPath evaluation failed."""
 
 
+class XSLTError(LeptrisError):
+    """XSLT compilation or transformation failed
+    (lxml's etree.XSLTError equivalent)."""
+
+
+class XQueryError(LeptrisError):
+    """XQuery compilation or evaluation failed."""
+
+
 def status_message(status: int) -> str:
     """Human-readable text for a LeptrisStatus code, plus the
     thread-local last error when one is recorded."""

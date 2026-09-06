@@ -50,6 +50,29 @@ python scripts/check_ffi_mirrors.py /path/to/libleptris
 
 Cross-module imports are local inside functions where needed to avoid cycles (document → element, api → document).
 
+### Internal protocol (package-private seams)
+
+Modules inside `leptris` cooperate through a small set of underscore
+seams — the package's own contract, not public API (the Python
+analogue of the no-require_relative/encapsulation rules: no path
+tricks, no duck-typed probing for types):
+
+- `Document._raw_addr` / `Document._cd()` — raw handle for FFI/accel
+  entry points; `_cd()` materializes the cffi handle lazily.
+- `Document._from_parts(address, registry[, buffer])` — constructs a
+  Document from an engine-produced tree (XSLT results, HTML parse).
+- `Element._raw` / `Element._cd()` / `Element._document` — the C-side
+  node handle and owning document for wrappers.
+- `_accel.new_registry()` — per-document element registry for engine
+  result trees.
+- `_engine.CompiledSource` — the compile-once lifecycle base for
+  FFI-compiled language objects (XSLT, XQuery, future RelaxNG):
+  encoding, parse-or-raise with the thread-local diagnostic, the
+  closed-document guard, and GC free live only there.
+
+New modules use these seams (and the local-import convention for
+cross-module references) instead of re-implementing or probing.
+
 ### Key semantic decisions (lxml parity)
 
 - `text`/`tail` are **computed from node-level text+CDATA runs** (first-run text, runs merge) — NOT the C `leptris_element_text`, which concatenates all descendant text (Nokogiri semantics).

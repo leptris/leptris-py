@@ -18,7 +18,7 @@ def libleptris_version() -> str:
     return _ffi.ffi.string(value).decode("utf-8")
 
 
-def fromstring(xml) -> Element:
+def fromstring(xml: "str | bytes") -> Element:
     """Parse XML from a str or bytes; returns the root Element."""
     return Document.parse(xml).getroot()
 
@@ -78,10 +78,9 @@ def tostring(
     if elem is not None:
         from .element import _accel
 
-        raw = getattr(elem, "_raw", None)
+        raw = elem._raw
         if (
             _accel is not None
-            and raw is not None
             and c_encoding is None
             and xml_declaration in (None, False)
         ):

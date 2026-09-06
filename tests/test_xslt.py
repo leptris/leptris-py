@@ -854,3 +854,37 @@ class TestXSLTVersionCoverage:
             out = XSLT(style)(d)
             assert tostring(out).decode() == "<o>6</o>"
             out.close()
+
+
+class TestXSLTErrorTaxonomy:
+    def test_compile_failure_raises_xslt_error(self):
+        from leptris.error import LeptrisError, XSLTError
+
+        with pytest.raises(XSLTError) as info:
+            XSLT("<xsl:stylesheet")
+        # backward compatible: domain errors subclass LeptrisError
+        assert isinstance(info.value, LeptrisError)
+
+    def test_apply_failure_raises_xslt_error(self):
+        from leptris.error import XSLTError
+
+        style = XSLT(
+            '<xsl:stylesheet version="1.0"'
+            ' xmlns:xsl="http://www.w3.org/1999/XSL/Transform">'
+            "<xsl:template match='/'><xsl:value-of select='definitely-not-a-fn(1)'/>"
+            "</xsl:template></xsl:stylesheet>"
+        )
+        with pytest.raises(XSLTError):
+            with Document.parse("<r/>") as d:
+                style(d)
+
+    def test_bytes_stylesheet_accepted(self):
+        out = XSLT(
+            b'<xsl:stylesheet version="1.0"'
+            b' xmlns:xsl="http://www.w3.org/1999/XSL/Transform">'
+            b"<xsl:template match='/'><o/></xsl:template></xsl:stylesheet>"
+        )
+        with Document.parse("<r/>") as d:
+            result = out(d)
+            assert tostring(result, encoding="unicode") == "<o/>"
+            result.close()
