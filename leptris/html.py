@@ -15,7 +15,7 @@ from .element import _accel
 from .error import ParseError
 
 
-def document(html) -> Document:
+def document(html: "str | bytes") -> Document:
     """Parse HTML into a Document (use as a context manager)."""
     if isinstance(html, str):
         html = html.encode("utf-8")
@@ -29,6 +29,6 @@ def document(html) -> Document:
     )
 
 
-def fromstring(html):
+def fromstring(html: "str | bytes"):
     """Parse HTML; returns the first element of the fragment."""
     return document(html).getroot()

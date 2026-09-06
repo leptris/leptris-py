@@ -139,8 +139,8 @@ class _ElementMethods:
 
     def find(self, path: str, namespaces=None) -> Optional["Element"]:
         if namespaces is None and "{" not in path:
-            raw = getattr(self, "_raw", None)
-            if _accel is not None and raw is not None:
+            raw = self._raw
+            if _accel is not None:
                 if "/" in path:
                     # plain multi-step path: first-match walk, no list
                     steps = path.split("/")

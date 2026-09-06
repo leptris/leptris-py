@@ -175,7 +175,7 @@ empty `<head/>` is emitted) — leptris/leptris#813.
 | `elem.find/findall/findtext` | same | accepts full XPath 1.0 — a superset of ElementPath — including `{uri}local` names |
 | `elem.xpath(expr, namespaces=…)` | same | plus `variables={…}` (leptris extension) |
 | `etree.c14n` / `etree.XInclude` | `c14n(…)` / `doc.process_xinclude()` | |
-| `etree.XMLSyntaxError` | `ParseError` | XPath failures raise `XPathError`; both subclass `LeptrisError` |
+| `etree.XMLSyntaxError` | `ParseError` | XPath failures raise `XPathError`; XSLT raises `XSLTError`, XQuery `XQueryError` — all subclass `LeptrisError` |
 | `etree.Element`, `SubElement`, `append`, `set`, `remove` | **not exposed** | libleptris has partial mutation upstream (node content setters, `set_root`, `remove_children`) — not surfaced here; build trees elsewhere |
 | document-level comments / PIs | `doc.toplevel_comments()` / `doc.toplevel_pis()` | prolog then epilog; requires libleptris 1.9.3+ |
 | `etree.iterparse` | `leptris.iterparse(source, full_document=False)` | bounded by the largest subtree; yields `("end", element)`; elements borrowed until the next yield; tags resolve namespaces (Clark notation, libleptris 1.9.4+). **Truncated or malformed input raises ParseError** (both modes, libleptris 1.9.15+). `full_document=True` yields every element in completion order |

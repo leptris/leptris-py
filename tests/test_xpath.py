@@ -796,3 +796,11 @@ class TestXPathSnapshotAndAnalyze:
             "string-join(analyze-string('ab12cd', '([a-z]+)"
             "([0-9]+)([a-z]+)')/fn:match[1]/fn:group, ',')"
         ) == "ab,12,cd"
+
+
+class TestXPathTypedContract:
+    def test_wrong_argument_type_raises_type_error(self):
+        from leptris import XPath
+
+        with pytest.raises(TypeError):
+            XPath("count(//item)")("not a document or element")

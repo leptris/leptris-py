@@ -1,10 +1,10 @@
 """XQuery 1.0 core: compile once, evaluate many (libleptris 1.9.64+)."""
 
-from . import _ffi
-from .error import LeptrisError
+from . import _engine, _ffi
+from .error import XQueryError
 
 
-class XQuery:
+class XQuery(_engine.CompiledSource):
     """Precompiled XQuery query.
 
     Supports the XQuery 1.0 core shipped by libleptris: FLWOR
@@ -17,36 +17,25 @@ class XQuery:
     values come back as plain str/float/bool.
     """
 
-    __slots__ = ("_query",)
+    _parse = _ffi.lib.leptris_xquery_parse
+    _free = _ffi.lib.leptris_xquery_free
+    _label = "XQuery query"
+    _error = XQueryError
 
-    def __init__(self, query: str):
-        if isinstance(query, bytes):
-            query = query.decode("utf-8")
-        qb = query.encode("utf-8")
-        self._query = _ffi.lib.leptris_xquery_parse(qb, len(qb))
-        if self._query == _ffi.ffi.NULL:
-            message = _ffi.lib.leptris_last_error()
-            detail = (
-                _ffi.ffi.string(message).decode("utf-8", "replace")
-                if message != _ffi.ffi.NULL
-                else "query compilation failed"
-            )
-            raise LeptrisError(detail)
-
-    def __call__(self, document_or_element):
-        from .document import Document
+    def __call__(self, document_or_element: "Document | Element"):
+        from .element import Element
         from .xpath import _XPathEngine
 
-        if isinstance(document_or_element, Document):
-            document = document_or_element
-            context = _ffi.ffi.NULL
-        else:
-            element = document_or_element
-            document = element._document
-            context = element._cd()
+        element = (
+            document_or_element
+            if isinstance(document_or_element, Element)
+            else None
+        )
+        document = self._document(document_or_element)
+        context = element._cd() if element is not None else _ffi.ffi.NULL
 
         result = _ffi.lib.leptris_xquery_eval(
-            self._query, document._cd(), context
+            self._handle, document._cd(), context
         )
         if result == _ffi.ffi.NULL:
             message = _ffi.lib.leptris_document_last_error(document._cd())
@@ -55,10 +44,5 @@ class XQuery:
                 if message != _ffi.ffi.NULL
                 else "query evaluation failed"
             )
-            raise LeptrisError(f"XQuery evaluation failed: {detail}")
+            raise XQueryError(f"XQuery evaluation failed: {detail}")
         return _XPathEngine._convert(document, result)
-
-    def __del__(self):
-        if getattr(self, "_query", None) is not None and self._query != _ffi.ffi.NULL:
-            _ffi.lib.leptris_xquery_free(self._query)
-            self._query = _ffi.ffi.NULL

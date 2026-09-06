@@ -170,3 +170,33 @@ class TestXQueryConformanceTail:
     def test_top_level_empty_constructor(self):
         with Document.parse(SRC) as d:
             assert XQuery("<e/>")(d) == "<e/>"
+
+
+class TestXQueryErrorTaxonomy:
+    def test_compile_failure_raises_xquery_error(self):
+        from leptris.error import LeptrisError, XQueryError
+
+        with pytest.raises(XQueryError) as info:
+            XQuery("for $x in ")
+        assert isinstance(info.value, LeptrisError)
+
+    def test_eval_on_closed_document_raises(self):
+        # Caught a use-after-free red-first: XQuery.__call__ used to
+        # dereference the closed document's handle (crash) before
+        # the CompiledSource closed-guard landed.
+        from leptris.error import XQueryError
+
+        query = XQuery("count(//item)")
+        with Document.parse(SRC) as d:
+            pass
+        with pytest.raises(XQueryError):
+            query(d)
+
+    def test_wrong_argument_type_raises_type_error(self):
+        query = XQuery("count(//item)")
+        with pytest.raises(TypeError):
+            query("not a document or element")
+
+    def test_bytes_query_accepted(self):
+        with Document.parse(SRC) as d:
+            assert XQuery(b"count(//item)")(d) == 2.0

@@ -250,9 +250,9 @@ class XPath:
         # falls back to the engine path below (mixed nodeset, eval
         # failure, ns+vars combined, or a borrowed document without
         # a raw address).
-        doc_addr = getattr(document, "_raw_addr", None)
+        doc_addr = document._raw_addr
         if doc_addr is not None:
-            context_addr = getattr(element, "_raw", None) or 0
+            context_addr = element._raw if element is not None else 0
             flat = (
                 [v for pair in namespaces.items() for v in pair]
                 if namespaces
