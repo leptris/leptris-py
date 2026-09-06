@@ -131,6 +131,15 @@ empty output instead of an error (`xsl:map`/`xsl:map-entry`, and
 `xsl:value-of/@separator` is ignored); tracked in the
 #685/#690 ledgers above.
 
+### Advisory: libleptris 1.9.93 dispatch-index regression (leptris/leptris#875)
+
+Stylesheets with more than ~48 distinct literal template names can
+silently drop output from the overflow templates under
+`leptris 1.9.93.0` (a fixed-capacity table in the 1.9.93 predicate
+index; verified binding-side — 48 of 120 fire). If you transform
+large stylesheets, pin `leptris==1.9.90.0` until the fix ships;
+this advisory is removed with the fix release.
+
 ## HTML parsing
 
 `leptris.html` (libleptris 1.9.75+) — tolerant HTML in the shape of
