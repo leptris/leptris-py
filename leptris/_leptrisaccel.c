@@ -126,6 +126,10 @@ static PyObject *LeptrisErrorType = NULL;
 
 /* -1 with LeptrisError set when the document was closed and this
  * element poisoned by invalidate(). ~5ns: one pointer compare. */
+/* Invariant: every entry that touches self->raw must guard with
+ * check_poisoned (directly, or by being reachable only from a
+ * guarded entry — attr_walk's case). Audited 2026-09-07; the one
+ * historical gap was elem_get_method (fixed). */
 static int
 check_poisoned(AccelElement *self)
 {
