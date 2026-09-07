@@ -67,4 +67,4 @@ jobs:
           # to be exercised.
           python setup.py build_ext --inplace
           echo "using lib at: $LEPTRIS_LIB_PATH"
-          python -m pytest tests/ -q
+          python -m pytest tests/ -q -x --tb=short -rf
