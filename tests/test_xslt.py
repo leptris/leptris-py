@@ -888,3 +888,27 @@ class TestXSLTErrorTaxonomy:
             result = out(d)
             assert tostring(result, encoding="unicode") == "<o/>"
             result.close()
+
+
+class TestDispatchIndexCapacity:
+    # leptris/leptris#875 (fixed in libleptris 1.9.97): templates
+    # past the dispatch index capacity silently never fired. Red
+    # against 1.9.93/1.9.94 (48 of 120 fired); green since 1.9.97.
+    def test_120_distinct_literal_templates_all_fire(self):
+        n = 120
+        templates = "".join(
+            f"<xsl:template match='t{i}'><v>{i}</v></xsl:template>"
+            for i in range(n)
+        )
+        style = (
+            '<xsl:stylesheet version="1.0"'
+            ' xmlns:xsl="http://www.w3.org/1999/XSL/Transform">'
+            "<xsl:template match='/'><out>"
+            "<xsl:apply-templates select=\"//*[starts-with(name(), 't')]\"/>"
+            f"</out></xsl:template>{templates}</xsl:stylesheet>"
+        )
+        xml = "<r>" + "".join(f"<t{i}/>" for i in range(n)) + "</r>"
+        with Document.parse(xml) as d:
+            out = XSLT(style)(d)
+            assert tostring(out, encoding="unicode").count("<v>") == n
+            out.close()

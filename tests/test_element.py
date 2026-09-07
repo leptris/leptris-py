@@ -341,3 +341,57 @@ class TestFindNamespaceSemantics:
         assert root.find("book/q") is None   # book is namespaced: no match
         found = root.find("plain/q")         # both un-namespaced: match
         assert found is not None and found.tag == "q"
+
+
+class TestSubtreeDigest:
+    # libleptris 1.9.99 (leptris/leptris#869): on-demand Merkle
+    # content digest — the binding-side sign-off pinned.
+
+    def test_content_defined(self):
+        a = fromstring("<r><a x='1'>t</a><b/></r>")
+        assert a.digest() == fromstring(
+            "<r><a x='1'>t</a><b/></r>"
+        ).digest()
+        assert a.digest() != fromstring(
+            "<r><a x='2'>t</a><b/></r>"
+        ).digest()
+
+    def test_drop_whitespace_flag(self):
+        compact = fromstring("<r><a>t</a></r>")
+        pretty = fromstring("<r>\n  <a>t</a>\n</r>")
+        assert compact.digest() != pretty.digest()
+        assert compact.digest(True) == pretty.digest(True)
+
+    def test_closed_document_raises(self):
+        from leptris import Document
+        from leptris.error import LeptrisError
+
+        with Document.parse("<r/>") as d:
+            root = d.getroot()
+        with pytest.raises(LeptrisError):
+            root.digest()
+
+
+class TestClosedDocumentContract:
+    # The closed-contract sweep (TODO.restructure/10): every public
+    # entry point RAISES on a closed document. find/get used to
+    # SEGFAULT (use-after-free through the fast paths) — fixed with
+    # the poison guard / _check_alive respectively.
+
+    def test_accessors_raise_not_crash(self):
+        from leptris import Document, tostring, c14n
+        from leptris.error import LeptrisError
+
+        with Document.parse("<r><a x='1'>t</a></r>") as d:
+            root, child = d.getroot(), d.getroot()[0]
+        for op in (
+            lambda: tostring(child),
+            lambda: c14n(child),
+            lambda: root.find("a"),
+            lambda: child.get("x"),
+            lambda: child.text,
+            lambda: list(root.iter()),
+            lambda: root.xpath("count(//a)"),
+        ):
+            with pytest.raises(LeptrisError):
+                op()

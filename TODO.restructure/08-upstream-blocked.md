@@ -1,4 +1,4 @@
-**STATUS: OPEN (blocked upstream by definition) — triggers and automation listed above; watcher armed for #875.**
+**STATUS UPDATE 2026-09-07: #875 FIXED (1.9.97, adopted, golden shipped, advisory removed); #869 digest SHIPPED (1.9.99) AND BOUND (`Element.digest`, REQUIRED_CORE, goldens). Remaining open upstream: #878 RelaxNG, #682, #659. Originally OPEN (blocked upstream by definition) — triggers and automation listed above; watcher armed for #875.**
 
 # 08 — Blocked upstream: fix adoptions and new-engine bindings (P3)
 

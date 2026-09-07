@@ -38,6 +38,8 @@ python scripts/check_ffi_mirrors.py /path/to/libleptris
 
 ## Architecture
 
+- `leptris/_engine.py` — compile-once lifecycle base for FFI-compiled language objects (XSLT, XQuery, future RelaxNG).
+- `leptris/_results.py` — the shared result model (engine results -> Python values).
 - `leptris/_leptrisaccel.c` — optional C accelerator (abi3): allocates Element instances in C; the whole API surface stays in Python, attached onto the C heap type in `element.py` (single-mode: the accelerator is required; `_ElementMethods` is the Python method host attached onto the C type).
 - `leptris/_ffi.py` — the ONLY place the libleptris FFI surface is declared. The `cdef` mirrors libleptris's public headers (`src/include/leptris/` + the `leptris.h` umbrella in the C repo). Node-type / XPath-result / C14N constants live here.
 - `leptris/document.py` — `Document` (the ElementTree analogue): owns the tree + pool; `parse`, `parse_file`, `getroot`/`root`, `xpath`, `write`, `process_xinclude`, `close`/context manager. Also `serialize_options()` (shared by `api.tostring` and `write`).

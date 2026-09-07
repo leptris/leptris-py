@@ -138,6 +138,7 @@ class _ElementMethods:
         )
 
     def find(self, path: str, namespaces=None) -> Optional["Element"]:
+        self._check_alive()
         if namespaces is None and "{" not in path:
             raw = self._raw
             if _accel is not None:
@@ -150,6 +151,24 @@ class _ElementMethods:
                     return _accel.find_first(raw, path, self._document)
         results = self.findall(path, namespaces)
         return results[0] if results else None
+
+    def digest(self, drop_whitespace: bool = False) -> int:
+        """On-demand content digest of this subtree (Merkle hash).
+
+        Stable across processes: element name/prefix/namespace,
+        attributes sorted by (namespace, local), children
+        recursively in document order; text/CDATA/comment/PI hash
+        their content. Equality implies subtree equivalence under
+        the flag; inequality implies nothing — descend and decide.
+        With drop_whitespace=True, whitespace-only text nodes are
+        skipped (logically-equivalent pretty-printed trees hash
+        equal). Zero cost when never called.
+        """
+        self._check_alive()
+        return _ffi.lib.leptris_node_digest(
+            _ffi.ffi.cast("LeptrisNodeRef", self._cd()),
+            1 if drop_whitespace else 0,
+        )
 
     def findtext(self, path: str, default=None, namespaces=None) -> Optional[str]:
         found = self.find(path, namespaces)

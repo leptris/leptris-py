@@ -534,6 +534,8 @@ elem_get_method(AccelElement *self, PyObject *args)
     PyObject *default_value = Py_None;
     if (!PyArg_ParseTuple(args, "U|O", &name, &default_value))
         return NULL;
+    if (check_poisoned(self) < 0)
+        return NULL;
     if (!bound || self->raw == NULL)
         Py_RETURN_NONE;
     PyObject *encoded = PyUnicode_AsUTF8String(name);
