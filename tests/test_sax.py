@@ -178,3 +178,47 @@ class TestStreamingKwarg:
         with pytest.warns(DeprecationWarning):
             with sax.StreamingParser(sax.SAXHandler(), streaming=False):
                 pass
+
+
+class TestSaxProtocolContract:
+    # TODO.restructure/12: callbacks dispatch DIRECTLY — a handler
+    # missing a method raises AttributeError (raise-not-skip, the
+    # binding's documented SAX contract; lxml's target objects skip
+    # silently instead).
+
+    def test_missing_callback_raises(self):
+        import pytest
+        from leptris import sax
+
+        class Partial:
+            def start_document(self):
+                pass
+
+        with pytest.raises(AttributeError):
+            sax.parse("<r/>", Partial())
+
+    def test_full_handler_receives_events(self):
+        from leptris import sax
+
+        events = []
+
+        class Full:
+            def start_document(self):
+                events.append("start")
+
+            def start_element(self, name, attributes):
+                events.append((name, dict(attributes)))
+
+            def characters(self, text):
+                events.append(text)
+
+            def end_element(self, name):
+                events.append("/" + name)
+
+            def end_document(self):
+                events.append("end")
+
+        sax.parse("<r a='1'>t</r>", Full())
+        assert events == [
+            "start", ("r", {"a": "1"}), "t", "/r", "end",
+        ]
