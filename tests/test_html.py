@@ -140,3 +140,14 @@ class TestHtmlTwoModes:
     def test_unknown_mode_raises_value_error(self):
         with pytest.raises(ValueError):
             html.document(self.SCRIPT_DOC, mode="nope")
+
+    def test_whatwg_foster_parenting(self):
+        # libleptris 1.9.105 (#659): stray text inside a table is
+        # fostered BEFORE the table (WHATWG); html4 keeps it inside.
+        doc = "<table>text<td>x</td></table>"
+        assert tostring(
+            html.fromstring(doc, mode="whatwg"), encoding="unicode"
+        ) == "<html><body>text<table><td>x</td></table></body></html>"
+        assert tostring(
+            html.fromstring(doc), encoding="unicode"
+        ) == "<html><body><table>text<td>x</td></table></body></html>"
