@@ -60,7 +60,12 @@ class CompiledSource:
         return target
 
     def __del__(self):
-        handle = getattr(self, "_handle", None)
-        if handle is not None and handle != _ffi.ffi.NULL:
-            self._free(handle)
-            self._handle = _ffi.ffi.NULL
+        # Guarded: interpreter shutdown may tear the cffi binding
+        # down before compiled objects are collected.
+        try:
+            handle = getattr(self, "_handle", None)
+            if handle is not None and handle != _ffi.ffi.NULL:
+                self._free(handle)
+                self._handle = _ffi.ffi.NULL
+        except Exception:
+            pass
