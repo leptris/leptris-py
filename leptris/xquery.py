@@ -23,8 +23,8 @@ class XQuery(_engine.CompiledSource):
     _error = XQueryError
 
     def __call__(self, document_or_element: "Document | Element"):
+        from . import _results
         from .element import Element
-        from .xpath import _XPathEngine
 
         element = (
             document_or_element
@@ -45,4 +45,4 @@ class XQuery(_engine.CompiledSource):
                 else "query evaluation failed"
             )
             raise XQueryError(f"XQuery evaluation failed: {detail}")
-        return _XPathEngine._convert(document, result)
+        return _results.convert(document, result)

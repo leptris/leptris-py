@@ -73,6 +73,8 @@ ffi.cdef(
     int            leptris_document_save_file(LeptrisDocument doc, const char* filepath, LeptrisSerializeOptions* options);
 
     int    leptris_node_get_type(LeptrisNodeRef node);
+    typedef unsigned int LeptrisDigestFlags;
+    unsigned long long leptris_node_digest(LeptrisNodeRef node, LeptrisDigestFlags flags);
     LeptrisNodeRef leptris_node_first_child(LeptrisNodeRef node);
     LeptrisNodeRef leptris_node_next_sibling(LeptrisNodeRef node);
     LeptrisNodeRef leptris_node_previous_sibling(LeptrisNodeRef node);

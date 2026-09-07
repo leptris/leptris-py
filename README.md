@@ -131,16 +131,6 @@ empty output instead of an error (`xsl:map`/`xsl:map-entry`, and
 `xsl:value-of/@separator` is ignored); tracked in the
 #685/#690 ledgers above.
 
-### Advisory: libleptris dispatch-index regression (leptris/leptris#875)
-
-Stylesheets with more than ~48 distinct literal template names can
-silently drop output from the overflow templates under
-`leptris 1.9.93.0` **and `1.9.94.0`** (a fixed-capacity table in
-the 1.9.93 predicate index; verified binding-side — 48 of 120
-fire, still present in 1.9.94). If you transform large
-stylesheets, pin `leptris==1.9.90.0` until the fix ships; this
-advisory is removed with the fix release.
-
 ## HTML parsing
 
 `leptris.html` (libleptris 1.9.75+) — tolerant HTML in the shape of
@@ -194,6 +184,11 @@ empty `<head/>` is emitted) — leptris/leptris#813.
 
 - `leptris/_ffi.py` — cdef mirror of the public headers + loader
   (the only place libleptris is declared)
+- `leptris/_engine.py` — the compile-once lifecycle base shared by
+  the compiled language objects (`XSLT`, `XQuery`, future `RelaxNG`)
+- `leptris/_results.py` — the result model: engine results to
+  Python values (nodeset wrapping, scalar conversion), shared by
+  every evaluation surface
 - `leptris/_leptrisaccel.c` — the C accelerator (abi3): allocates
   Elements and runs the hot accessors, subtree iteration, the parse
   and serialization seams, and the per-document element registry;
