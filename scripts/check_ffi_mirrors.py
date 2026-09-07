@@ -28,8 +28,9 @@ import sys
 from pathlib import Path
 
 REQUIRED_CORE = [
-    # html parsing (libleptris 1.9.75+, issue #659)
+    # html parsing (libleptris 1.9.75+, issue #659; two-mode 1.9.104)
     "leptris_parse_html_string",
+    "leptris_parse_html4_string",
     # subtree digest (libleptris 1.9.99+, issue #869)
     "leptris_node_digest",
     # xquery core (libleptris 1.9.64+)

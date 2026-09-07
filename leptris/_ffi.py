@@ -66,6 +66,7 @@ ffi.cdef(
     void leptris_xquery_free(LeptrisXQuery query);
     LeptrisDocument leptris_parse_file(const char* filepath, int* status);
     LeptrisDocument leptris_parse_html_string(const char* html, size_t length, int* status);
+    LeptrisDocument leptris_parse_html4_string(const char* html, size_t length, int* status);
     void           leptris_document_free(LeptrisDocument doc);
     LeptrisElement  leptris_document_root(LeptrisDocument doc);
     char*          leptris_document_serialize(LeptrisDocument doc, LeptrisSerializeOptions* options);

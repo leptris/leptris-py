@@ -109,3 +109,34 @@ class TestHtmlParsing:
             html.fromstring("<p>a</p><title>late</title>"),
             encoding="unicode",
         ) == "<html><body><p>a</p><title>late</title></body></html>"
+
+
+class TestHtmlTwoModes:
+    # libleptris 1.9.104 (#659): the WHATWG engine lifted leading
+    # script/style/template runs into head; leptris_parse_html4_string
+    # keeps the Nokogiri/lxml shape. The binding's default is the
+    # byte-parity html4 entry (TODO.restructure/16).
+
+    SCRIPT_DOC = "<script>var x=1</script><p>y</p>"
+
+    def test_html4_default_keeps_script_in_body(self):
+        # Known divergence from lxml (reported on #659): lxml's
+        # libxml2 lifts a leading script run into head; the html4
+        # (Nokogiri-fragment) shape keeps it in body. Every other
+        # pinned shape remains byte-identical to lxml.
+        assert tostring(
+            html.fromstring(self.SCRIPT_DOC), encoding="unicode"
+        ) == "<html><body><script>var x=1</script><p>y</p></body></html>"
+
+    def test_whatwg_lifts_leading_script_to_head(self):
+        assert tostring(
+            html.fromstring(self.SCRIPT_DOC, mode="whatwg"),
+            encoding="unicode",
+        ) == (
+            "<html><head><script>var x=1</script></head>"
+            "<body><p>y</p></body></html>"
+        )
+
+    def test_unknown_mode_raises_value_error(self):
+        with pytest.raises(ValueError):
+            html.document(self.SCRIPT_DOC, mode="nope")
