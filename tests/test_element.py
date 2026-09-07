@@ -395,3 +395,34 @@ class TestClosedDocumentContract:
         ):
             with pytest.raises(LeptrisError):
                 op()
+
+
+class TestAttribMapMappingConformance:
+    # TODO.restructure/17: _AttribMap claims Mapping — pin the
+    # protocol conformance (collections.abc registration, derived
+    # methods, read-only contract).
+
+    def test_is_a_mapping(self):
+        from collections.abc import Mapping
+
+        e = fromstring("<e a='1' b='2'/>")
+        assert isinstance(e.attrib, Mapping)
+
+    def test_protocol_methods(self):
+        e = fromstring("<e a='1' b='2'/>")
+        m = e.attrib
+        assert len(m) == 2
+        assert set(iter(m)) == {"a", "b"}
+        assert m["a"] == "1"
+        assert sorted(m.keys()) == ["a", "b"]
+        assert sorted(m.values()) == ["1", "2"]
+        assert sorted(m.items()) == [("a", "1"), ("b", "2")]
+        assert "a" in m and "z" not in m
+        assert m.get("z") is None and m.get("z", "d") == "d"
+
+    def test_read_only(self):
+        e = fromstring("<e a='1'/>")
+        with pytest.raises(TypeError):
+            e.attrib["b"] = "2"
+        with pytest.raises(TypeError):
+            del e.attrib["a"]
