@@ -151,3 +151,20 @@ class TestHtmlTwoModes:
         assert tostring(
             html.fromstring(doc), encoding="unicode"
         ) == "<html><body><table>text<td>x</td></table></body></html>"
+
+    def test_whatwg_adoption_agency(self):
+        # libleptris 1.9.106/1.9.107 (#659): the WHATWG adoption
+        # algorithm — the formatting element re-opens for the
+        # post-close run (libxml2's html4 shape differs: bare
+        # text), and adopted clones carry their attributes.
+        assert tostring(
+            html.fromstring("<b>1<i>2</b>3</i>", mode="whatwg"),
+            encoding="unicode",
+        ) == "<html><body><b>1<i>2</i></b><i>3</i></body></html>"
+        assert tostring(
+            html.fromstring('<p a="1">x<b a="2">y</p>z</b>',
+                            mode="whatwg"),
+            encoding="unicode",
+        ) == (
+            '<html><body><p a="1">x<b a="2">y</b></p>z</body></html>'
+        )
