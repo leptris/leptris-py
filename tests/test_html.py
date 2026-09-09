@@ -168,3 +168,11 @@ class TestHtmlTwoModes:
         ) == (
             '<html><body><p a="1">x<b a="2">y</b></p>z</body></html>'
         )
+
+    def test_doctype_recorded_per_mode(self):
+        # libleptris 1.9.116 (#659): HTML records the DOCTYPE —
+        # WHATWG lowercases the name, html4 preserves it.
+        with html.document("<!DOCTYPE HTML><p>x") as d:
+            assert d.doctype == ("HTML", None, None)
+        with html.document("<!DOCTYPE HTML><p>x", mode="whatwg") as d:
+            assert d.doctype == ("html", None, None)
