@@ -64,6 +64,12 @@ ffi.cdef(
     LeptrisXQuery leptris_xquery_parse(const char* query, size_t len);
     LeptrisXPathResult leptris_xquery_eval(LeptrisXQuery query, LeptrisDocument doc, LeptrisElement context_node);
     void leptris_xquery_free(LeptrisXQuery query);
+    typedef struct LeptrisRelaxNGInternal* LeptrisRelaxNG;
+    LeptrisRelaxNG leptris_rng_parse(const char* schema, size_t len, int* status);
+    LeptrisRelaxNG leptris_rng_parse_file(const char* path, int* status);
+    void leptris_rng_free(LeptrisRelaxNG rng);
+    int leptris_rng_validate(LeptrisRelaxNG rng, LeptrisDocument doc);
+    const char* leptris_rng_error(LeptrisRelaxNG rng);
     LeptrisDocument leptris_parse_file(const char* filepath, int* status);
     LeptrisDocument leptris_parse_html_string(const char* html, size_t length, int* status);
     LeptrisDocument leptris_parse_html4_string(const char* html, size_t length, int* status);
