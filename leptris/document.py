@@ -164,6 +164,34 @@ class Document:
     def getroot(self) -> Optional["Element"]:
         return self.root
 
+    @property
+    def doctype(self):
+        """The DOCTYPE declaration as ``(name, public_id,
+        system_id)``, or None when absent.
+
+        HTML documents record the doctype since libleptris 1.9.116
+        (WHATWG mode lowercases the name; html4 preserves it).
+        """
+        if self._freed:
+            raise LeptrisError("operation on a closed document")
+        lib = _ffi.lib
+        dt = lib.leptris_document_internal_subset(self._cd())
+        if dt == _ffi.ffi.NULL:
+            return None
+
+        def _text(ptr):
+            return (
+                _ffi.ffi.string(ptr).decode("utf-8", "replace")
+                if ptr != _ffi.ffi.NULL
+                else None
+            )
+
+        return (
+            _text(lib.leptris_doctype_get_name(dt)),
+            _text(lib.leptris_doctype_get_public_id(dt)),
+            _text(lib.leptris_doctype_get_system_id(dt)),
+        )
+
     def toplevel_comments(self) -> List[str]:
         """Document-level comments outside the root (prolog then epilog).
 

@@ -70,6 +70,11 @@ ffi.cdef(
     void leptris_rng_free(LeptrisRelaxNG rng);
     int leptris_rng_validate(LeptrisRelaxNG rng, LeptrisDocument doc);
     const char* leptris_rng_error(LeptrisRelaxNG rng);
+    typedef struct LeptrisDoctypeInternal* LeptrisDoctype;
+    LeptrisDoctype leptris_document_internal_subset(LeptrisDocument doc);
+    const char* leptris_doctype_get_name(LeptrisDoctype dt);
+    const char* leptris_doctype_get_public_id(LeptrisDoctype dt);
+    const char* leptris_doctype_get_system_id(LeptrisDoctype dt);
     LeptrisDocument leptris_parse_file(const char* filepath, int* status);
     LeptrisDocument leptris_parse_html_string(const char* html, size_t length, int* status);
     LeptrisDocument leptris_parse_html4_string(const char* html, size_t length, int* status);
