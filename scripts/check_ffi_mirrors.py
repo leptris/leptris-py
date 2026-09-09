@@ -33,6 +33,10 @@ REQUIRED_CORE = [
     "leptris_parse_html4_string",
     # subtree digest (libleptris 1.9.99+, issue #869)
     "leptris_node_digest",
+    # relax ng (libleptris 1.9.115+, issue #878)
+    "leptris_rng_parse",
+    "leptris_rng_parse_file",
+    "leptris_rng_validate",
     # xquery core (libleptris 1.9.64+)
     "leptris_xquery_parse",
     "leptris_xquery_eval",

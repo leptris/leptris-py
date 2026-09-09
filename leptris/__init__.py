@@ -12,7 +12,7 @@ Requires libleptris on the library search path (or LEPTRIS_LIB_PATH).
 
 from __future__ import annotations
 
-__version__ = "1.9.109.0"
+__version__ = "1.9.115.0"
 
 from . import sax
 from .api import XML, c14n, fromstring, iterparse, libleptris_version, parse, tostring
@@ -21,6 +21,7 @@ from .element import Element
 from .error import LeptrisError, ParseError, XQueryError, XPathError, XSLTError
 from .xpath import XPath
 from . import html
+from .relaxng import RelaxNG
 from .xquery import XQuery
 from .xslt import XSLT
 from .node import Node
@@ -34,6 +35,8 @@ __all__ = [
     "XPathError",
     "XSLTError",
     "XQueryError",
+    "RelaxNGError",
+    "RelaxNG",
     "XML",
     "XPath",
     "XQuery",
