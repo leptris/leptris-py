@@ -147,7 +147,10 @@ class TestHtmlTwoModes:
         doc = "<table>text<td>x</td></table>"
         assert tostring(
             html.fromstring(doc, mode="whatwg"), encoding="unicode"
-        ) == "<html><body>text<table><td>x</td></table></body></html>"
+        ) == (
+            "<html><head/><body>text<table><td>x</td></table>"
+            "</body></html>"
+        )
         assert tostring(
             html.fromstring(doc), encoding="unicode"
         ) == "<html><body><table>text<td>x</td></table></body></html>"
@@ -160,13 +163,16 @@ class TestHtmlTwoModes:
         assert tostring(
             html.fromstring("<b>1<i>2</b>3</i>", mode="whatwg"),
             encoding="unicode",
-        ) == "<html><body><b>1<i>2</i></b><i>3</i></body></html>"
+        ) == (
+            "<html><head/><body><b>1<i>2</i></b><i>3</i></body></html>"
+        )
         assert tostring(
             html.fromstring('<p a="1">x<b a="2">y</p>z</b>',
                             mode="whatwg"),
             encoding="unicode",
         ) == (
-            '<html><body><p a="1">x<b a="2">y</b></p>z</body></html>'
+            '<html><head/><body>'
+            '<p a="1">x<b a="2">y</b></p>z</body></html>'
         )
 
     def test_doctype_recorded_per_mode(self):
@@ -176,3 +182,30 @@ class TestHtmlTwoModes:
             assert d.doctype == ("HTML", None, None)
         with html.document("<!DOCTYPE HTML><p>x", mode="whatwg") as d:
             assert d.doctype == ("html", None, None)
+
+    def test_whatwg_structural_head_and_template(self):
+        # libleptris 1.9.117/1.9.118 (#659): WHATWG always emits the
+        # structural head (empty <head/> when bare — the browser
+        # shape; html4 stays lxml-shaped), and a LEADING <template>
+        # lifts into head while an embedded one stays in place.
+        assert tostring(
+            html.fromstring("<p>y", mode="whatwg"), encoding="unicode"
+        ) == "<html><head/><body><p>y</p></body></html>"
+        assert tostring(
+            html.fromstring(
+                "<template><b>t</b></template><p>y", mode="whatwg"
+            ),
+            encoding="unicode",
+        ) == (
+            "<html><head><template><b>t</b></template></head>"
+            "<body><p>y</p></body></html>"
+        )
+        assert tostring(
+            html.fromstring(
+                "<div><template>x</template></div>", mode="whatwg"
+            ),
+            encoding="unicode",
+        ) == (
+            "<html><head/><body><div><template>x</template></div>"
+            "</body></html>"
+        )
