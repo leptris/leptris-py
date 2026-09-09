@@ -147,9 +147,11 @@ class TestHtmlTwoModes:
         doc = "<table>text<td>x</td></table>"
         assert tostring(
             html.fromstring(doc, mode="whatwg"), encoding="unicode"
+        # 1.9.120: the fostered cell synthesizes its in-table
+        # wrappers (tbody/tr) — the WHATWG-correct shape.
         ) == (
-            "<html><head/><body>text<table><td>x</td></table>"
-            "</body></html>"
+            "<html><head/><body>text<table><tbody><tr><td>x</td>"
+            "</tr></tbody></table></body></html>"
         )
         assert tostring(
             html.fromstring(doc), encoding="unicode"
@@ -208,4 +210,20 @@ class TestHtmlTwoModes:
         ) == (
             "<html><head/><body><div><template>x</template></div>"
             "</body></html>"
+        )
+
+    def test_whatwg_foreign_content(self):
+        # libleptris 1.9.119 (#659): MathML/SVG foreign content —
+        # camelCase element names preserved inside SVG/MathML
+        # islands (corpus 652->755).
+        assert tostring(
+            html.fromstring(
+                "<svg><foreignObject><div>x</div></foreignObject>"
+                "</svg>",
+                mode="whatwg",
+            ),
+            encoding="unicode",
+        ) == (
+            "<html><head/><body><svg><foreignObject><div>x</div>"
+            "</foreignObject></svg></body></html>"
         )
