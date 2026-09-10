@@ -22,6 +22,7 @@ from .error import LeptrisError, ParseError, XQueryError, XPathError, XSLTError
 from .xpath import XPath
 from . import html
 from .relaxng import RelaxNG
+from .schematron import Schematron, SchematronError
 from .xquery import XQuery
 from .xslt import XSLT
 from .node import Node
@@ -37,6 +38,8 @@ __all__ = [
     "XQueryError",
     "RelaxNGError",
     "RelaxNG",
+    "SchematronError",
+    "Schematron",
     "XML",
     "XPath",
     "XQuery",
