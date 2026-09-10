@@ -70,6 +70,15 @@ ffi.cdef(
     void leptris_rng_free(LeptrisRelaxNG rng);
     int leptris_rng_validate(LeptrisRelaxNG rng, LeptrisDocument doc);
     const char* leptris_rng_error(LeptrisRelaxNG rng);
+
+    typedef struct leptris_schematron* LeptrisSchematron;
+    LeptrisSchematron leptris_schematron_parse(const char* schema, size_t len, int* status);
+    LeptrisSchematron leptris_schematron_parse_file(const char* path, int* status);
+    LeptrisSchematron leptris_schematron_parse_phase(const char* schema, size_t len, const char* phase, int* status);
+    void leptris_schematron_free(LeptrisSchematron sch);
+    int leptris_schematron_valid(LeptrisSchematron sch, LeptrisDocument doc);
+    LeptrisDocument leptris_schematron_validate(LeptrisSchematron sch, LeptrisDocument doc);
+    const char* leptris_schematron_error(LeptrisSchematron sch);
     typedef struct LeptrisDoctypeInternal* LeptrisDoctype;
     LeptrisDoctype leptris_document_internal_subset(LeptrisDocument doc);
     const char* leptris_doctype_get_name(LeptrisDoctype dt);
