@@ -35,6 +35,11 @@ REQUIRED_CORE = [
     "leptris_node_digest",
     # relax ng (libleptris 1.9.115+, issue #878)
     "leptris_rng_parse",
+    # xml diff + xquery params (libleptris 1.9.144+, lanes 17/05)
+    "leptris_diff",
+    "leptris_diff_free",
+    "leptris_diff_serialize",
+    "leptris_xquery_eval_params",
     "leptris_rng_parse_file",
     "leptris_rng_validate",
     # xquery core (libleptris 1.9.64+)
