@@ -27,7 +27,9 @@ class TestXQuery:
             assert XQuery(
                 "for $i in //item where $i/@v > 1 "
                 "order by $i/@v descending return string($i)"
-            )(d) == ["beta"]
+            # 1.9.122+ wave: single-item FLWOR sequences unwrap to
+            # the scalar (multi-item results stay lists).
+            )(d) == "beta"
 
     def test_positional_for(self):
         with Document.parse(SRC) as d:
@@ -38,7 +40,9 @@ class TestXQuery:
     def test_scalar_results(self):
         with Document.parse(SRC) as d:
             assert XQuery("count(//item)")(d) == 2.0
-            assert XQuery("let $x := 2 return $x * 21")(d) == ["42"]
+            # and keeps the NUMBER type (the old synthetic-string
+            # stringification noted on leptris/leptris#692 is gone)
+            assert XQuery("let $x := 2 return $x * 21")(d) == 42.0
 
     def test_prolog_variable_and_constructor(self):
         with Document.parse(SRC) as d:
@@ -200,3 +204,25 @@ class TestXQueryErrorTaxonomy:
     def test_bytes_query_accepted(self):
         with Document.parse(SRC) as d:
             assert XQuery(b"count(//item)")(d) == 2.0
+
+
+class TestXQueryExternalVariables:
+    # libleptris 1.9.144: declare variable $x external + QT3-style
+    # select bindings through XQuery(...)(doc, variables=...).
+
+    def test_select_bindings(self):
+        with Document.parse(SRC) as d:
+            assert XQuery(
+                "declare variable $min external; "
+                "//item[@v > $min]/@v"
+            )(d, variables={"min": "3"}) == ["5"]
+            assert XQuery(
+                "declare variable $n external; count((1 to $n))"
+            )(d, variables={"n": "4"}) == 4.0
+
+    def test_unbound_external_raises(self):
+        from leptris.error import XQueryError
+
+        with Document.parse(SRC) as d:
+            with pytest.raises(XQueryError):
+                XQuery("declare variable $need external; $need")(d)

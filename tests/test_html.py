@@ -172,9 +172,12 @@ class TestHtmlTwoModes:
             html.fromstring('<p a="1">x<b a="2">y</p>z</b>',
                             mode="whatwg"),
             encoding="unicode",
+        # 1.9.139-143 insertion-edge work: the formatting element
+        # now re-opens for the trailing run (matching the first
+        # shape's semantics) instead of leaving bare text.
         ) == (
             '<html><head/><body>'
-            '<p a="1">x<b a="2">y</b></p>z</body></html>'
+            '<p a="1">x<b a="2">y</b></p><b a="2">z</b></body></html>'
         )
 
     def test_doctype_recorded_per_mode(self):

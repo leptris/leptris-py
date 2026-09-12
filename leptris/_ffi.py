@@ -84,6 +84,17 @@ ffi.cdef(
     const char* leptris_doctype_get_name(LeptrisDoctype dt);
     const char* leptris_doctype_get_public_id(LeptrisDoctype dt);
     const char* leptris_doctype_get_system_id(LeptrisDoctype dt);
+    typedef struct LeptrisDiffInternal* LeptrisDiff;
+    LeptrisDiff leptris_diff(LeptrisDocument a, LeptrisDocument b, unsigned int flags, int* status);
+    void leptris_diff_free(LeptrisDiff diff);
+    size_t leptris_diff_op_count(LeptrisDiff diff);
+    int leptris_diff_op_type(LeptrisDiff diff, size_t index);
+    const char* leptris_diff_op_path(LeptrisDiff diff, size_t index);
+    const char* leptris_diff_op_name(LeptrisDiff diff, size_t index);
+    const char* leptris_diff_op_before(LeptrisDiff diff, size_t index);
+    const char* leptris_diff_op_after(LeptrisDiff diff, size_t index);
+    char* leptris_diff_serialize(LeptrisDiff diff);
+    LeptrisXPathResult leptris_xquery_eval_params(LeptrisXQuery query, LeptrisDocument doc, LeptrisElement context_node, const char* const* names, const char* const* selects, size_t count);
     LeptrisDocument leptris_parse_file(const char* filepath, int* status);
     LeptrisDocument leptris_parse_html_string(const char* html, size_t length, int* status);
     LeptrisDocument leptris_parse_html4_string(const char* html, size_t length, int* status);
