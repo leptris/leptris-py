@@ -106,13 +106,18 @@ class _ElementMethods:
 
     # -- queries ---------------------------------------------------------
 
-    def xpath(self, expression: str, *, namespaces=None, variables=None):
-        if variables is None:
+    def xpath(self, expression: str, *, namespaces=None, variables=None,
+              version=None):
+        from .xpath import _version_flag
+
+        _version_flag(version)
+        if version is None and variables is None:
             items = _c_evaluate(self._document, self, expression, namespaces)
             if items is not None:
                 return items
         return self._document.xpath(
-            expression, context=self, namespaces=namespaces, variables=variables
+            expression, context=self, namespaces=namespaces,
+            variables=variables, version=version,
         )
 
     def findall(self, path: str, namespaces=None) -> list:

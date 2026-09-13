@@ -100,6 +100,17 @@ with Document.parse("<r><item v='1'>alpha</item><item v='5'>beta</item></r>") as
     XQuery("declare function local:dbl($x) { $x * 2 }; local:dbl(4)")(doc)  # 8.0
 ```
 
+The default surface is the full XPath 3.1 grammar. To pin the
+strict XPath 1.0 surface (3.x-only syntax raises `XPathError`),
+pass `version="1.0"` — on `Document.xpath`, `Element.xpath`, and
+the compiled `XPath` class (`XPath(expr, version="1.0")`):
+
+```python
+root.xpath("count(//book)", version="1.0")          # works — 1.0 grammar
+root.xpath("//book ! @id", version="1.0")           # XPathError: 3.x syntax
+XPath("//book[1]/@id", version="1.0")(root)         # compiled + strict
+```
+
 XPath 3.1 composition and XSLT 3.0 instructions flow through the
 existing API with zero binding change:
 
