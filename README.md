@@ -8,19 +8,25 @@ plain-path XPath evaluation). Wheels ship it compiled; sdist builds
 require a C compiler.
 
 The pinned libleptris version lives in `libleptris-version.txt`
-(lockstep releases); CI builds it from the release tarball. The
-binding loads the shared library from `LEPTRIS_LIB_PATH` or the
-loader path.
+(lockstep releases); CI builds it from the release tarball.
+**Platform wheels bundle the compiled engine** — `pip install
+leptris` works with no extra setup on macOS (x86_64/arm64), Linux
+(manylinux + musllinux, x86_64/aarch64) and Windows (amd64/arm64).
 
 ## Requirements
 
 - Python 3.9+
 - `cffi` (installed automatically)
-- libleptris **1.9.3+** as a shared library (1.9.1 has an options-struct ABI break — leptris/leptris#568)
-- libleptris as a shared library (`libleptris.dylib` / `.so` /
-  `.dll`) on the loader path, or pointed to by `LEPTRIS_LIB_PATH`
-  (which must name the library **file** — the loader `dlopen`s it
-  verbatim). For a development checkout:
+- nothing else for wheel installs — the pinned libleptris is
+  vendored into `leptris/_vendor/` by the wheel build
+  (`scripts/vendor_libleptris.sh`)
+
+For a **development checkout** (or to use your own libleptris
+build), the loader also accepts a shared library
+(`libleptris.dylib` / `.so` / `.dll`) on the loader path, or one
+named by `LEPTRIS_LIB_PATH` (which must name the library
+**file** — the loader `dlopen`s it verbatim; it takes precedence
+over the vendored copy):
 
 ```bash
 cmake -B build -S /path/to/leptris -DLEPTRIS_BUILD_SHARED=ON

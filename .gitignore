@@ -7,3 +7,4 @@ build/
 .pytest_cache/
 tmp/
 leptris/*.so
+leptris/_vendor/
