@@ -171,6 +171,8 @@ ffi.cdef(
     const char* leptris_document_last_error(LeptrisDocument doc);
 
     LeptrisXPathResult leptris_xpath_eval(LeptrisDocument doc, LeptrisElement context, const char* expression);
+    typedef enum { LEPTRIS_XPATH_10 = 1, LEPTRIS_XPATH_31 = 3 } LeptrisXPathVersion;
+    LeptrisXPathResult leptris_xpath_eval_versioned(LeptrisDocument doc, LeptrisElement context, const char* expression, LeptrisXPathVersion version, LeptrisStatus* status);
     LeptrisXPathResult leptris_xpath_eval_ns(LeptrisDocument doc, LeptrisElement context, const char* expression, LeptrisXPathNsSet ns);
     LeptrisXPathResult leptris_xpath_eval_with_vars_context(LeptrisDocument doc, LeptrisElement context, const char* expression, LeptrisXPathVariableSet variables);
     void     leptris_xpath_result_free(LeptrisXPathResult result);

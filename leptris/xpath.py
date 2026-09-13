@@ -1,4 +1,8 @@
-"""XPath — XPath 1.0 evaluation with namespaces and variables.
+"""XPath — XPath evaluation with namespaces and variables.
+
+The engine evaluates the full 3.1 grammar by default; pass
+version="1.0" anywhere an expression is accepted to pin the
+strict XPath 1.0 surface (3.x-only syntax raises XPathError).
 
 Scalar results convert to native Python types. Nodeset results
 yield Element lists; attribute and text node selections yield
@@ -14,6 +18,25 @@ from . import _ffi
 from .error import XPathError
 
 _CLARK = re.compile(r"\{([^}]*)\}")
+
+_XPATH_VERSIONS = {
+    "1.0": _ffi.lib.LEPTRIS_XPATH_10,
+    "3.1": _ffi.lib.LEPTRIS_XPATH_31,
+}
+
+
+def _version_flag(version):
+    """Map a version string to the engine flag (None = default
+    full surface); validated once at the boundary."""
+    if version is None:
+        return None
+    try:
+        return _XPATH_VERSIONS[version]
+    except KeyError:
+        valid = ", ".join(sorted(_XPATH_VERSIONS))
+        raise ValueError(
+            f"unknown XPath version {version!r}; expected one of: {valid}"
+        ) from None
 
 
 def expand_clark_names(
@@ -81,8 +104,43 @@ class _XPathEngine:
         *,
         namespaces: Optional[Dict[str, str]] = None,
         variables: Optional[dict] = None,
+        version: Optional[str] = None,
     ):
         ffi = _ffi.ffi
+        version_flag = _version_flag(version)
+        if version_flag is not None:
+            if namespaces or variables:
+                raise ValueError(
+                    "versioned evaluation does not accept namespaces or "
+                    "variables yet (engine gap); use the default surface "
+                    "for those calls"
+                )
+            ctx = (
+                context_element._cd()
+                if context_element is not None
+                else ffi.NULL
+            )
+            status = ffi.new("LeptrisStatus*")
+            result = _ffi.lib.leptris_xpath_eval_versioned(
+                document._cd(), ctx, expression.encode("utf-8"),
+                version_flag, status,
+            )
+            if result == ffi.NULL:
+                message = _ffi.lib.leptris_document_last_error(
+                    document._cd()
+                )
+                detail = (
+                    ffi.string(message).decode("utf-8", "replace")
+                    if message != ffi.NULL
+                    else f"status {int(status[0])}"
+                )
+                raise XPathError(
+                    f"XPath {version} evaluation failed: {detail}"
+                )
+            try:
+                return _XPathEngine._convert(document, result)
+            finally:
+                _ffi.lib.leptris_xpath_result_free(result)
         if variables is None:
             items = _c_evaluate(
                 document, context_element, expression, namespaces
@@ -164,10 +222,16 @@ class XPath:
 
         query = leptris.XPath("count(//book)")
         query(root)
+
+    version="1.0" pins the strict XPath 1.0 surface (evaluation
+    then runs through the engine's versioned entry; 3.x-only
+    syntax raises XPathError). Default: the full 3.1 grammar.
     """
 
-    def __init__(self, expression: str):
+    def __init__(self, expression: str, *, version: Optional[str] = None):
         self._expression = expression
+        self._version = version
+        _version_flag(version)  # validate at construction
         self._compiled = _ffi.lib.leptris_xpath_compile(
             expression.encode("utf-8")
         )
@@ -194,6 +258,12 @@ class XPath:
             raise TypeError("expected an Element or Document")
         if document.closed:
             raise XPathError("document is closed")
+        if self._version is not None:
+            return _XPathEngine.evaluate(
+                document, element, self._expression,
+                namespaces=namespaces, variables=variables,
+                version=self._version,
+            )
         # All-C fast path: eval + result conversion in one call. None
         # falls back to the engine path below (mixed nodeset, eval
         # failure, ns+vars combined, or a borrowed document without

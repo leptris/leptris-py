@@ -818,3 +818,71 @@ class TestXPathFunctionItemBoundary:
         root = fromstring("<r/>")
         with pytest.raises(XPathError):
             root.xpath("upper-case#1")
+
+
+class TestVersionSelection:
+    """version="1.0" pins the strict XPath 1.0 surface;
+    default / "3.1" evaluate the full grammar
+    (leptris_xpath_eval_versioned, libleptris lane 15)."""
+
+    def test_10_accepts_baseline(self, books):
+        assert books.xpath("count(//book)", version="1.0") == 2.0
+        assert books.xpath("//book[1]/@id", version="1.0") == ["1"]
+
+    # NOTE: "map {'a': 1}" joins this list once the engine's 1.0
+    # scan rejects map/array constructors (upstream scan gap; the
+    # lookup ? IS covered).
+    @pytest.mark.parametrize("expr", [
+        "let $x := 1 return $x",
+        "//book ! @id",
+        "count(//book) => string()",
+        "[1, 2, 3][?1]",
+    ])
+    def test_10_rejects_3x_syntax(self, books, expr):
+        with pytest.raises(XPathError):
+            books.xpath(expr, version="1.0")
+
+    @pytest.mark.parametrize("expr", [
+        "let $x := 1 return $x",
+        "//book ! @id",
+        "count(//book) => string()",
+    ])
+    def test_31_evaluates_3x_syntax(self, books, expr):
+        books.xpath(expr, version="3.1")  # no raise
+        books.xpath(expr)  # default surface unchanged
+
+    def test_unknown_version_raises(self, books):
+        with pytest.raises(ValueError, match="2.0"):
+            books.xpath("count(//book)", version="2.0")
+
+    def test_version_with_namespaces_rejected(self):
+        doc = Document.parse(NS_XML)
+        try:
+            with pytest.raises(ValueError, match="namespaces"):
+                doc.xpath(
+                    "//x:item", namespaces={"x": "urn:ex"}, version="1.0"
+                )
+        finally:
+            doc.close()
+
+    def test_document_entry_point(self):
+        with Document.parse(BOOKS) as doc:
+            assert doc.xpath("count(//book)", version="1.0") == 2.0
+            with pytest.raises(XPathError):
+                doc.xpath("let $x := 1 return $x", version="1.0")
+
+    def test_compiled_xpath_version(self, books):
+        from leptris import XPath
+
+        strict = XPath("//book[1]/@id", version="1.0")
+        assert strict(books) == ["1"]
+        with pytest.raises(XPathError):
+            XPath("//book ! @id", version="1.0")(books)
+        # compiled objects default to the full surface
+        assert XPath("//book ! @id")(books) == ["1", "2"]
+
+    def test_compiled_xpath_rejects_unknown_version(self):
+        from leptris import XPath
+
+        with pytest.raises(ValueError, match="4.0"):
+            XPath("count(//book)", version="4.0")

@@ -71,6 +71,7 @@ REQUIRED_CORE = [
     "leptris_element_serialize",
     # xpath
     "leptris_xpath_eval",
+    "leptris_xpath_eval_versioned",
     "leptris_xpath_result_free",
     "leptris_xpath_result_count",
     "leptris_xpath_result_get",

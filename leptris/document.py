@@ -238,10 +238,14 @@ class Document:
             )
         return items
 
-    def xpath(self, expression: str, *, context=None, namespaces=None, variables=None):
+    def xpath(self, expression: str, *, context=None, namespaces=None,
+              variables=None, version=None):
         if self._freed:
             raise LeptrisError("operation on a closed document")
-        if variables is None:
+        from .xpath import _version_flag
+
+        _version_flag(version)
+        if version is None and variables is None:
             from .xpath import _c_evaluate
 
             items = _c_evaluate(self, context, expression, namespaces)
@@ -250,7 +254,8 @@ class Document:
         from .xpath import _XPathEngine
 
         return _XPathEngine.evaluate(
-            self, context, expression, namespaces=namespaces, variables=variables
+            self, context, expression, namespaces=namespaces,
+            variables=variables, version=version,
         )
 
     def write(
