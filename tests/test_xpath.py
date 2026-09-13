@@ -829,14 +829,13 @@ class TestVersionSelection:
         assert books.xpath("count(//book)", version="1.0") == 2.0
         assert books.xpath("//book[1]/@id", version="1.0") == ["1"]
 
-    # NOTE: "map {'a': 1}" joins this list once the engine's 1.0
-    # scan rejects map/array constructors (upstream scan gap; the
-    # lookup ? IS covered).
     @pytest.mark.parametrize("expr", [
         "let $x := 1 return $x",
         "//book ! @id",
         "count(//book) => string()",
         "[1, 2, 3][?1]",
+        "map {'a': 1}",
+        "array {//book}",
     ])
     def test_10_rejects_3x_syntax(self, books, expr):
         with pytest.raises(XPathError):

@@ -249,11 +249,18 @@ ffi.cdef(
 
 
 def _load():
+    here = os.path.dirname(__file__)
     candidates = []
     if os.environ.get("LEPTRIS_LIB_PATH"):
         candidates.append(os.environ["LEPTRIS_LIB_PATH"])
+    # Wheels vendor the pinned release build per platform
+    # (scripts/vendor_libleptris.sh -> leptris/_vendor/).
+    candidates += [
+        os.path.join(here, "_vendor", "libleptris.dylib"),
+        os.path.join(here, "_vendor", "libleptris.so"),
+        os.path.join(here, "_vendor", "leptris.dll"),
+    ]
     candidates += ["libleptris.dylib", "libleptris.so", "leptris.dll"]
-    here = os.path.dirname(__file__)
     candidates += [
         os.path.join(here, "..", "..", "..", "build", "src", "libleptris.dylib"),
         os.path.join(here, "..", "..", "..", "build", "src", "libleptris.so"),
