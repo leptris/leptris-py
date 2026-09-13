@@ -99,8 +99,10 @@ jobs:
             archs: "x86_64 arm64"
           - os: windows-latest
             cibw: "cp39-win_amd64"
+            archs_win: "AMD64"
           - os: windows-latest
             cibw: "cp39-win_arm64"
+            archs_win: "ARM64"
     steps:
       # SELF-CHECKOUT: as a workflow_call the default checkout is the
       # CALLER's repo (leptris/leptris) — where neither the binding
@@ -130,6 +132,7 @@ jobs:
         env:
           CIBW_BUILD: ${{ matrix.cibw }}
           CIBW_ARCHS_MACOS: ${{ matrix.archs }}
+          CIBW_ARCHS_WINDOWS: ${{ matrix.archs_win }}
           CIBW_BEFORE_ALL_LINUX: "bash scripts/vendor_libleptris.sh"
           CIBW_BEFORE_ALL_MACOS: "bash scripts/vendor_libleptris.sh"
           CIBW_BEFORE_ALL_WINDOWS: "bash scripts/vendor_libleptris.sh"
