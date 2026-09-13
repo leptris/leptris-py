@@ -87,21 +87,28 @@ jobs:
         include:
           - os: ubuntu-latest
             cibw: "cp39-manylinux_x86_64"
+            dist: manylinux-x86_64
             sdist: true
           - os: ubuntu-24.04-arm
             cibw: "cp39-manylinux_aarch64"
+            dist: manylinux-aarch64
           - os: ubuntu-latest
             cibw: "cp39-musllinux_x86_64"
+            dist: musllinux-x86_64
           - os: ubuntu-24.04-arm
             cibw: "cp39-musllinux_aarch64"
+            dist: musllinux-aarch64
           - os: macos-latest
             cibw: "cp39-macosx*"
+            dist: macos-universal
             archs: "x86_64 arm64"
           - os: windows-latest
             cibw: "cp39-win_amd64"
+            dist: win-amd64
             archs_win: "AMD64"
           - os: windows-latest
             cibw: "cp39-win_arm64"
+            dist: win-arm64
             archs_win: "ARM64"
     steps:
       # SELF-CHECKOUT: as a workflow_call the default checkout is the
@@ -142,7 +149,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: leptris-dist-${{ matrix.os }}-${{ matrix.cibw }}
+          name: leptris-dist-${{ matrix.dist }}
           path: wheelhouse/*
 
   publish:
