@@ -107,7 +107,28 @@ def _make_benchmarks():
         doc = Document.parse(MEDIUM)
         root = doc.getroot()
 
+        from leptris import Plan
+
+        plan = Plan({
+            "element_name": "catalog",
+            "children": [{
+                "name": "book", "kind": "nested", "plan": {
+                    "element_name": "book",
+                    "attributes": {"id": {}, "lang": {}},
+                    "children": [
+                        {"name": "title", "kind": "scalar"},
+                        {"name": "author", "kind": "scalar"},
+                        {"name": "price", "kind": "scalar"},
+                    ],
+                },
+            }],
+        })
+
+        def plan_materialize():
+            return plan(doc)
+
         benchmarks["leptris"] = {
+            "plan materialize": plan_materialize,
             "parse small": parse_small,
             "parse medium": parse_medium,
             "parse html": parse_html,
@@ -120,6 +141,7 @@ def _make_benchmarks():
                 "//book[@id=$id]", variables={"id": "50"}
             ),
             "traversal": _traverse_iter(root.iter),
+            "tagged iter": lambda: sum(1 for _ in root.iter("book")),
             "serialize": lambda: tostring(doc),
         }
     except ImportError as error:
@@ -131,7 +153,23 @@ def _make_benchmarks():
 
         lroot = etree.fromstring(MEDIUM.encode())
 
+        lroot = etree.fromstring(MEDIUM.encode())
+
+        def lxml_materialize():
+            out = []
+            for book in lroot.iterfind("book"):
+                out.append({
+                    "attributes": dict(book.attrib),
+                    "children": {
+                        "title": book.findtext("title"),
+                        "author": book.findtext("author"),
+                        "price": book.findtext("price"),
+                    },
+                })
+            return out
+
         benchmarks["lxml"] = {
+            "plan materialize": lxml_materialize,
             "parse small": lambda: etree.fromstring(SMALL.encode()),
             "parse medium": lambda: etree.fromstring(MEDIUM.encode()),
             "parse html": lambda: etree.fromstring(
@@ -144,6 +182,7 @@ def _make_benchmarks():
             "xpath //author | //title": lambda: lroot.xpath("//author | //title"),
             "xpath //book[@id=$id]": lambda: lroot.xpath("//book[@id=$id]", id="50"),
             "traversal": _traverse_iter(lroot.iter),
+            "tagged iter": lambda: sum(1 for _ in lroot.iter("book")),
             "serialize": lambda: etree.tostring(lroot),
         }
     except ImportError as error:
@@ -225,6 +264,7 @@ HTML_DOC = (
 )
 
 OPERATIONS = [
+    ("plan materialize", N_QUERY),
     ("parse small", N_PARSE_SMALL),
     ("parse medium", N_PARSE_MEDIUM),
     ("xpath count(//book)", N_QUERY),
@@ -235,6 +275,7 @@ OPERATIONS = [
     ("xpath //book[@id=$id]", N_QUERY),
     ("parse html", N_QUERY),
     ("traversal", N_TRAVERSE),
+    ("tagged iter", N_TRAVERSE),
     ("serialize", N_SERIALIZE),
 ]
 

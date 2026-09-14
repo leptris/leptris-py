@@ -264,6 +264,24 @@ class Plan:
             raise LeptrisError(f"plan build failed: status {int(status[0])}")
         self._handle = handle
         self._keepalive = keepalive + [element_structs]
+        # Accelerated conversion: the shape tables the C converter
+        # needs (attr names + ordered rows per plan). None when the
+        # accelerator is unavailable — _convert is the fallback.
+        from .element import _accel
+
+        self._shape = None
+        if _accel is not None:
+            blob = [
+                (
+                    tuple(element["attrs"]),
+                    tuple(
+                        (name, row[0], row[2])
+                        for name, row in element["rows"].items()
+                    ),
+                )
+                for element in elements
+            ]
+            self._shape = _accel.plan_shape_build(blob, PlanCallback)
 
     def __call__(self, element_or_document) -> Optional[dict]:
         from .document import Document
@@ -285,6 +303,12 @@ class Plan:
         if result == ffi.NULL:
             raise LeptrisError(f"plan walk failed: status {int(status[0])}")
         try:
+            if self._shape is not None:
+                from .element import _accel
+
+                return _accel.plan_convert(
+                    int(ffi.cast("uintptr_t", result)), self._shape
+                )
             return _convert(result, self._elements, plan_index=0)
         finally:
             _ffi.lib.leptris_plan_result_free(result)
@@ -293,6 +317,7 @@ class Plan:
         if getattr(self, "_handle", None) is not None:
             _ffi.lib.leptris_plan_free(self._handle)
             self._handle = None
+        self._shape = None  # capsule frees the C shape via its dtor
 
     def __enter__(self) -> "Plan":
         return self

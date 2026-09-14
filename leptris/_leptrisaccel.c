@@ -20,6 +20,9 @@
 #define PY_SSIZE_T_CLEAN
 #define Py_LIMITED_API 0x03090000
 #include <Python.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define ACCEL_RAW_INVALID ((void *)-1)
 
@@ -117,9 +120,19 @@ static struct {
     void *(*xpath_compiled_eval_ns_vars)(
         void *, void *, void *, void *, void *);
     void *(*iterparse_next)(void *);
+    /* descriptor ABI v1 (#1039) result accessors */
+    int (*plan_value_kind)(const void *);
+    const char *(*plan_value_name)(const void *);
+    unsigned char (*plan_value_type_tag)(const void *);
+    const char *(*plan_value_string)(const void *);
+    size_t (*plan_value_length)(const void *);
+    size_t (*plan_value_position)(const void *);
+    size_t (*plan_value_count)(const void *);
+    void *(*plan_value_at)(const void *, size_t);
+    const char *(*plan_value_attribute)(const void *, const char *);
 } Fns;
 
-#define FN_COUNT 55
+#define FN_COUNT 64
 
 static int bound = 0;
 static PyObject *LeptrisErrorType = NULL;
@@ -1039,6 +1052,15 @@ accel_bind(PyObject *module, PyObject *args)
     (void **)&Fns.parse_with_encoding,
     (void **)&Fns.xpath_compiled_eval_ns_vars,
     (void **)&Fns.iterparse_next,
+    (void **)&Fns.plan_value_kind,
+    (void **)&Fns.plan_value_name,
+    (void **)&Fns.plan_value_type_tag,
+    (void **)&Fns.plan_value_string,
+    (void **)&Fns.plan_value_length,
+    (void **)&Fns.plan_value_position,
+    (void **)&Fns.plan_value_count,
+    (void **)&Fns.plan_value_at,
+    (void **)&Fns.plan_value_attribute,
     };
     for (Py_ssize_t i = 0; i < FN_COUNT; i++) {
         PyObject *item = PyList_Check(fast)
@@ -1959,6 +1981,491 @@ accel_document_root(PyObject *module, PyObject *args)
         root, Py_None, document, registry_of(document));
 }
 
+
+/* ---- Plan shape + result conversion (#1039 mirror, phase 01) -------
+ *
+ * One C call per walk: the binding's shape-stable dict/list structure
+ * is built here via the Fns descriptor accessors, replacing ~6 cffi
+ * transitions per result node. The Python converter in leptris.plan
+ * stays as the reference implementation; differential specs pin the
+ * two equal. */
+
+#define PK_SCALAR 1
+#define PK_COLLECTION 2
+#define PK_NESTED 3
+#define PK_RAW 4
+#define PK_CONTENT 5
+#define PK_CALLBACK 6
+
+#define PV_ELEMENT 0
+#define PV_SCALAR 1
+#define PV_COLLECTION 2
+#define PV_RAW 3
+#define PV_CALLBACK 4
+
+typedef struct {
+    char *name;        /* row wire name (owned) */
+    int kind;          /* PK_* */
+    int child_index;   /* -1 for non-nested */
+} PlanRowC;
+
+typedef struct {
+    char **attr_names; /* owned strings */
+    Py_ssize_t attr_count;
+    PlanRowC *rows;    /* plan-row order */
+    Py_ssize_t row_count;
+} PlanPlanC;
+
+typedef struct {
+    PlanPlanC *plans;
+    Py_ssize_t plan_count;
+    PyObject *callback_type;  /* PlanCallback; strong ref */
+} PlanShapeC;
+
+static void
+plan_shape_free_c(PlanShapeC *shape)
+{
+    if (shape == NULL)
+        return;
+    for (Py_ssize_t p = 0; p < shape->plan_count; p++) {
+        PlanPlanC *plan = &shape->plans[p];
+        for (Py_ssize_t a = 0; a < plan->attr_count; a++)
+            free(plan->attr_names[a]);
+        free(plan->attr_names);
+        for (Py_ssize_t r = 0; r < plan->row_count; r++)
+            free(plan->rows[r].name);
+        free(plan->rows);
+    }
+    free(shape->plans);
+    Py_XDECREF(shape->callback_type);
+    free(shape);
+}
+
+static void
+plan_shape_capsule_destructor(PyObject *capsule)
+{
+    plan_shape_free_c(
+        (PlanShapeC *)PyCapsule_GetPointer(capsule, NULL));
+}
+
+/* plan_shape_build(plans, callback_type) -> capsule.
+ * plans: sequence of (attr_names, rows) per element plan, where
+ * attr_names is a sequence of str and rows a sequence of
+ * (name, kind, child_index) in plan-row order. */
+static PyObject *
+accel_plan_shape_build(PyObject *module, PyObject *args)
+{
+    PyObject *plans, *callback_type;
+    if (!PyArg_ParseTuple(args, "OO", &plans, &callback_type))
+        return NULL;
+    PyObject *fast = PySequence_Fast(plans, "plans must be a sequence");
+    if (fast == NULL)
+        return NULL;
+    Py_ssize_t plan_count = PySequence_Size(fast);
+    PlanShapeC *shape = (PlanShapeC *)calloc(1, sizeof(PlanShapeC));
+    if (shape == NULL) {
+        Py_DECREF(fast);
+        return PyErr_NoMemory();
+    }
+    shape->plan_count = plan_count;
+    shape->plans = (PlanPlanC *)calloc(
+        plan_count ? plan_count : 1, sizeof(PlanPlanC));
+    if (shape->plans == NULL) {
+        free(shape);
+        Py_DECREF(fast);
+        return PyErr_NoMemory();
+    }
+    Py_INCREF(callback_type);
+    shape->callback_type = callback_type;
+
+    for (Py_ssize_t p = 0; p < plan_count; p++) {
+        PyObject *entry = PySequence_GetItem(fast, p);
+        PyObject *attr_seq, *row_seq;
+        if (entry == NULL
+            || !PyArg_ParseTuple(entry, "OO", &attr_seq, &row_seq)) {
+            Py_XDECREF(entry);
+            plan_shape_free_c(shape);
+            Py_DECREF(fast);
+            return NULL;
+        }
+        Py_DECREF(entry);
+        PlanPlanC *plan = &shape->plans[p];
+        PyObject *attr_fast = PySequence_Fast(
+            attr_seq, "attr_names must be a sequence");
+        PyObject *row_fast = PySequence_Fast(
+            row_seq, "rows must be a sequence");
+        if (attr_fast == NULL || row_fast == NULL) {
+            Py_XDECREF(attr_fast);
+            Py_XDECREF(row_fast);
+            plan_shape_free_c(shape);
+            Py_DECREF(fast);
+            return NULL;
+        }
+        plan->attr_count = PySequence_Size(attr_fast);
+        plan->attr_names = (char **)calloc(
+            plan->attr_count ? plan->attr_count : 1, sizeof(char *));
+        plan->row_count = PySequence_Size(row_fast);
+        plan->rows = (PlanRowC *)calloc(
+            plan->row_count ? plan->row_count : 1, sizeof(PlanRowC));
+        if (plan->attr_names == NULL || plan->rows == NULL) {
+            Py_DECREF(attr_fast);
+            Py_DECREF(row_fast);
+            plan_shape_free_c(shape);
+            Py_DECREF(fast);
+            return PyErr_NoMemory();
+        }
+        int failed = 0;
+        for (Py_ssize_t a = 0; a < plan->attr_count && !failed; a++) {
+            PyObject *item = PySequence_GetItem(attr_fast, a);
+            if (item == NULL) {
+                failed = 1;
+                break;
+            }
+            PyObject *encoded =
+                PyUnicode_AsEncodedString(item, "utf-8", NULL);
+            if (encoded == NULL) {
+                Py_DECREF(item);
+                failed = 1;
+                break;
+            }
+            plan->attr_names[a] = strdup(PyBytes_AsString(encoded));
+            Py_DECREF(encoded);
+            Py_DECREF(item);
+        }
+        for (Py_ssize_t r = 0; r < plan->row_count && !failed; r++) {
+            PyObject *row = PySequence_GetItem(row_fast, r);
+            const char *name;
+            int kind, child_index;
+            if (row == NULL
+                || !PyArg_ParseTuple(row, "sii", &name, &kind,
+                                     &child_index))
+                failed = 1;
+            else {
+                plan->rows[r].name = strdup(name);
+                plan->rows[r].kind = kind;
+                plan->rows[r].child_index = child_index;
+            }
+            Py_XDECREF(row);
+        }
+        Py_DECREF(attr_fast);
+        Py_DECREF(row_fast);
+        if (failed) {
+            plan_shape_free_c(shape);
+            Py_DECREF(fast);
+            return NULL;
+        }
+    }
+    Py_DECREF(fast);
+    PyObject *capsule = PyCapsule_New(
+        shape, NULL, plan_shape_capsule_destructor);
+    if (capsule == NULL) {
+        plan_shape_free_c(shape);
+        return NULL;
+    }
+    return capsule;
+}
+
+static PyObject *
+plan_leaf(const void *value, PyObject *callback_type)
+{
+    int kind = Fns.plan_value_kind(value);
+    if (kind == PV_CALLBACK) {
+        const char *s = Fns.plan_value_string(value);
+        size_t length = Fns.plan_value_length(value);
+        PyObject *text = (s != NULL)
+            ? PyUnicode_DecodeUTF8(s, (Py_ssize_t)length, "replace")
+            : Py_None;
+        if (text == NULL)
+            return NULL;
+        PyObject *position = PyLong_FromSize_t(
+            Fns.plan_value_position(value));
+        PyObject *tag = PyLong_FromLong(
+            (long)Fns.plan_value_type_tag(value));
+        PyObject *out = PyObject_CallFunctionObjArgs(
+            callback_type, text, position, tag, NULL);
+        Py_DECREF(text);
+        Py_XDECREF(position);
+        Py_XDECREF(tag);
+        return out;
+    }
+    const char *s = Fns.plan_value_string(value);
+    if (s == NULL)
+        Py_RETURN_NONE;
+    return PyUnicode_DecodeUTF8(
+        s, (Py_ssize_t)Fns.plan_value_length(value), "replace");
+}
+
+static PyObject *
+plan_collection_items(const void *value, PyObject *callback_type)
+{
+    size_t count = Fns.plan_value_count(value);
+    PyObject *out = PyList_New((Py_ssize_t)count);
+    if (out == NULL)
+        return NULL;
+    for (size_t i = 0; i < count; i++) {
+        PyObject *item = plan_leaf(
+            Fns.plan_value_at(value, i), callback_type);
+        if (item == NULL || PyList_SetItem(out, (Py_ssize_t)i, item) < 0) {
+            Py_XDECREF(item);
+            Py_DECREF(out);
+            return NULL;
+        }
+    }
+    return out;
+}
+
+static PyObject *
+plan_convert_element(const void *value, const PlanShapeC *shape,
+                     Py_ssize_t plan_index)
+{
+    const PlanPlanC *plan = &shape->plans[plan_index];
+    size_t vcount = Fns.plan_value_count(value);
+    PyObject *children = PyDict_New();
+    if (children == NULL)
+        return NULL;
+
+    Py_ssize_t vi = 0;
+    for (Py_ssize_t r = 0; r < plan->row_count; r++) {
+        const PlanRowC *row = &plan->rows[r];
+        if (vi >= (Py_ssize_t)vcount) {
+            if (PyDict_SetItemString(
+                    children, row->name,
+                    (row->kind == PK_COLLECTION || row->kind == PK_CONTENT)
+                        ? (PyObject *)PyList_New(0) : Py_None) < 0) {
+                Py_DECREF(children);
+                return NULL;
+            }
+            continue;
+        }
+        const void *candidate = Fns.plan_value_at(value, (size_t)vi);
+        int vkind = Fns.plan_value_kind(candidate);
+        const char *vname_c = Fns.plan_value_name(candidate);
+        const char *row_name = row->name;
+        int row_len = (int)strlen(row_name);
+        int name_equal = (vname_c != NULL)
+            && (int)strlen(vname_c) == row_len
+            && memcmp(vname_c, row_name, (size_t)row_len) == 0;
+
+        int matches = 0;
+        if (row->kind == PK_SCALAR || row->kind == PK_CALLBACK
+            || row->kind == PK_RAW) {
+            matches = vkind != PV_ELEMENT && vkind != PV_COLLECTION
+                && name_equal;
+        } else if (row->kind == PK_NESTED) {
+            matches = vkind == PV_ELEMENT && name_equal;
+        } else if (vkind == PV_COLLECTION) {
+            size_t icount = Fns.plan_value_count(candidate);
+            if (icount == 0) {
+                matches = 1; /* [] either way — order decides */
+            } else {
+                const char *first =
+                    Fns.plan_value_name(Fns.plan_value_at(candidate, 0));
+                if (row->kind == PK_COLLECTION)
+                    matches = (first != NULL)
+                        && (int)strlen(first) == row_len
+                        && memcmp(first, row_name, (size_t)row_len) == 0;
+                else
+                    matches = (first == NULL);
+            }
+        }
+
+        if (!matches) {
+            if (PyDict_SetItemString(
+                    children, row->name,
+                    (row->kind == PK_COLLECTION || row->kind == PK_CONTENT)
+                        ? (PyObject *)PyList_New(0) : Py_None) < 0) {
+                Py_DECREF(children);
+                return NULL;
+            }
+            continue;
+        }
+
+        if (row->kind == PK_NESTED) {
+            /* A nested row can match repeatedly (implicit collection
+             * of structured children): consume consecutive matches —
+             * one is the dict, several a list. */
+            PyObject *collected = PyList_New(0);
+            if (collected == NULL) {
+                Py_DECREF(children);
+                return NULL;
+            }
+            while (vi < (Py_ssize_t)vcount) {
+                const void *next = Fns.plan_value_at(value, (size_t)vi);
+                int nkind = Fns.plan_value_kind(next);
+                const char *nname = Fns.plan_value_name(next);
+                int n_equal = (nname != NULL)
+                    && (int)strlen(nname) == row_len
+                    && memcmp(nname, row_name, (size_t)row_len) == 0;
+                if (!(nkind == PV_ELEMENT && n_equal))
+                    break;
+                PyObject *converted = plan_convert_element(
+                    next, shape, row->child_index);
+                if (converted == NULL
+                    || PyList_Append(collected, converted) < 0) {
+                    Py_XDECREF(converted);
+                    Py_DECREF(collected);
+                    Py_DECREF(children);
+                    return NULL;
+                }
+                Py_DECREF(converted);
+                vi++;
+            }
+            Py_ssize_t matched = PyList_Size(collected);
+            if (matched == 1) {
+                PyObject *only = PyList_GetItem(collected, 0);
+                Py_INCREF(only);
+                Py_DECREF(collected);
+                if (PyDict_SetItemString(children, row->name, only) < 0) {
+                    Py_DECREF(only);
+                    Py_DECREF(children);
+                    return NULL;
+                }
+                Py_DECREF(only);
+            } else {
+                if (PyDict_SetItemString(children, row->name, collected) < 0) {
+                    Py_DECREF(collected);
+                    Py_DECREF(children);
+                    return NULL;
+                }
+                Py_DECREF(collected);
+            }
+            continue;
+        }
+
+        /* first consumer of the matched value */
+        vi++;
+        PyObject *converted;
+        if (vkind == PV_COLLECTION)
+            converted = plan_collection_items(
+                candidate, shape->callback_type);
+        else
+            converted = plan_leaf(candidate, shape->callback_type);
+        if (converted == NULL
+            || PyDict_SetItemString(children, row->name, converted) < 0) {
+            Py_XDECREF(converted);
+            Py_DECREF(children);
+            return NULL;
+        }
+        Py_DECREF(converted);
+    }
+
+    PyObject *attrs = PyDict_New();
+    if (attrs == NULL) {
+        Py_DECREF(children);
+        return NULL;
+    }
+    for (Py_ssize_t a = 0; a < plan->attr_count; a++) {
+        const char *val = Fns.plan_value_attribute(
+            value, plan->attr_names[a]);
+        PyObject *item = (val != NULL)
+            ? PyUnicode_DecodeUTF8(val, (Py_ssize_t)strlen(val), "replace")
+            : Py_None;
+        if (item == NULL
+            || PyDict_SetItemString(attrs, plan->attr_names[a], item) < 0) {
+            Py_XDECREF(item);
+            Py_DECREF(attrs);
+            Py_DECREF(children);
+            return NULL;
+        }
+        Py_DECREF(item);
+    }
+
+    PyObject *out = PyDict_New();
+    if (out == NULL
+        || PyDict_SetItemString(out, "attributes", attrs) < 0
+        || PyDict_SetItemString(out, "children", children) < 0) {
+        Py_XDECREF(out);
+        Py_DECREF(attrs);
+        Py_DECREF(children);
+        return NULL;
+    }
+    Py_DECREF(attrs);
+    Py_DECREF(children);
+    return out;
+}
+
+/* plan_convert(result_address, shape_capsule) -> dict. One C call
+ * for the whole walk; the result handle stays owned by the caller
+ * (freed with leptris_plan_result_free from the binding). */
+static PyObject *
+accel_plan_convert(PyObject *module, PyObject *args)
+{
+    unsigned long long address;
+    PyObject *capsule;
+    if (!PyArg_ParseTuple(args, "KO", &address, &capsule))
+        return NULL;
+    if (!bound) {
+        PyErr_SetString(
+            PyExc_RuntimeError, "accelerator not bound");
+        return NULL;
+    }
+    PlanShapeC *shape = (PlanShapeC *)PyCapsule_GetPointer(capsule, NULL);
+    if (shape == NULL)
+        return NULL;
+    return plan_convert_element(
+        (const void *)(uintptr_t)address, shape, 0);
+}
+
+
+/* Serialize a DOCUMENT with options in one C call (the options-less
+ * path is serialize_doc). Encoding (or NULL for UTF-8) borrows from
+ * the bytes object PyArg holds alive for the call. */
+static PyObject *
+accel_serialize_doc_opts(PyObject *module, PyObject *args)
+{
+    unsigned long long address;
+    int indent, declaration;
+    const char *encoding = NULL;
+    if (!PyArg_ParseTuple(
+            args, "Kiiz", &address, &indent, &declaration, &encoding))
+        return NULL;
+    if (!bound)
+        Py_RETURN_NONE;
+    struct { int indent; int xml_declaration; const char *encoding; } opts;
+    opts.indent = indent;
+    opts.xml_declaration = declaration;
+    opts.encoding = encoding;
+    char *out = Fns.document_serialize((void *)(uintptr_t)address, &opts);
+    if (out == NULL)
+        Py_RETURN_NONE;
+    size_t length = strlen(out);
+    PyObject *bytes = PyBytes_FromStringAndSize(out, (Py_ssize_t)length);
+    Fns.free_string(out);
+    return bytes;
+}
+
+/* Serialize an ELEMENT subtree with full options (serialize_elem
+ * covers the no-encoding fast path). */
+static PyObject *
+accel_serialize_elem_opts(PyObject *module, PyObject *args)
+{
+    unsigned long long address;
+    int indent, declaration;
+    const char *encoding = NULL;
+    if (!PyArg_ParseTuple(
+            args, "Kiiz", &address, &indent, &declaration, &encoding))
+        return NULL;
+    if (!bound || Fns.element_serialize_into == NULL)
+        Py_RETURN_NONE;
+    struct { int indent; int xml_declaration; const char *encoding; } opts;
+    opts.indent = indent;
+    opts.xml_declaration = declaration;
+    opts.encoding = encoding;
+    size_t needed = Fns.element_serialize_into(
+        (void *)(uintptr_t)address, NULL, 0, NULL, &opts);
+    if (needed == 0)
+        Py_RETURN_NONE;
+    PyObject *bytes = PyBytes_FromStringAndSize(
+        NULL, (Py_ssize_t)(needed - 1));
+    if (bytes == NULL)
+        return NULL;
+    size_t written = 0;
+    Fns.element_serialize_into((void *)(uintptr_t)address,
+                               PyBytes_AsString(bytes), needed, &written,
+                               &opts);
+    return bytes;
+}
+
 static PyMethodDef accel_methods[] = {
     {"create", accel_create, METH_VARARGS,
      "create(address, ptr, document) -> Element"},
@@ -2002,6 +2509,14 @@ static PyMethodDef accel_methods[] = {
      "new_registry() -> capsule tracking live elements of a document"},
     {"invalidate", (PyCFunction)accel_invalidate, METH_O,
      "invalidate(capsule) -> poison all tracked elements (document closed)"},
+    {"plan_shape_build", accel_plan_shape_build, METH_VARARGS,
+     "plan_shape_build(plans, callback_type) -> capsule"},
+    {"plan_convert", accel_plan_convert, METH_VARARGS,
+     "plan_convert(result_address, shape_capsule) -> dict"},
+    {"serialize_doc_opts", accel_serialize_doc_opts, METH_VARARGS,
+     "serialize_doc_opts(address, indent, declaration, encoding|None) -> bytes | None"},
+    {"serialize_elem_opts", accel_serialize_elem_opts, METH_VARARGS,
+     "serialize_elem_opts(address, indent, declaration, encoding|None) -> bytes | None"},
     {NULL}
 };
 

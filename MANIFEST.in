@@ -1,1 +1,7 @@
 prune leptris/_vendor
+
+# sdist zero-setup: the pinned engine source, extracted at sdist
+# build time (scripts/prepare_sdist_vendor.sh); compiled by setup.py
+# when no wheel/vendored library serves the platform.
+graft vendor/libleptris
+prune vendor/libleptris/build
