@@ -117,6 +117,9 @@ class TestC14N:
     def test_namespace_normalization(self):
         xml = "<x:a xmlns:x='urn:1' xmlns:y='urn:2'><x:b>1</x:b></x:a>"
         out = c14n(Document.parse(xml))
-        # Canonical form renames prefixes to n0/n1 in namespace order.
-        assert b"urn:1" in out and b"urn:2" in out
-        assert b"<b>1</b>" in out
+        # #1015 (libleptris 1.9.164): element prefixes are KEPT —
+        # the libxml2/C14N-1.0 shape; unused in-scope declarations
+        # survive; nothing is renamed to n0/n1.
+        assert out == (
+            b'<x:a xmlns:x="urn:1" xmlns:y="urn:2"><x:b>1</x:b></x:a>'
+        )
