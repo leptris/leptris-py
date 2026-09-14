@@ -12,7 +12,7 @@ Requires libleptris on the library search path (or LEPTRIS_LIB_PATH).
 
 from __future__ import annotations
 
-__version__ = "1.9.161.0"
+__version__ = "1.9.162.0"
 
 from . import sax
 from .api import XML, c14n, fromstring, iterparse, libleptris_version, parse, tostring
@@ -23,6 +23,7 @@ from .xpath import XPath
 from . import html
 from .relaxng import RelaxNG
 from .xmldiff import Diff, DiffOp, diff
+from .plan import Plan, PlanCallback
 from .schematron import Schematron, SchematronError
 from .xquery import XQuery
 from .xslt import XSLT
@@ -42,6 +43,8 @@ __all__ = [
     "diff",
     "Diff",
     "DiffOp",
+    "PlanCallback",
+    "Plan",
     "SchematronError",
     "Schematron",
     "XML",
