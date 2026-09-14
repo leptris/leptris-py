@@ -106,6 +106,37 @@ with Document.parse("<r><item v='1'>alpha</item><item v='5'>beta</item></r>") as
     XQuery("declare function local:dbl($x) { $x * 2 }; local:dbl(4)")(doc)  # 8.0
 ```
 
+### Schema-descriptor materialization (`Plan`, libleptris 1.9.162+)
+
+Compile a descriptor once, materialize whole documents in one native
+pass — the tree-shaped ABI lutaml-model hosts consume (leptris/leptris#1039):
+
+```python
+from leptris import Document, Plan
+
+catalog = Plan({
+    "element_name": "catalog",
+    "children": [
+        {"name": "item", "kind": "collection", "plan": {
+            "element_name": "item",
+            "attributes": {"id": {}, "price": {}},
+            "children": [{"name": "title"}],
+        }},
+        {"name": "note", "kind": "raw"},
+    ],
+})
+with Document.parse(xml) as doc:
+    data = catalog(doc)   # {"attributes": {...}, "children": {...}}
+```
+
+Row kinds: `scalar`, `collection` (list), `nested` (element plan),
+`raw` (serialized subtree), `content` (mixed-content text runs, name
+may be `""`), `callback` (`PlanCallback(value, position, type_tag)`
+— the escape hatch for host-side procs). Results are shape-stable
+(absent rows yield `None` / `[]`); namespace forms via
+`ns={"form": "none"|"exact"|"any", "uri": ...}`, flags via
+`{"mixed_content", "ordered", "cdata", "ns_lenient"}`.
+
 The default surface is the full XPath 3.1 grammar. To pin the
 strict XPath 1.0 surface (3.x-only syntax raises `XPathError`),
 pass `version="1.0"` — on `Document.xpath`, `Element.xpath`, and

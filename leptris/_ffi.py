@@ -244,6 +244,79 @@ ffi.cdef(
     int leptris_sax_parser_set_streaming(LeptrisSAXParser* parser, int streaming);
 
     void leptris_free_string(char* str);
+
+    /* Tree-shaped schema-descriptor materialization (#1039, lib
+     * 1.9.162+): the ABI is frozen at leptris_plan_abi_version(). */
+    size_t leptris_node_byte_offset(LeptrisNodeRef node);
+    typedef struct leptris_plan* LeptrisPlan;
+    typedef struct leptris_plan_result* LeptrisPlanResult;
+    typedef enum {
+        LEPTRIS_PLAN_KIND_SCALAR = 1,
+        LEPTRIS_PLAN_KIND_COLLECTION = 2,
+        LEPTRIS_PLAN_KIND_NESTED = 3,
+        LEPTRIS_PLAN_KIND_RAW = 4,
+        LEPTRIS_PLAN_KIND_CONTENT = 5,
+        LEPTRIS_PLAN_KIND_CALLBACK = 6
+    } LeptrisPlanKind;
+    #define LEPTRIS_PLAN_FLAG_MIXED_CONTENT 0x1
+    #define LEPTRIS_PLAN_FLAG_ORDERED 0x2
+    #define LEPTRIS_PLAN_FLAG_CDATA 0x4
+    #define LEPTRIS_PLAN_FLAG_NS_LENIENT 0x8
+    typedef enum {
+        LEPTRIS_PLAN_NS_NONE = 0,
+        LEPTRIS_PLAN_NS_EXACT = 1,
+        LEPTRIS_PLAN_NS_ANY = 2
+    } LeptrisPlanNsForm;
+    typedef struct {
+        const char* wire_name;
+        uint8_t kind;
+        uint8_t type_tag;
+    } leptris_attr_plan;
+    typedef struct {
+        const char* wire_name;
+        uint8_t kind;
+        uint8_t type_tag;
+        int32_t child_plan_index;
+    } leptris_child_plan;
+    typedef struct {
+        const char* element_name;
+        uint8_t ns_form;
+        uint8_t pad0;
+        const char* ns_uri;
+        uint32_t attribute_count;
+        uint32_t child_count;
+        const leptris_attr_plan* attribute_plans;
+        const leptris_child_plan* child_plans;
+        uint16_t flags;
+        uint16_t pad1;
+    } leptris_element_plan;
+    typedef struct {
+        uint32_t abi_version;
+        uint32_t plan_count;
+        const leptris_element_plan* plans;
+    } leptris_plan_spec;
+    typedef enum {
+        LEPTRIS_PLAN_VALUE_ELEMENT = 0,
+        LEPTRIS_PLAN_VALUE_SCALAR = 1,
+        LEPTRIS_PLAN_VALUE_COLLECTION = 2,
+        LEPTRIS_PLAN_VALUE_RAW = 3,
+        LEPTRIS_PLAN_VALUE_CALLBACK = 4
+    } LeptrisPlanValueKind;
+    void leptris_element_expanded_name(LeptrisElement e, const char** local, const char** prefix, const char** uri);
+    uint32_t leptris_plan_abi_version(void);
+    LeptrisPlan leptris_plan_build(const leptris_plan_spec* spec, LeptrisStatus* status);
+    void leptris_plan_free(LeptrisPlan plan);
+    LeptrisPlanResult leptris_plan_walk(LeptrisDocument doc, LeptrisElement ctx, LeptrisPlan plan, LeptrisStatus* status);
+    void leptris_plan_result_free(LeptrisPlanResult result);
+    LeptrisPlanValueKind leptris_plan_value_kind(const LeptrisPlanResult v);
+    const char* leptris_plan_value_name(const LeptrisPlanResult v);
+    uint8_t leptris_plan_value_type_tag(const LeptrisPlanResult v);
+    const char* leptris_plan_value_string(const LeptrisPlanResult v);
+    size_t leptris_plan_value_length(const LeptrisPlanResult v);
+    size_t leptris_plan_value_position(const LeptrisPlanResult v);
+    size_t leptris_plan_value_count(const LeptrisPlanResult v);
+    LeptrisPlanResult leptris_plan_value_at(const LeptrisPlanResult v, size_t i);
+    const char* leptris_plan_value_attribute(const LeptrisPlanResult v, const char* wire_name);
     """
 )
 
