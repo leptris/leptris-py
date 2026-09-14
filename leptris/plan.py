@@ -403,10 +403,24 @@ def _convert(result, elements, plan_index):
             if vi < len(values) and row_matches(
                 wire_name, row, values[vi], kinds[vi], names[vi]
             ):
-                child, kind = values[vi], kinds[vi]
-                vi += 1
+                # A NESTED row can match repeatedly (implicit
+                # collection of structured children): consume every
+                # consecutive value this row produced — one match is
+                # the dict, several a list.
+                nested_matches = []
+                while vi < len(values) and row_matches(
+                    wire_name, row, values[vi], kinds[vi], names[vi]
+                ):
+                    nested_matches.append((values[vi], kinds[vi]))
+                    vi += 1
+                child, kind = nested_matches[0]
                 if kind == lib.LEPTRIS_PLAN_VALUE_ELEMENT:
-                    children[wire_name] = element(child, row[2])
+                    converted = [
+                        element(v, row[2]) for v, k in nested_matches
+                    ]
+                    children[wire_name] = (
+                        converted[0] if len(converted) == 1 else converted
+                    )
                 elif kind == lib.LEPTRIS_PLAN_VALUE_COLLECTION:
                     children[wire_name] = list_items(child)
                 else:

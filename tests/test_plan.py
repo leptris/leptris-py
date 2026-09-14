@@ -164,3 +164,31 @@ class TestLifecycle:
         doc.close()
         with pytest.raises(Exception):
             plan(doc)
+
+
+class TestRepeatedNested:
+    def test_repeated_nested_row_is_a_list_single_is_a_dict(self):
+        plan = Plan({
+            "element_name": "r",
+            "children": [
+                {
+                    "name": "i",
+                    "kind": "nested",
+                    "plan": {
+                        "element_name": "i",
+                        "attributes": {"n": {}},
+                    },
+                },
+            ],
+        })
+        with Document.parse("<r><i n='1'/><i n='2'/></r>") as doc:
+            data = plan(doc)
+        items = data["children"]["i"]
+        assert isinstance(items, list)
+        assert [e["attributes"]["n"] for e in items] == ["1", "2"]
+        with Document.parse("<r><i n='1'/></r>") as doc:
+            single = plan(doc)["children"]["i"]
+        assert isinstance(single, dict)
+        assert single["attributes"]["n"] == "1"
+        with Document.parse("<r/>") as doc:
+            assert plan(doc)["children"]["i"] is None
