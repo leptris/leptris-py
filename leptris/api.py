@@ -92,6 +92,31 @@ def tostring(
             if encoding == "unicode":
                 return data.decode("utf-8")
             return data
+    # Options-bearing serialization: one C call (options struct
+    # built in C), cffi as the fallback only.
+    from .element import _accel
+
+    declaration = xml_declaration
+    if declaration is None:
+        declaration = c_encoding is not None
+    if _accel is not None:
+        data = (
+            _accel.serialize_elem_opts(
+                elem._raw,
+                2 if pretty_print else 0,
+                1 if declaration else 0,
+                c_encoding,
+            )
+            if elem is not None
+            else _accel.serialize_doc_opts(
+                doc._raw_addr,
+                2 if pretty_print else 0,
+                1 if declaration else 0,
+                c_encoding,
+            )
+        )
+        if data is not None:
+            return data.decode("utf-8") if encoding == "unicode" else data
     options, _keepalive = serialize_options(c_encoding, pretty_print, xml_declaration)
     if elem is not None:
         ptr = _ffi.lib.leptris_element_serialize(elem._cd(), options)

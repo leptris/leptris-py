@@ -20,6 +20,19 @@ leptris` works with no extra setup on macOS (x86_64/arm64), Linux
 - nothing else for wheel installs — the pinned libleptris is
   vendored into `leptris/_vendor/` by the wheel build
   (`scripts/vendor_libleptris.sh`)
+- source installs (`pip install --no-binary leptris`) need a C
+  toolchain + cmake; the sdist bundles the pinned engine source
+  and compiles it at install time — no `LEPTRIS_LIB_PATH`
+
+### Supported runtimes
+
+- **CPython 3.9+** (abi3 wheels; one wheel per platform covers every
+  supported CPython, including future 3.x releases)
+- **Free-threaded CPython (3.13t/3.14t)**: unsupported pending a
+  `Py_GIL_DISABLED` audit of the accelerator's global state
+- **PyPy / GraalPy**: unsupported — the accelerator is required
+  (single-mode by design); a pure-cffi fallback would contradict
+  the binding's purpose. Revisit only on real demand.
 
 For a **development checkout** (or to use your own libleptris
 build), the loader also accepts a shared library

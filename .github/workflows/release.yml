@@ -129,10 +129,11 @@ jobs:
         if: matrix.sdist
         run: |
           python -m pip install --upgrade build
-          python -m build --sdist --outdir wheelhouse
-          # The sdist is source-only; strip any vendored binaries a
-          # local run may have left behind.
+          # The sdist bundles the pinned ENGINE SOURCE; binaries are
+          # never included (MANIFEST prunes _vendor + vendor builds).
+          bash scripts/prepare_sdist_vendor.sh
           rm -rf leptris/_vendor
+          python -m build --sdist --outdir wheelhouse
 
       - name: Build wheels (cibuildwheel)
         uses: pypa/cibuildwheel@v2.23.3

@@ -298,6 +298,15 @@ _BIND_NAMES = (
     "leptris_parse_string_with_encoding",
     "leptris_xpath_compiled_eval_ns_vars",
     "leptris_iterparse_next",
+    "leptris_plan_value_kind",
+    "leptris_plan_value_name",
+    "leptris_plan_value_type_tag",
+    "leptris_plan_value_string",
+    "leptris_plan_value_length",
+    "leptris_plan_value_position",
+    "leptris_plan_value_count",
+    "leptris_plan_value_at",
+    "leptris_plan_value_attribute",
 )
 _accel.bind(
     [

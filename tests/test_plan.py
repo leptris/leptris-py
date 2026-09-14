@@ -192,3 +192,100 @@ class TestRepeatedNested:
         assert single["attributes"]["n"] == "1"
         with Document.parse("<r/>") as doc:
             assert plan(doc)["children"]["i"] is None
+
+
+class TestDifferential:
+    """The C converter (accelerator) and the Python converter must
+    produce identical structures for the same walk result."""
+
+    CASES = [
+        # (spec, xml)
+        (CATALOG_SPEC, DOC_XML),
+        (
+            {
+                "element_name": "p",
+                "flags": {"mixed_content": True, "cdata": True},
+                "children": [
+                    {"name": "b", "kind": "scalar"},
+                    {"kind": "content"},
+                    {"name": "ref", "kind": "raw"},
+                    {"name": "stamp", "kind": "callback", "type_tag": 6},
+                ],
+            },
+            "<p>intro <b>bold</b> mid<![CDATA[ cdata ]]>tail"
+            "<ref><inner x='1'/></ref><stamp>xyz</stamp></p>",
+        ),
+        (
+            {
+                "element_name": "r",
+                "children": [
+                    {"name": "e", "kind": "nested", "plan": {
+                        "element_name": "e",
+                        "attributes": {"n": {}},
+                    }},
+                ],
+            },
+            "<r><e n='1'/><e n='2'/><e n='3'/></r>",
+        ),
+        (
+            {
+                "element_name": "r",
+                "children": [
+                    {"name": "one", "kind": "nested", "plan": {
+                        "element_name": "one"}},
+                    {"name": "many", "kind": "collection"},
+                    {"name": "missing", "kind": "scalar"},
+                ],
+            },
+            "<r><one/><many>a</many><many/><many>b</many></r>",
+        ),
+        (
+            {
+                "element_name": "outer",
+                "ns": {"form": "exact", "uri": "urn:x"},
+                "children": [
+                    {"name": "deep", "kind": "nested", "plan": {
+                        "element_name": "deep",
+                        "ns": {"form": "any"},
+                        "children": [
+                            {"name": "leaf", "kind": "scalar"},
+                        ],
+                    }},
+                ],
+            },
+            "<o:outer xmlns:o='urn:x'><o:deep xmlns:p='urn:y'>"
+            "<p:leaf>v</p:leaf><leaf>w</leaf></o:deep></o:outer>",
+        ),
+    ]
+
+    def _walk(self, plan, doc):
+        from leptris import _ffi
+
+        ffi = _ffi.ffi
+        status = ffi.new("LeptrisStatus*")
+        result = _ffi.lib.leptris_plan_walk(
+            doc._cd(), doc.getroot()._cd(), plan._handle, status
+        )
+        assert result != ffi.NULL
+        return result
+
+    @pytest.mark.parametrize("spec,xml", CASES)
+    def test_converters_agree(self, spec, xml):
+        from leptris import Document
+        from leptris import _ffi
+        from leptris.element import _accel
+        from leptris.plan import _convert
+
+        if _accel is None:
+            pytest.skip("accelerator unavailable")
+        plan = Plan(spec)
+        with Document.parse(xml) as doc:
+            result = self._walk(plan, doc)
+            try:
+                c_result = _accel.plan_convert(
+                    int(_ffi.ffi.cast("uintptr_t", result)), plan._shape
+                )
+                py_result = _convert(result, plan._elements, 0)
+            finally:
+                _ffi.lib.leptris_plan_result_free(result)
+        assert c_result == py_result
