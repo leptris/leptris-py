@@ -14,3 +14,9 @@ finished Python structures.
 - 11 — v2: plain xpath-with-variables in one C call
 - 12 — v2: interned-key cache for Plan dict building
 - 13 — v2: free-threaded decision + 3.15 leg + SAX drain stretch
+
+- 20 — v3 audit (binding-side program complete; four real items)
+- 21 — engine-wave adoption + language-engine bench rows
+- 22 — XQuery materialization (conditional on the new row)
+- 23 — conda-forge feedstock (last zero-setup surface)
+- 24 — v3 decisions (PyPy/API-mode-ffi/cp313t/engine walls)
