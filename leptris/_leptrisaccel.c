@@ -18,7 +18,13 @@
  */
 
 #define PY_SSIZE_T_CLEAN
+/* Free-threaded builds (Py_GIL_DISABLED, the cp3XXt wheels) are
+ * version-specific: the 3.9 limited API predates free-threading.
+ * TODO.native/13 — one-doc-per-thread contract, see the Fns
+ * THREADING CONTRACT note below. */
+#ifndef Py_GIL_DISABLED
 #define Py_LIMITED_API 0x03090000
+#endif
 #include <Python.h>
 #include <stdint.h>
 #include <stdlib.h>

@@ -110,6 +110,37 @@ jobs:
             cibw: "cp39-win_arm64"
             dist: win-arm64
             archs_win: "ARM64"
+          - os: ubuntu-latest
+            cibw: "cp314t-manylinux_x86_64"
+            dist: ft-manylinux-x86_64
+            enable: "cpython-freethreading"
+          - os: ubuntu-24.04-arm
+            cibw: "cp314t-manylinux_aarch64"
+            dist: ft-manylinux-aarch64
+            enable: "cpython-freethreading"
+          - os: ubuntu-latest
+            cibw: "cp314t-musllinux_x86_64"
+            dist: ft-musllinux-x86_64
+            enable: "cpython-freethreading"
+          - os: ubuntu-24.04-arm
+            cibw: "cp314t-musllinux_aarch64"
+            dist: ft-musllinux-aarch64
+            enable: "cpython-freethreading"
+          - os: macos-latest
+            cibw: "cp314t-macosx*"
+            archs: "x86_64 arm64"
+            dist: ft-macos-universal
+            enable: "cpython-freethreading"
+          - os: windows-latest
+            cibw: "cp314t-win_amd64"
+            dist: ft-win-amd64
+            archs_win: "AMD64"
+            enable: "cpython-freethreading"
+          - os: windows-latest
+            cibw: "cp314t-win_arm64"
+            dist: ft-win-arm64
+            archs_win: "ARM64"
+            enable: "cpython-freethreading"
     steps:
       # SELF-CHECKOUT: as a workflow_call the default checkout is the
       # CALLER's repo (leptris/leptris) — where neither the binding
@@ -141,6 +172,7 @@ jobs:
           CIBW_BUILD: ${{ matrix.cibw }}
           CIBW_ARCHS_MACOS: ${{ matrix.archs }}
           CIBW_ARCHS_WINDOWS: ${{ matrix.archs_win }}
+          CIBW_ENABLE: ${{ matrix.enable }}
           CIBW_BEFORE_ALL_LINUX: "bash scripts/vendor_libleptris.sh"
           CIBW_BEFORE_ALL_MACOS: "bash scripts/vendor_libleptris.sh"
           CIBW_BEFORE_ALL_WINDOWS: "bash scripts/vendor_libleptris.sh"

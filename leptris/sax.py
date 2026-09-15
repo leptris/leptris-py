@@ -12,6 +12,7 @@ after the drain completes.
 
 from __future__ import annotations
 
+import threading
 from typing import Optional, Tuple
 
 from . import _ffi
@@ -138,6 +139,7 @@ def _raise_if_failed(handler: SAXHandler) -> None:
 
 
 _shared_recorder = None
+_shared_recorder_lock = threading.Lock()
 
 
 def parse(xml, handler: SAXHandler) -> None:
@@ -145,21 +147,29 @@ def parse(xml, handler: SAXHandler) -> None:
 
     Runs on a module-level recorder reused across calls (reset —
     libleptris 1.9.10): retaining the arena saves ~21% per document
-    versus new+free per parse. Safe because every step holds the GIL.
+    versus new+free per parse. The lock serializes recorder access —
+    cffi RELEASES the GIL around each C call, so even on a GIL build
+    concurrent parses interleave feed/reset/drain on the shared
+    recorder and corrupt it (found by the TODO.native/13 thread
+    specs); free-threaded builds need it regardless. Uncontended
+    acquisition is nanoseconds; arena reuse is kept.
     """
     global _shared_recorder
     if isinstance(xml, str):
         xml = xml.encode("utf-8")
     handler.last_error = None
     lib, ffi = _ffi.lib, _ffi.ffi
-    if _shared_recorder is None:
-        _shared_recorder = lib.leptris_sax_recorder_new()
-        if _shared_recorder == ffi.NULL:
-            raise ParseError("could not create SAX recorder")
-    lib.leptris_sax_recorder_reset(_shared_recorder)
-    rc = lib.leptris_sax_recorder_feed(_shared_recorder, xml, len(xml), 1)
-    _drain(handler, _shared_recorder, "document")
-    _raise_if_failed(handler)
+    with _shared_recorder_lock:
+        if _shared_recorder is None:
+            _shared_recorder = lib.leptris_sax_recorder_new()
+            if _shared_recorder == ffi.NULL:
+                raise ParseError("could not create SAX recorder")
+        lib.leptris_sax_recorder_reset(_shared_recorder)
+        rc = lib.leptris_sax_recorder_feed(
+            _shared_recorder, xml, len(xml), 1
+        )
+        _drain(handler, _shared_recorder, "document")
+        _raise_if_failed(handler)
     if rc != 0 and handler.last_error is None:
         raise ParseError("SAX parse failed")
 

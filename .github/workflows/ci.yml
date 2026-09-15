@@ -52,6 +52,42 @@ jobs:
         env:
           LEPTRIS_LIB_PATH: ${{ env.LEPTRIS_LIB_PATH }}
 
+  freethreaded:
+    # TODO.native/13: the cpXXt wheels ship under the
+    # one-document-per-thread contract — this leg exercises that
+    # contract on a real free-threaded interpreter.
+    name: pytest (ubuntu, 3.14t free-threaded)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14t"
+      - name: Build libleptris from the pinned release tarball
+        shell: bash
+        run: |
+          set -e
+          LIBLEPTRIS_VERSION=$(cat libleptris-version.txt)
+          mkdir -p tmp/libleptris && cd tmp/libleptris
+          curl -sL "https://codeload.github.com/leptris/leptris/tar.gz/refs/tags/v${LIBLEPTRIS_VERSION}" | tar xz --strip-components=1
+          cmake -B build -S . \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLEPTRIS_BUILD_SHARED=ON -DLEPTRIS_BUILD_STATIC=OFF \
+            -DBUILD_TESTING=OFF -DLEPTRIS_BUILD_CLI=OFF \
+            -DLEPTRIS_BUILD_BENCHMARKS=OFF \
+            -DLEPTRIS_ENABLE_UTF8PROC=OFF -DLEPTRIS_ENABLE_ICONV=OFF
+          cmake --build build --config Release
+          LIB=$(find build -type f -o -type l 2>/dev/null | grep -iE '(lib)?leptris\.(dylib|so|dll)$' | head -1)
+          echo "LEPTRIS_LIB_PATH=$PWD/$LIB" >> "$GITHUB_ENV"
+      - name: Install and test the binding
+        shell: bash
+        run: |
+          python -m pip install pytest cffi setuptools
+          python setup.py build_ext --inplace
+          python -m pytest tests/ -q
+        env:
+          LEPTRIS_LIB_PATH: ${{ env.LEPTRIS_LIB_PATH }}
+
   test:
     name: pytest (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

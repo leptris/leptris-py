@@ -46,3 +46,19 @@
 - **3.15 canary**: live in ci.yml (`future-python` job,
   3.15.0-alpha.3, continue-on-error — a forward-compat tripwire,
   never a merge gate).
+
+## Decision (2026-09-15): SHIPPED
+
+cp314t wheels on all 8 platforms (release matrix `ft-*` legs,
+CIBW_ENABLE=cpython-freethreading; version-specific builds — the
+3.9 limited API predates free-threading). The CI 3.14t leg runs
+the full suite + tests/test_threading.py (the contract spec).
+Found and fixed while shipping:
+
+- sax.py's shared recorder raced under threads (cffi RELEASES the
+  GIL around C calls — the "safe because GIL" assumption was wrong
+  on every build); now lock-serialized.
+- leptris/leptris#1079: engine twin-compile freed the bytecode the
+  caller then ran (segfault in vm_run via eval_with_vars_context;
+  ~1/3 runs of the 16-thread repro). Fixed upstream (PR #1081);
+  the binding thread spec re-verifies on adoption.
