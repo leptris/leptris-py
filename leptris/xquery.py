@@ -38,6 +38,23 @@ class XQuery(_engine.CompiledSource):
         document = self._document(document_or_element)
         context = element._cd() if element is not None else _ffi.ffi.NULL
 
+        # TODO.native/22: one C call for the no-variables path
+        # (eval + result conversion; the Python converter was 42%
+        # of the row). Variables keep the cffi eval_params path.
+        if not variables:
+            from .element import _accel
+
+            if _accel is not None:
+                doc_addr = document._raw_addr
+                if doc_addr is not None:
+                    items = _accel.xquery_eval(
+                        int(_ffi.ffi.cast("uintptr_t", self._handle)),
+                        doc_addr,
+                        element._raw if element is not None else 0,
+                        document,
+                    )
+                    if items is not None:
+                        return items
         if variables:
             keepalive = []
             name_ptrs = []

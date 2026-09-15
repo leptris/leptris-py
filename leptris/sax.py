@@ -78,7 +78,17 @@ _KIND_ERROR = 10
 
 
 def _drain(handler: SAXHandler, recorder, chunk_label: str) -> None:
-    """Read one chunk's buffered records and dispatch them."""
+    """Read one chunk's buffered records and dispatch them.
+
+    The accelerator drains in C (TODO.native/22: the Python loop was
+    91% of the SAX row); the loop below is the reference + fallback."""
+    from .element import _accel
+
+    if _accel is not None:
+        _accel.sax_drain(
+            int(_ffi.ffi.cast("uintptr_t", recorder)), handler
+        )
+        return
     lib, ffi = _ffi.lib, _ffi.ffi
     count = ffi.new("size_t*")
     records = lib.leptris_sax_recorder_records(recorder, count)
