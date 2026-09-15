@@ -62,6 +62,46 @@ def expand_clark_names(
     return _CLARK.sub(replacement, path), extra
 
 
+def _vars_flat(variables):
+    """Flatten a variables dict to the accelerator's [name, tag,
+    value, ...] encoding (the compiled-XPath contract; TypeError on
+    unsupported value types)."""
+    flat = []
+    for name, value in variables.items():
+        if isinstance(value, bool):
+            flat.extend((name, 0, value))
+        elif isinstance(value, (int, float)):
+            flat.extend((name, 1, value))
+        elif isinstance(value, str):
+            flat.extend((name, 2, value))
+        else:
+            raise TypeError(
+                f"XPath variable {name!r} must be bool, int, float or str"
+            )
+    return flat
+
+
+def _c_evaluate_vars(document, context_element, expression, variables):
+    """One C call for the plain variables path (TODO.native/11):
+    bind + evaluate + convert, mirroring the no-variables fast
+    path. Returns None when the C path is unsuitable — callers
+    fall back to the engine path."""
+    from .element import _accel
+
+    if _accel is None or document.closed:
+        return None
+    doc_addr = document._raw_addr
+    if doc_addr is None:
+        return None
+    context_addr = (
+        context_element._raw if context_element is not None else 0
+    )
+    return _accel.nodeset_vars(
+        doc_addr, context_addr, expression, document,
+        _vars_flat(variables),
+    )
+
+
 def _c_evaluate(document, context_element, expression, namespaces):
     """The single bridge from Python query entry points to all-C
     evaluation (eval, batch fill, element construction in one call).

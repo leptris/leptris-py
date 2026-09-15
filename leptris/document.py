@@ -251,6 +251,14 @@ class Document:
             items = _c_evaluate(self, context, expression, namespaces)
             if items is not None:
                 return items
+        if version is None and variables is not None:
+            from .xpath import _c_evaluate_vars
+
+            items = _c_evaluate_vars(
+                self, context, expression, variables
+            )
+            if items is not None:
+                return items
         from .xpath import _XPathEngine
 
         return _XPathEngine.evaluate(
