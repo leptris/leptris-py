@@ -92,12 +92,17 @@ class build_with_engine(build):
 
 # Free-threaded builds (the cpXXt wheels) are version-specific:
 # Py_GIL_DISABLED + the 3.9 limited API are mutually exclusive.
-# Detected from the BUILD interpreter (cibuildwheel's cpython-
-# freethreading runners set it in sysconfig; some 3.14t builds
-# only carry the abiflags 't' marker).
+# Detection needs three signals because no single one is portable:
+# sysconfig Py_GIL_DISABLED (some builds), sys.abiflags 't'
+# (Unix-only), and the EXT_SUFFIX 'cpXXt' marker (every platform —
+# e.g. '.cp314t-win_amd64.pyd').
+import re as _re
+
 FREE_THREADED = (
     sysconfig.get_config_var("Py_GIL_DISABLED") == "1"
     or "t" in (getattr(sys, "abiflags", "") or "")
+    or _re.search(r"3\d+t", sysconfig.get_config_var("EXT_SUFFIX") or "")
+    is not None
 )
 
 if FREE_THREADED:
