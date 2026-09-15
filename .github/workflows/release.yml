@@ -167,7 +167,7 @@ jobs:
           python -m build --sdist --outdir wheelhouse
 
       - name: Build wheels (cibuildwheel)
-        uses: pypa/cibuildwheel@v2.23.3
+        uses: pypa/cibuildwheel@v3
         env:
           CIBW_BUILD: ${{ matrix.cibw }}
           CIBW_ARCHS_MACOS: ${{ matrix.archs }}
