@@ -885,3 +885,74 @@ class TestVersionSelection:
 
         with pytest.raises(ValueError, match="4.0"):
             XPath("count(//book)", version="4.0")
+
+
+class TestVariablesFastPath:
+    """The plain variables path runs through one C call
+    (accel.nodeset_vars, TODO.native/11) — these pin it to the
+    engine-path semantics."""
+
+    XML = (
+        "<r xmlns:x='urn:x'>"
+        "<x:item n='2'>alpha</x:item><x:item n='9'>beta</x:item>"
+        "</r>"
+    )
+
+    def _doc(self):
+        return Document.parse(self.XML)
+
+    def test_nodeset_result(self):
+        with self._doc() as doc:
+            got = doc.xpath("//x:item[@n=$n]", variables={"n": "9"})
+            assert len(got) == 1
+            assert got[0].text == "beta"
+
+    def test_scalar_result(self):
+        with self._doc() as doc:
+            assert doc.xpath(
+                "count(//x:item[@n=$n])", variables={"n": "9"}
+            ) == 1.0
+
+    def test_all_value_types(self):
+        with self._doc() as doc:
+            assert doc.xpath("$b", variables={"b": True}) is True
+            assert doc.xpath("$i", variables={"i": 3}) == 3.0
+            assert doc.xpath("$s", variables={"s": "x"}) == "x"
+
+    def test_multiple_variables(self):
+        with self._doc() as doc:
+            got = doc.xpath(
+                "//x:item[@n=$n][text()=$t]",
+                variables={"n": "2", "t": "alpha"},
+            )
+        assert len(got) == 1
+
+    def test_element_entry_point(self):
+        with self._doc() as doc:
+            root = doc.getroot()
+            assert root.xpath(
+                "count(//x:item[@n=$n])", variables={"n": "2"}
+            ) == 1.0
+
+    def test_namespaces_argument_unchanged_semantics(self):
+        # namespaces= is accepted alongside variables (the engine
+        # resolves prefixes against document declarations on this
+        # path — identical to the engine path it replaces)
+        with self._doc() as doc:
+            got = doc.xpath(
+                "//x:item[@n=$n]",
+                namespaces={"x": "urn:x"},
+                variables={"n": "9"},
+            )
+        assert len(got) == 1
+
+    def test_no_match_is_empty_list(self):
+        with self._doc() as doc:
+            assert doc.xpath(
+                "//x:item[@n=$n]", variables={"n": "99"}
+            ) == []
+
+    def test_unsupported_variable_type_raises(self):
+        with self._doc() as doc:
+            with pytest.raises(TypeError, match="must be bool"):
+                doc.xpath("//i", variables={"v": {}})

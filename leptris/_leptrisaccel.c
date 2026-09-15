@@ -62,7 +62,12 @@ rodict_sq_ass_item(PyObject *self, Py_ssize_t index, PyObject *value)
     return -1;
 }
 
-/* libleptris entry points, bound once from Python via addresses. */
+/* libleptris entry points, bound once from Python via addresses.
+ * THREADING CONTRACT: the table is written exactly once, by
+ * bind() during leptris.element import, before any thread can
+ * reach these pointers (import happens-before first use). Reads
+ * afterwards are data-race-free on every build, including
+ * free-threaded CPython. */
 static struct {
     const char *(*element_name)(void *);
     const char *(*element_namespace)(void *);
@@ -130,9 +135,10 @@ static struct {
     size_t (*plan_value_count)(const void *);
     void *(*plan_value_at)(const void *, size_t);
     const char *(*plan_value_attribute)(const void *, const char *);
+    void *(*xpath_eval_vars_ctx)(void *, void *, const char *, void *);
 } Fns;
 
-#define FN_COUNT 64
+#define FN_COUNT 65
 
 static int bound = 0;
 static PyObject *LeptrisErrorType = NULL;
@@ -1061,6 +1067,7 @@ accel_bind(PyObject *module, PyObject *args)
     (void **)&Fns.plan_value_count,
     (void **)&Fns.plan_value_at,
     (void **)&Fns.plan_value_attribute,
+    (void **)&Fns.xpath_eval_vars_ctx,
     };
     for (Py_ssize_t i = 0; i < FN_COUNT; i++) {
         PyObject *item = PyList_Check(fast)
@@ -2005,12 +2012,16 @@ accel_document_root(PyObject *module, PyObject *args)
 
 typedef struct {
     char *name;        /* row wire name (owned) */
+    PyObject *key;     /* the SAME str object the spec passed:
+                        * dict probes on repeated walks are
+                        * pointer-equal (TODO.native/12) */
     int kind;          /* PK_* */
     int child_index;   /* -1 for non-nested */
 } PlanRowC;
 
 typedef struct {
     char **attr_names; /* owned strings */
+    PyObject **attr_keys; /* parallel interned keys (owned refs) */
     Py_ssize_t attr_count;
     PlanRowC *rows;    /* plan-row order */
     Py_ssize_t row_count;
@@ -2029,11 +2040,16 @@ plan_shape_free_c(PlanShapeC *shape)
         return;
     for (Py_ssize_t p = 0; p < shape->plan_count; p++) {
         PlanPlanC *plan = &shape->plans[p];
-        for (Py_ssize_t a = 0; a < plan->attr_count; a++)
+        for (Py_ssize_t a = 0; a < plan->attr_count; a++) {
             free(plan->attr_names[a]);
+            Py_XDECREF(plan->attr_keys[a]);
+        }
         free(plan->attr_names);
-        for (Py_ssize_t r = 0; r < plan->row_count; r++)
+        free(plan->attr_keys);
+        for (Py_ssize_t r = 0; r < plan->row_count; r++) {
             free(plan->rows[r].name);
+            Py_XDECREF(plan->rows[r].key);
+        }
         free(plan->rows);
     }
     free(shape->plans);
@@ -2104,6 +2120,8 @@ accel_plan_shape_build(PyObject *module, PyObject *args)
         plan->attr_count = PySequence_Size(attr_fast);
         plan->attr_names = (char **)calloc(
             plan->attr_count ? plan->attr_count : 1, sizeof(char *));
+        plan->attr_keys = (PyObject **)calloc(
+            plan->attr_count ? plan->attr_count : 1, sizeof(PyObject *));
         plan->row_count = PySequence_Size(row_fast);
         plan->rows = (PlanRowC *)calloc(
             plan->row_count ? plan->row_count : 1, sizeof(PlanRowC));
@@ -2130,20 +2148,32 @@ accel_plan_shape_build(PyObject *module, PyObject *args)
             }
             plan->attr_names[a] = strdup(PyBytes_AsString(encoded));
             Py_DECREF(encoded);
+            Py_INCREF(item);  /* the interned key: the spec's own str */
+            plan->attr_keys[a] = item;
             Py_DECREF(item);
         }
         for (Py_ssize_t r = 0; r < plan->row_count && !failed; r++) {
             PyObject *row = PySequence_GetItem(row_fast, r);
-            const char *name;
+            PyObject *name_obj;
             int kind, child_index;
             if (row == NULL
-                || !PyArg_ParseTuple(row, "sii", &name, &kind,
+                || !PyArg_ParseTuple(row, "Oii", &name_obj, &kind,
                                      &child_index))
                 failed = 1;
             else {
-                plan->rows[r].name = strdup(name);
-                plan->rows[r].kind = kind;
-                plan->rows[r].child_index = child_index;
+                PyObject *encoded =
+                    PyUnicode_AsEncodedString(name_obj, "utf-8", NULL);
+                if (encoded == NULL)
+                    failed = 1;
+                else {
+                    plan->rows[r].name =
+                        strdup(PyBytes_AsString(encoded));
+                    Py_DECREF(encoded);
+                    Py_INCREF(name_obj);  /* interned key */
+                    plan->rows[r].key = name_obj;
+                    plan->rows[r].kind = kind;
+                    plan->rows[r].child_index = child_index;
+                }
             }
             Py_XDECREF(row);
         }
@@ -2228,8 +2258,8 @@ plan_convert_element(const void *value, const PlanShapeC *shape,
     for (Py_ssize_t r = 0; r < plan->row_count; r++) {
         const PlanRowC *row = &plan->rows[r];
         if (vi >= (Py_ssize_t)vcount) {
-            if (PyDict_SetItemString(
-                    children, row->name,
+            if (PyDict_SetItem(
+                    children, row->key,
                     (row->kind == PK_COLLECTION || row->kind == PK_CONTENT)
                         ? (PyObject *)PyList_New(0) : Py_None) < 0) {
                 Py_DECREF(children);
@@ -2270,8 +2300,8 @@ plan_convert_element(const void *value, const PlanShapeC *shape,
         }
 
         if (!matches) {
-            if (PyDict_SetItemString(
-                    children, row->name,
+            if (PyDict_SetItem(
+                    children, row->key,
                     (row->kind == PK_COLLECTION || row->kind == PK_CONTENT)
                         ? (PyObject *)PyList_New(0) : Py_None) < 0) {
                 Py_DECREF(children);
@@ -2315,14 +2345,14 @@ plan_convert_element(const void *value, const PlanShapeC *shape,
                 PyObject *only = PyList_GetItem(collected, 0);
                 Py_INCREF(only);
                 Py_DECREF(collected);
-                if (PyDict_SetItemString(children, row->name, only) < 0) {
+                if (PyDict_SetItem(children, row->key, only) < 0) {
                     Py_DECREF(only);
                     Py_DECREF(children);
                     return NULL;
                 }
                 Py_DECREF(only);
             } else {
-                if (PyDict_SetItemString(children, row->name, collected) < 0) {
+                if (PyDict_SetItem(children, row->key, collected) < 0) {
                     Py_DECREF(collected);
                     Py_DECREF(children);
                     return NULL;
@@ -2341,7 +2371,7 @@ plan_convert_element(const void *value, const PlanShapeC *shape,
         else
             converted = plan_leaf(candidate, shape->callback_type);
         if (converted == NULL
-            || PyDict_SetItemString(children, row->name, converted) < 0) {
+            || PyDict_SetItem(children, row->key, converted) < 0) {
             Py_XDECREF(converted);
             Py_DECREF(children);
             return NULL;
@@ -2361,7 +2391,7 @@ plan_convert_element(const void *value, const PlanShapeC *shape,
             ? PyUnicode_DecodeUTF8(val, (Py_ssize_t)strlen(val), "replace")
             : Py_None;
         if (item == NULL
-            || PyDict_SetItemString(attrs, plan->attr_names[a], item) < 0) {
+            || PyDict_SetItem(attrs, plan->attr_keys[a], item) < 0) {
             Py_XDECREF(item);
             Py_DECREF(attrs);
             Py_DECREF(children);
@@ -2466,6 +2496,46 @@ accel_serialize_elem_opts(PyObject *module, PyObject *args)
     return bytes;
 }
 
+
+/* Plain-path xpath WITH variables in one C call (TODO.native/11):
+ * the same engine entry the cffi path uses, plus the flat-vars
+ * marshaling and result conversion from compiled_eval — no
+ * per-variable, per-node FFI transitions. Semantics are the
+ * engine's: document namespace declarations resolve prefixes;
+ * the caller's ns bindings are not consulted on this path
+ * (identical to the engine path it replaces). */
+static PyObject *
+accel_nodeset_vars(PyObject *module, PyObject *args)
+{
+    PyObject *document_ptr, *context_obj, *expression, *document,
+        *vars_flat;
+    if (!PyArg_ParseTuple(args, "OOOOO", &document_ptr, &context_obj,
+                          &expression, &document, &vars_flat))
+        return NULL;
+    if (!bound || !PyLong_Check(document_ptr))
+        Py_RETURN_NONE;
+    PyObject *encoded = PyUnicode_AsUTF8String(expression);
+    if (encoded == NULL)
+        return NULL;
+    const char *expr = PyBytes_AsString(encoded);
+    void *ctx = NULL;
+    if (context_obj != Py_None && PyLong_Check(context_obj))
+        ctx = PyLong_AsVoidPtr(context_obj);
+    void *var_set = build_variable_set(vars_flat);
+    if (var_set == (void *)-1) {
+        Py_DECREF(encoded);
+        return NULL;
+    }
+    void *result = Fns.xpath_eval_vars_ctx(
+        PyLong_AsVoidPtr(document_ptr), ctx, expr, var_set);
+    Py_DECREF(encoded);
+    if (var_set != NULL)
+        Fns.variable_set_free(var_set);
+    if (result == NULL)
+        Py_RETURN_NONE;
+    return finish_result(result, document);
+}
+
 static PyMethodDef accel_methods[] = {
     {"create", accel_create, METH_VARARGS,
      "create(address, ptr, document) -> Element"},
@@ -2517,6 +2587,8 @@ static PyMethodDef accel_methods[] = {
      "serialize_doc_opts(address, indent, declaration, encoding|None) -> bytes | None"},
     {"serialize_elem_opts", accel_serialize_elem_opts, METH_VARARGS,
      "serialize_elem_opts(address, indent, declaration, encoding|None) -> bytes | None"},
+    {"nodeset_vars", accel_nodeset_vars, METH_VARARGS,
+     "nodeset_vars(document_address, context_address, expression, document, vars_flat) -> list | scalar | None"},
     {NULL}
 };
 
