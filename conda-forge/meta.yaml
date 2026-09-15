@@ -17,8 +17,9 @@ requirements:
   build:
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
+    - {{ stdlib("c") }}
     - cmake
-    - sysroot_linux-64 2.17  # manylinux-compatible glibc for the engine build
+    - make  # [unix]
   host:
     - python
     - pip
