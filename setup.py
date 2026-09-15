@@ -14,6 +14,7 @@ import os
 import shutil
 import subprocess
 import sys
+import sysconfig
 
 from setuptools import Extension, setup
 from setuptools.command.build import build
@@ -89,15 +90,32 @@ class build_with_engine(build):
         super().run()
 
 
+# Free-threaded builds (the cpXXt wheels) are version-specific:
+# Py_GIL_DISABLED + the 3.9 limited API are mutually exclusive.
+# Detected from the BUILD interpreter (cibuildwheel's cpython-
+# freethreading runners set it in sysconfig).
+FREE_THREADED = sysconfig.get_config_var("Py_GIL_DISABLED") == "1"
+
+if FREE_THREADED:
+    ext_kwargs = dict(
+        define_macros=[("Py_GIL_DISABLED", "1")],
+    )
+    bdist_options = {}
+else:
+    ext_kwargs = dict(
+        py_limited_api=True,
+        define_macros=[("Py_LIMITED_API", "0x03090000")],
+    )
+    bdist_options = {"bdist_wheel": {"py_limited_api": "cp39"}}
+
 setup(
     cmdclass={"build": build_with_engine},
     ext_modules=[
         Extension(
             "leptris._leptrisaccel",
             sources=["leptris/_leptrisaccel.c"],
-            py_limited_api=True,
-            define_macros=[("Py_LIMITED_API", "0x03090000")],
+            **ext_kwargs,
         )
     ],
-    options={"bdist_wheel": {"py_limited_api": "cp39"}},
+    options=bdist_options,
 )

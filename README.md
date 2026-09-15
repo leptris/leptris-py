@@ -28,8 +28,12 @@ leptris` works with no extra setup on macOS (x86_64/arm64), Linux
 
 - **CPython 3.9+** (abi3 wheels; one wheel per platform covers every
   supported CPython, including future 3.x releases)
-- **Free-threaded CPython (3.13t/3.14t)**: unsupported pending a
-  `Py_GIL_DISABLED` audit of the accelerator's global state
+- **Free-threaded CPython (3.13t/3.14t)**: supported — cp314t wheels
+  ship for every platform, built with `Py_GIL_DISABLED` (version-
+  specific; the accelerator's Fns table is write-once at import).
+  Contract: **one document per thread** (documents may migrate
+  between threads between calls); the shared SAX recorder is
+  internally serialized
 - **PyPy / GraalPy**: unsupported — the accelerator is required
   (single-mode by design); a pure-cffi fallback would contradict
   the binding's purpose. Revisit only on real demand.
