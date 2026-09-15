@@ -303,6 +303,17 @@ ffi.cdef(
         LEPTRIS_PLAN_VALUE_CALLBACK = 4
     } LeptrisPlanValueKind;
     void leptris_element_expanded_name(LeptrisElement e, const char** local, const char** prefix, const char** uri);
+    /* node-surface parity (lib 1.9.176, #1094) */
+    LeptrisNodeRef leptris_document_append_pi(LeptrisDocument doc, const char* target, const char* data);
+    LeptrisStatus leptris_document_remove_child(LeptrisDocument doc, LeptrisNodeRef node);
+    LeptrisDoctype leptris_document_set_doctype(LeptrisDocument doc, const char* name, const char* public_id, const char* system_id);
+    LeptrisStatus leptris_document_set_encoding(LeptrisDocument doc, const char* encoding);
+    LeptrisStatus leptris_document_set_standalone(LeptrisDocument doc, int standalone);
+    LeptrisStatus leptris_document_set_version(LeptrisDocument doc, const char* version);
+    int leptris_document_standalone(LeptrisDocument doc);
+    const char* leptris_document_version(LeptrisDocument doc);
+    LeptrisNodeRef leptris_entity_ref_node_create(LeptrisDocument doc, const char* name);
+    const char* leptris_entity_ref_node_name(LeptrisNodeRef node);
     uint32_t leptris_plan_abi_version(void);
     LeptrisPlan leptris_plan_build(const leptris_plan_spec* spec, LeptrisStatus* status);
     void leptris_plan_free(LeptrisPlan plan);

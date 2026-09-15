@@ -296,6 +296,29 @@ class Document:
         if status != 0:
             raise LeptrisError(status_message(status))
 
+    @property
+    def version(self) -> Optional[str]:
+        """The XML declaration's version (None when absent; the
+        engine default is "1.0" for parsed docs)."""
+        if self._freed:
+            raise LeptrisError("operation on a closed document")
+        from ._ffi import lib, ffi
+
+        value = lib.leptris_document_version(self._cd())
+        return ffi.string(value).decode("utf-8", "replace") if value != ffi.NULL else None
+
+    @property
+    def standalone(self) -> Optional[bool]:
+        """The XML declaration's standalone flag (None when the
+        declaration carries no standalone attribute)."""
+        if self._freed:
+            raise LeptrisError("operation on a closed document")
+        from ._ffi import lib
+
+        # The engine signals absence with -1.
+        value = lib.leptris_document_standalone(self._cd())
+        return None if value < 0 else bool(value)
+
     def process_xinclude(self, base_url: Optional[str] = None) -> "Document":
         if self._freed:
             raise LeptrisError("operation on a closed document")
