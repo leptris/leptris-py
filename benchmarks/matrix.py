@@ -38,6 +38,7 @@ MEDIUM = (
     )
     + "</catalog>"
 )
+MEDIUM_BYTES = MEDIUM.encode("utf-8")
 
 N_PARSE_SMALL = 5_000
 N_PARSE_MEDIUM = 1_000
@@ -127,8 +128,43 @@ def _make_benchmarks():
         def plan_materialize():
             return plan(doc)
 
+        from leptris import XSLT, XQuery, c14n
+        from leptris import sax as _sax
+        from leptris import iterparse as _iterparse
+
+        style = XSLT(
+            "<xsl:stylesheet xmlns:xsl='http://www.w3.org/1999/XSL/Transform'"
+            " version='1.0'><xsl:template match='/'>"
+            "<out><xsl:for-each select='//book'>"
+            "<b><xsl:value-of select='@id'/></b>"
+            "</xsl:for-each></out></xsl:template></xsl:stylesheet>"
+        )
+        query = XQuery("for $b in //book return string($b/@id)")
+
+        class _SaxCount(_sax.SAXHandler):
+            def __init__(self):
+                self.last_error = None
+                self.n = 0
+            def start_element(self, name, attributes):
+                self.n += 1
+
+        def sax_parse():
+            h = _SaxCount()
+            _sax.parse(MEDIUM, h)
+            return h.n
+
+        import io as _io
+
+        def iterparse_all():
+            return sum(1 for _ in _iterparse(_io.BytesIO(MEDIUM_BYTES)))
+
         benchmarks["leptris"] = {
             "plan materialize": plan_materialize,
+            "xslt apply": lambda: style(doc),
+            "xquery eval": lambda: query(doc),
+            "sax parse": sax_parse,
+            "iterparse": iterparse_all,
+            "c14n": lambda: c14n(doc),
             "parse small": parse_small,
             "parse medium": parse_medium,
             "parse html": parse_html,
@@ -168,8 +204,41 @@ def _make_benchmarks():
                 })
             return out
 
+        import io as _lio
+
+        lx_style = etree.XSLT(etree.XML(
+            b"<xsl:stylesheet xmlns:xsl='http://www.w3.org/1999/XSL/Transform'"
+            b" version='1.0'><xsl:template match='/'>"
+            b"<out><xsl:for-each select='//book'>"
+            b"<b><xsl:value-of select='@id'/></b>"
+            b"</xsl:for-each></out></xsl:template></xsl:stylesheet>"))
+
+        class _LxSax:
+            def __init__(self):
+                self.n = 0
+            def start(self, tag, attrib):
+                self.n += 1
+            def end(self, tag):
+                pass
+            def data(self, data):
+                pass
+            def close(self):
+                return self.n
+
+        def lxml_sax():
+            p = etree.XMLParser(target=_LxSax())
+            p.feed(MEDIUM_BYTES)
+            return p.close()
+
+        def lxml_iterparse():
+            return sum(1 for _ in etree.iterparse(_lio.BytesIO(MEDIUM_BYTES)))
+
         benchmarks["lxml"] = {
             "plan materialize": lxml_materialize,
+            "xslt apply": lambda: lx_style(lroot),
+            "sax parse": lxml_sax,
+            "iterparse": lxml_iterparse,
+            "c14n": lambda: etree.tostring(lroot, method="c14n"),
             "parse small": lambda: etree.fromstring(SMALL.encode()),
             "parse medium": lambda: etree.fromstring(MEDIUM.encode()),
             "parse html": lambda: etree.fromstring(
@@ -265,6 +334,11 @@ HTML_DOC = (
 
 OPERATIONS = [
     ("plan materialize", N_QUERY),
+    ("xslt apply", N_QUERY),
+    ("xquery eval", N_QUERY),
+    ("sax parse", N_PARSE_MEDIUM),
+    ("iterparse", N_PARSE_MEDIUM),
+    ("c14n", N_QUERY),
     ("parse small", N_PARSE_SMALL),
     ("parse medium", N_PARSE_MEDIUM),
     ("xpath count(//book)", N_QUERY),

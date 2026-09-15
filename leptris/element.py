@@ -308,6 +308,9 @@ _BIND_NAMES = (
     "leptris_plan_value_at",
     "leptris_plan_value_attribute",
     "leptris_xpath_eval_with_vars_context",
+    "leptris_sax_recorder_records",
+    "leptris_sax_recorder_arena",
+    "leptris_xquery_eval",
 )
 _accel.bind(
     [

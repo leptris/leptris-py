@@ -142,9 +142,12 @@ static struct {
     void *(*plan_value_at)(const void *, size_t);
     const char *(*plan_value_attribute)(const void *, const char *);
     void *(*xpath_eval_vars_ctx)(void *, void *, const char *, void *);
+    const void *(*sax_records)(void *, size_t *);
+    const char *(*sax_arena)(void *, size_t *);
+    void *(*xquery_eval)(void *, void *, void *);
 } Fns;
 
-#define FN_COUNT 65
+#define FN_COUNT 68
 
 static int bound = 0;
 static PyObject *LeptrisErrorType = NULL;
@@ -1074,6 +1077,9 @@ accel_bind(PyObject *module, PyObject *args)
     (void **)&Fns.plan_value_at,
     (void **)&Fns.plan_value_attribute,
     (void **)&Fns.xpath_eval_vars_ctx,
+    (void **)&Fns.sax_records,
+    (void **)&Fns.sax_arena,
+    (void **)&Fns.xquery_eval,
     };
     for (Py_ssize_t i = 0; i < FN_COUNT; i++) {
         PyObject *item = PyList_Check(fast)
@@ -2542,6 +2548,299 @@ accel_nodeset_vars(PyObject *module, PyObject *args)
     return finish_result(result, document);
 }
 
+
+/* ---- SAX drain + XQuery eval in C (TODO.native/22) ------------------
+ *
+ * The measured split: recorder feed 85us vs Python drain 855us for
+ * the 302-event MEDIUM fixture (91% of the row). The drain decodes
+ * every record field and builds every attribute dict in Python over
+ * cffi reads; here it runs in C — strings decoded once, dicts built
+ * in C, handler methods resolved once per drain and called through
+ * the C API. The Python loop in leptris/sax.py stays as the
+ * reference + fallback.
+ *
+ * Record layout mirrors the PUBLIC LeptrisSaxEventRecord (frozen ABI,
+ * sax recorder family). */
+
+#define SK_START_DOC 0
+#define SK_END_DOC 1
+#define SK_START_ELEM 2
+#define SK_END_ELEM 3
+#define SK_CHARACTERS 4
+#define SK_COMMENT 5
+#define SK_CDATA 6
+#define SK_PI 7
+#define SK_START_PREFIX 8
+#define SK_END_PREFIX 9
+#define SK_ERROR 10
+
+typedef struct {
+    uint8_t kind;
+    uint8_t reserved[7];
+    uint32_t name_off, name_len;
+    uint32_t text_off, text_len;
+    uint32_t attrs_off;
+    uint32_t attr_count;
+    uint32_t line, column;
+} AccelSaxRecord;
+
+typedef struct {
+    PyObject *start_document, *end_document;
+    PyObject *start_element, *end_element;
+    PyObject *characters, *comment, *cdata;
+    PyObject *processing_instruction;
+    PyObject *start_prefix_mapping, *end_prefix_mapping;
+    PyObject *error;
+} SaxMethods;
+
+static void
+sax_methods_clear(SaxMethods *m)
+{
+    Py_XDECREF(m->start_document); Py_XDECREF(m->end_document);
+    Py_XDECREF(m->start_element); Py_XDECREF(m->end_element);
+    Py_XDECREF(m->characters); Py_XDECREF(m->comment);
+    Py_XDECREF(m->cdata); Py_XDECREF(m->processing_instruction);
+    Py_XDECREF(m->start_prefix_mapping);
+    Py_XDECREF(m->end_prefix_mapping);
+    Py_XDECREF(m->error);
+}
+
+/* Methods are REQUIRED (the Python loop calls handler.X()
+ * unguarded; a partial handler raises AttributeError — the
+ * protocol-contract spec pins this). */
+static PyObject *
+sax_method(PyObject *handler, const char *name)
+{
+    return PyObject_GetAttrString(handler, name);
+}
+
+static int
+sax_dispatch_noarg(PyObject *callable)
+{
+    if (callable == Py_None)
+        return 0;
+    PyObject *r = PyObject_CallObject(callable, NULL);
+    if (r == NULL)
+        return -1;
+    Py_DECREF(r);
+    return 0;
+}
+
+static int
+sax_dispatch(PyObject *callable, PyObject *arg)
+{
+    if (callable == Py_None)
+        return 0;
+    PyObject *r = PyObject_CallFunctionObjArgs(callable, arg, NULL);
+    if (r == NULL)
+        return -1;
+    Py_DECREF(r);
+    return 0;
+}
+
+/* accel.sax_drain(recorder_address, handler) -> None (errors raise) */
+static PyObject *
+accel_sax_drain(PyObject *module, PyObject *args)
+{
+    unsigned long long address;
+    PyObject *handler;
+    if (!PyArg_ParseTuple(args, "KO", &address, &handler))
+        return NULL;
+    if (!bound)
+        Py_RETURN_NONE;
+    size_t count = 0;
+    const AccelSaxRecord *records = (const AccelSaxRecord *)
+        Fns.sax_records((void *)(uintptr_t)address, &count);
+    if (records == NULL || count == 0)
+        Py_RETURN_NONE;
+    size_t arena_len = 0;
+    const char *arena =
+        Fns.sax_arena((void *)(uintptr_t)address, &arena_len);
+    if (arena == NULL)
+        Py_RETURN_NONE;
+
+    /* Lazy, cached: methods resolve on the FIRST event of their
+     * kind (the Python loop resolves at dispatch — an absent method
+     * raises only when its event actually occurs; the protocol spec
+     * pins this). */
+    SaxMethods methods;
+    memset(&methods, 0, sizeof(methods));
+#define SAX_RESOLVE(slot, name) \
+    (methods.slot != NULL ? methods.slot \
+     : (methods.slot = sax_method(handler, name)))
+
+    int failed = 0;
+    for (size_t i = 0; i < count && !failed; i++) {
+        const AccelSaxRecord *rec = &records[i];
+        const char *name = arena + rec->name_off;
+        const char *text = arena + rec->text_off;
+        switch (rec->kind) {
+        case SK_START_DOC:
+            { PyObject *fn = SAX_RESOLVE(start_document, "start_document"); failed = (fn == NULL) || sax_dispatch_noarg(fn) < 0; }
+            break;
+        case SK_END_DOC:
+            { PyObject *fn = SAX_RESOLVE(end_document, "end_document"); failed = (fn == NULL) || sax_dispatch_noarg(fn) < 0; }
+            break;
+        case SK_START_ELEM: {
+            PyObject *dict = PyDict_New();
+            if (dict == NULL) { failed = 1; break; }
+            const char *cursor = arena + rec->attrs_off;
+            for (uint32_t a = 0; a < rec->attr_count; a++) {
+                size_t nlen = strnlen(cursor, (size_t)(arena + arena_len - cursor));
+                PyObject *key = PyUnicode_DecodeUTF8(cursor, nlen, "replace");
+                cursor += nlen + 1;
+                size_t vlen = strnlen(cursor, (size_t)(arena + arena_len - cursor));
+                PyObject *value = PyUnicode_DecodeUTF8(cursor, vlen, "replace");
+                cursor += vlen + 1;
+                if (key == NULL || value == NULL ||
+                    PyDict_SetItem(dict, key, value) < 0) {
+                    Py_XDECREF(key); Py_XDECREF(value);
+                    Py_DECREF(dict); failed = 1; break;
+                }
+                Py_DECREF(key); Py_DECREF(value);
+            }
+            if (failed) break;
+            PyObject *name_obj =
+                PyUnicode_DecodeUTF8(name, rec->name_len, "replace");
+            if (name_obj == NULL) {
+                Py_DECREF(dict);
+                failed = 1;
+                break;
+            }
+            PyObject *se = SAX_RESOLVE(start_element, "start_element");
+            if (se == NULL) { Py_DECREF(name_obj); Py_DECREF(dict); failed = 1; break; }
+            PyObject *r = PyObject_CallFunctionObjArgs(
+                se, name_obj, dict, NULL);
+            Py_DECREF(name_obj); Py_DECREF(dict);
+            if (r == NULL) { failed = 1; break; }
+            Py_DECREF(r);
+            break;
+        }
+        case SK_END_ELEM: {
+            PyObject *name_obj =
+                PyUnicode_DecodeUTF8(name, rec->name_len, "replace");
+            if (name_obj == NULL) { failed = 1; break; }
+            { PyObject *fn = SAX_RESOLVE(end_element, "end_element"); failed = (fn == NULL) || sax_dispatch(fn, name_obj) < 0; }
+            Py_DECREF(name_obj);
+            break;
+        }
+        case SK_CHARACTERS:
+        case SK_CDATA: {
+            PyObject *text_obj =
+                PyUnicode_DecodeUTF8(text, rec->text_len, "replace");
+            if (text_obj == NULL) { failed = 1; break; }
+            PyObject *call = (rec->kind == SK_CDATA)
+                ? SAX_RESOLVE(cdata, "cdata")
+                : SAX_RESOLVE(characters, "characters");
+            failed = (call == NULL) || (sax_dispatch(call, text_obj) < 0);
+            Py_DECREF(text_obj);
+            break;
+        }
+        case SK_COMMENT: {
+            PyObject *text_obj =
+                PyUnicode_DecodeUTF8(text, rec->text_len, "replace");
+            if (text_obj == NULL) { failed = 1; break; }
+            { PyObject *fn = SAX_RESOLVE(comment, "comment"); failed = (fn == NULL) || sax_dispatch(fn, text_obj) < 0; }
+            Py_DECREF(text_obj);
+            break;
+        }
+        case SK_PI: {
+            PyObject *name_obj =
+                PyUnicode_DecodeUTF8(name, rec->name_len, "replace");
+            PyObject *text_obj =
+                PyUnicode_DecodeUTF8(text, rec->text_len, "replace");
+            if (name_obj == NULL || text_obj == NULL) {
+                Py_XDECREF(name_obj); Py_XDECREF(text_obj);
+                failed = 1;
+                break;
+            }
+            PyObject *pi = SAX_RESOLVE(processing_instruction, "processing_instruction");
+            if (pi == NULL) { Py_DECREF(name_obj); Py_DECREF(text_obj); failed = 1; break; }
+            PyObject *r = PyObject_CallFunctionObjArgs(
+                pi, name_obj, text_obj, NULL);
+            Py_DECREF(name_obj); Py_DECREF(text_obj);
+            if (r == NULL) { failed = 1; break; }
+            Py_DECREF(r);
+            break;
+        }
+        case SK_START_PREFIX: {
+            PyObject *prefix = PyUnicode_DecodeUTF8(
+                name, rec->name_len, "replace");
+            PyObject *uri = PyUnicode_DecodeUTF8(
+                text, rec->text_len, "replace");
+            if (prefix == NULL || uri == NULL) {
+                Py_XDECREF(prefix); Py_XDECREF(uri);
+                failed = 1; break;
+            }
+            PyObject *spm = SAX_RESOLVE(start_prefix_mapping, "start_prefix_mapping");
+            if (spm == NULL) { Py_DECREF(prefix); Py_DECREF(uri); failed = 1; break; }
+            PyObject *r = PyObject_CallFunctionObjArgs(
+                spm, prefix, uri, NULL);
+            Py_DECREF(prefix); Py_DECREF(uri);
+            if (r == NULL) { failed = 1; break; }
+            Py_DECREF(r);
+            break;
+        }
+        case SK_END_PREFIX: {
+            PyObject *name_obj =
+                PyUnicode_DecodeUTF8(name, rec->name_len, "replace");
+            if (name_obj == NULL) { failed = 1; break; }
+            PyObject *epm = SAX_RESOLVE(end_prefix_mapping, "end_prefix_mapping");
+            failed = (epm == NULL) || sax_dispatch(epm, name_obj) < 0;
+            Py_DECREF(name_obj);
+            break;
+        }
+        case SK_ERROR: {
+            PyObject *text_obj =
+                PyUnicode_DecodeUTF8(text, rec->text_len, "replace");
+            PyObject *line = PyLong_FromUnsignedLong(rec->line);
+            PyObject *col = PyLong_FromUnsignedLong(rec->column);
+            if (text_obj == NULL || line == NULL || col == NULL) {
+                Py_XDECREF(text_obj); Py_XDECREF(line); Py_XDECREF(col);
+                failed = 1;
+                break;
+            }
+            PyObject *errfn = SAX_RESOLVE(error, "error");
+            if (errfn == NULL) { Py_DECREF(text_obj); Py_DECREF(line); Py_DECREF(col); failed = 1; break; }
+            PyObject *r = PyObject_CallFunctionObjArgs(
+                errfn, text_obj, line, col, NULL);
+            Py_DECREF(text_obj); Py_DECREF(line); Py_DECREF(col);
+            if (r == NULL) { failed = 1; break; }
+            Py_DECREF(r);
+            break;
+        }
+        default:
+            break; /* unknown kinds: skip, mirroring the Python loop */
+        }
+    }
+    sax_methods_clear(&methods);
+    if (failed)
+        return NULL;
+    Py_RETURN_NONE;
+}
+
+/* accel.xquery_eval(query_address, document_address, context_address,
+ *                   document) -> list | scalar | None — one C call for
+ * the no-variables XQuery path (TODO.native/22: the conversion was
+ * 42% of the row). */
+static PyObject *
+accel_xquery_eval(PyObject *module, PyObject *args)
+{
+    unsigned long long query, document_address, context_address;
+    PyObject *document;
+    if (!PyArg_ParseTuple(args, "KKKO", &query, &document_address,
+                          &context_address, &document))
+        return NULL;
+    if (!bound)
+        Py_RETURN_NONE;
+    void *ctx = context_address ? (void *)(uintptr_t)context_address : NULL;
+    void *result = Fns.xquery_eval(
+        (void *)(uintptr_t)query, (void *)(uintptr_t)document_address, ctx);
+    if (result == NULL)
+        Py_RETURN_NONE;
+    return finish_result(result, document);
+}
+
 static PyMethodDef accel_methods[] = {
     {"create", accel_create, METH_VARARGS,
      "create(address, ptr, document) -> Element"},
@@ -2595,6 +2894,10 @@ static PyMethodDef accel_methods[] = {
      "serialize_elem_opts(address, indent, declaration, encoding|None) -> bytes | None"},
     {"nodeset_vars", accel_nodeset_vars, METH_VARARGS,
      "nodeset_vars(document_address, context_address, expression, document, vars_flat) -> list | scalar | None"},
+    {"sax_drain", accel_sax_drain, METH_VARARGS,
+     "sax_drain(recorder_address, handler) -> None"},
+    {"xquery_eval", accel_xquery_eval, METH_VARARGS,
+     "xquery_eval(query_address, document_address, context_address, document) -> list | scalar | None"},
     {NULL}
 };
 
