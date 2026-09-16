@@ -25,16 +25,52 @@ class TestRelaxNG:
         for doc in (VALID, VALID_OPTIONAL_OMITTED):
             with Document.parse(doc) as d:
                 assert v.validate(d) is True
-                assert v.error_log is None
+                assert v.error_log == []
 
     def test_invalid_documents_report_errors(self):
         v = RelaxNG(SCHEMA)
         with Document.parse(INVALID_MISSING_REQUIRED) as d:
             assert v.validate(d) is False
-            assert "error" in v.error_log
+            (entry,) = v.error_log
+            assert entry.line == 1
+            assert entry.message == (
+                'element "book" incomplete; missing required element '
+                '"author"'
+            )
         with Document.parse(INVALID_WRONG_ROOT) as d:
             assert v.validate(d) is False
-            assert "error" in v.error_log
+            (entry,) = v.error_log
+            assert entry.message == (
+                'element "catalog" not allowed anywhere; expected '
+                'element "library"'
+            )
+
+    def test_error_log_accumulates_with_jing_positions(self):
+        # libleptris 1.9.179+ (#878): every failure from the last
+        # validate call, Jing-compatible line/column + vocabulary.
+        rng = (
+            "<element name='r' "
+            "xmlns='http://relaxng.org/ns/structure/1.0'>"
+            "<choice><element name='a'/><element name='b'/></choice>"
+            "<element name='c'/></element>"
+        )
+        v = RelaxNG(rng)
+        with Document.parse("<r><c/><c/><z/></r>") as d:
+            assert v.validate(d) is False
+        assert [(e.line, e.column, e.message) for e in v.error_log] == [
+            (1, 8, 'element "c" not allowed yet; missing required element "a"'),
+            (1, 12, 'element "c" not allowed here; expected the element end-tag'),
+            (1, 16, 'element "z" not allowed anywhere; expected the element end-tag'),
+        ]
+
+    def test_error_log_resets_between_validations(self):
+        v = RelaxNG(SCHEMA)
+        with Document.parse(INVALID_WRONG_ROOT) as d:
+            assert v.validate(d) is False
+            assert v.error_log
+        with Document.parse(VALID) as d:
+            assert v.validate(d) is True
+            assert v.error_log == []
 
     def test_schema_parse_error_raises(self):
         with pytest.raises(RelaxNGError) as info:

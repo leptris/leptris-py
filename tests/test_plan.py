@@ -289,3 +289,89 @@ class TestDifferential:
             finally:
                 _ffi.lib.leptris_plan_result_free(result)
         assert c_result == py_result
+
+class TestPlanRowNamespace:
+    """Row-level ns forms (#1115, libleptris 1.9.178+): the row's
+    'ns' selects which same-local-name children it binds."""
+
+    XML = (
+        "<r xmlns:p='urn:p'><p:item>P</p:item>"
+        "<item>N</item><p:item>Q</p:item></r>"
+    )
+
+    def _run(self, row):
+        plan = Plan({"element_name": "r", "children": [row]})
+        with Document.parse(self.XML) as doc:
+            return plan(doc)["children"]["item"]
+
+    def test_exact_uri_binds_only_namespaced(self):
+        assert (
+            self._run(
+                {
+                    "name": "item",
+                    "kind": "scalar",
+                    "ns": {"form": "exact", "uri": "urn:p"},
+                }
+            )
+            == "P"
+        )
+
+    def test_any_binds_first_match_as_scalar(self):
+        assert (
+            self._run({"name": "item", "kind": "scalar", "ns": "any"})
+            == "P"
+        )
+
+    def test_collection_any_merges_namespaces_in_document_order(self):
+        assert self._run(
+            {"name": "item", "kind": "collection", "ns": "any"}
+        ) == ["P", "N", "Q"]
+
+    def test_unset_binds_only_no_namespace(self):
+        assert self._run({"name": "item", "kind": "scalar"}) == "N"
+
+    def test_exact_requires_uri(self):
+        with pytest.raises(ValueError, match="needs a uri"):
+            Plan(
+                {
+                    "element_name": "r",
+                    "children": [
+                        {
+                            "name": "item",
+                            "kind": "scalar",
+                            "ns": {"form": "exact"},
+                        }
+                    ],
+                }
+            )
+
+    def test_unknown_form_rejected(self):
+        with pytest.raises(ValueError, match="unknown ns form"):
+            Plan(
+                {
+                    "element_name": "r",
+                    "children": [
+                        {
+                            "name": "item",
+                            "kind": "scalar",
+                            "ns": {"form": "wildcard"},
+                        }
+                    ],
+                }
+            )
+
+    def test_same_name_rows_are_rejected_with_guidance(self):
+        with pytest.raises(ValueError, match="distinct names"):
+            Plan(
+                {
+                    "element_name": "r",
+                    "children": [
+                        {
+                            "name": "item",
+                            "kind": "scalar",
+                            "ns": {"form": "exact", "uri": "urn:p"},
+                        },
+                        {"name": "item", "kind": "scalar"},
+                    ],
+                }
+            )

@@ -426,3 +426,30 @@ class TestAttribMapMappingConformance:
             e.attrib["b"] = "2"
         with pytest.raises(TypeError):
             del e.attrib["a"]
+
+class TestSourceLine:
+    """Element.sourceline (lxml parity, libleptris 1.9.180+)."""
+
+    def test_lines_track_source(self):
+        xml = "<a>\n  <b/>\n  <c><d/></c>\n</a>"
+        with Document.parse(xml) as doc:
+            lines = {e.tag: e.sourceline for e in doc.xpath("//*")}
+        assert lines == {"a": 1, "b": 2, "c": 3, "d": 3}
+
+    def test_single_line_document(self):
+        with Document.parse("<a><b/><c/></a>") as doc:
+            assert all(e.sourceline == 1 for e in doc.xpath("//*"))
+
+    def test_engine_created_document_reports_zero(self):
+        # programmatically created nodes carry no recorded position
+        from leptris import XSLT
+
+        style = XSLT(
+            "<xsl:stylesheet "
+            "xmlns:xsl='http://www.w3.org/1999/XSL/Transform' "
+            "version='1.0'><xsl:template match='/'><out><k/></out>"
+            "</xsl:template></xsl:stylesheet>"
+        )
+        with Document.parse("<a/>") as doc:
+            result = style(doc)
+            assert result.getroot()[0].sourceline == 0

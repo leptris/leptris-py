@@ -158,7 +158,10 @@ def _flatten(spec):
             if wire_name in rows:
                 raise ValueError(
                     f"plan #{index} ({name}): duplicate child row "
-                    f"{wire_name!r}"
+                    f"{wire_name!r} — same-name rows (e.g. one per "
+                    f"namespace) are an engine capability (#1115) the "
+                    f"dict-keyed result shape cannot express yet; give "
+                    f"the rows distinct names"
                 )
             kind = _kind(
                 row.get("kind"), f"plan #{index} ({name}) row {wire_name!r}"
@@ -171,8 +174,33 @@ def _flatten(spec):
                         f"nested rows need a 'plan'"
                     )
                 child_index = emit(row["plan"])
+            row_ns = row.get("ns", {"form": "none"})
+            if isinstance(row_ns, str):
+                row_ns = {"form": row_ns}
+            row_form = _NS_FORMS.get(row_ns.get("form", "none"))
+            if row_form is None:
+                valid = ", ".join(sorted(_NS_FORMS))
+                raise ValueError(
+                    f"plan #{index} ({name}) row {wire_name!r}: unknown "
+                    f"ns form {row_ns.get('form')!r}; expected one of: "
+                    f"{valid}"
+                )
+            if row_form == 1 and not row_ns.get("uri"):
+                raise ValueError(
+                    f"plan #{index} ({name}) row {wire_name!r}: ns form "
+                    f"'exact' needs a uri"
+                )
             rows[wire_name] = (kind, row.get("type_tag", 0), child_index)
-            kids.append((wire_name, kind, row.get("type_tag", 0), child_index))
+            kids.append(
+                (
+                    wire_name,
+                    kind,
+                    row.get("type_tag", 0),
+                    child_index,
+                    row_form,
+                    row_ns.get("uri"),
+                )
+            )
         elements[index] = {
             "name": name,
             "ns_form": form,
@@ -239,15 +267,31 @@ class Plan:
             if kids:
                 arr = ffi.new("leptris_child_plan[]", len(kids))
                 keepalive.append(arr)
-                for slot, (wire_name, kind, type_tag, child_index) in zip(
-                    arr, kids
-                ):
+                for slot, kid in zip(arr, kids):
+                    (
+                        wire_name,
+                        kind,
+                        type_tag,
+                        child_index,
+                        row_ns_form,
+                        row_ns_uri,
+                    ) = kid
                     wire_c = ffi.new("char[]", wire_name.encode("utf-8"))
                     keepalive.append(wire_c)
                     slot.wire_name = wire_c
                     slot.kind = kind
                     slot.type_tag = type_tag
                     slot.child_plan_index = child_index
+                    slot.ns_form = row_ns_form
+                    slot.pad0 = 0
+                    if row_ns_form == 1 and row_ns_uri:
+                        row_uri_c = ffi.new(
+                            "char[]", row_ns_uri.encode("utf-8")
+                        )
+                        keepalive.append(row_uri_c)
+                        slot.ns_uri = row_uri_c
+                    else:
+                        slot.ns_uri = ffi.NULL
                 struct.child_plans = arr
             else:
                 struct.child_plans = ffi.NULL
