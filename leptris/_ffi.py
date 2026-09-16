@@ -277,6 +277,11 @@ ffi.cdef(
         uint8_t kind;
         uint8_t type_tag;
         int32_t child_plan_index;
+        /* #1115 (additive, v1.9.178+): rule-level namespace form.
+         * NONE keeps the historical no-namespace behavior. */
+        uint8_t ns_form;
+        uint8_t pad0;
+        const char* ns_uri;
     } leptris_child_plan;
     typedef struct {
         const char* element_name;
@@ -304,6 +309,26 @@ ffi.cdef(
     } LeptrisPlanValueKind;
     void leptris_element_expanded_name(LeptrisElement e, const char** local, const char** prefix, const char** uri);
     /* node-surface parity (lib 1.9.176, #1094) */
+    /* RNG validation errors accumulate (#878, libleptris >= 1.9.179):
+     * every failure from the last validate call, Jing-compatible
+     * message vocabulary and positions. Reset per validate. */
+    size_t leptris_rng_error_count(LeptrisRelaxNG rng);
+    const char* leptris_rng_error_message(LeptrisRelaxNG rng, size_t i);
+    int leptris_rng_error_line(LeptrisRelaxNG rng, size_t i);
+    int leptris_rng_error_column(LeptrisRelaxNG rng, size_t i);
+
+    /* Parser-recorded source position (#1124, libleptris >= 1.9.180).
+     * Columns follow Jing's convention: col_start is the byte after
+     * the start tag's '>', col_end after the final '>'. Zeros for
+     * programmatically-created nodes. */
+    typedef struct {
+        int line;
+        int col_start;
+        int col_end;
+    } LeptrisSourcePosition;
+    void leptris_node_source_position(LeptrisNodeRef node,
+                                      LeptrisSourcePosition* out);
+
     LeptrisNodeRef leptris_document_append_pi(LeptrisDocument doc, const char* target, const char* data);
     LeptrisStatus leptris_document_remove_child(LeptrisDocument doc, LeptrisNodeRef node);
     LeptrisDoctype leptris_document_set_doctype(LeptrisDocument doc, const char* name, const char* public_id, const char* system_id);

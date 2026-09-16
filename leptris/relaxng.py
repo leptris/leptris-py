@@ -8,7 +8,16 @@ from __future__ import annotations
 
 from . import _engine, _ffi
 from .document import Document
+from collections import namedtuple
+
 from .error import RelaxNGError
+
+RelaxNGErrorEntry = namedtuple("RelaxNGErrorEntry", ["line", "column", "message"])
+RelaxNGErrorEntry.__doc__ = "One RELAX NG validation failure (Jing-compatible position)."
+RelaxNGErrorEntry.__repr__ = lambda self: (
+    f"RelaxNGErrorEntry(line={self.line}, column={self.column}, "
+    f"message={self.message!r})"
+)
 
 
 class RelaxNG(_engine.CompiledSource):
@@ -49,9 +58,42 @@ class RelaxNG(_engine.CompiledSource):
 
     @property
     def error_log(self):
-        """The first validation failure (Jing message shape), or
-        None after a valid parse with no failed validation."""
-        message = _ffi.lib.leptris_rng_error(self._handle)
-        if message == _ffi.ffi.NULL:
-            return None
-        return _ffi.ffi.string(message).decode("utf-8", "replace")
+        """Every failure from the last :meth:`validate` call (empty
+        for a valid document), as :class:`RelaxNGErrorEntry` records
+        with Jing-compatible ``line``/``column``/``message`` —
+        libleptris 1.9.179+ accumulates them (#878); older engines
+        surface only the first failure as a pre-parsed entry.
+
+        .. versionchanged:: 1.9.181.0
+            Returns the full list instead of the first failure's
+            ``"line:col: error: message"`` string."""
+        lib, ffi = _ffi.lib, _ffi.ffi
+        count = lib.leptris_rng_error_count(self._handle)
+        if count:
+            entries = []
+            for i in range(count):
+                message = lib.leptris_rng_error_message(self._handle, i)
+                entries.append(
+                    RelaxNGErrorEntry(
+                        line=lib.leptris_rng_error_line(self._handle, i),
+                        column=lib.leptris_rng_error_column(self._handle, i),
+                        message=ffi.string(message).decode("utf-8", "replace")
+                        if message != ffi.NULL
+                        else "",
+                    )
+                )
+            return entries
+        message = lib.leptris_rng_error(self._handle)
+        if message == ffi.NULL:
+            return []
+        text = ffi.string(message).decode("utf-8", "replace")
+        head, _, msg = text.partition(": error: ")
+        line, _, column = head.partition(":")
+        try:
+            return [
+                RelaxNGErrorEntry(
+                    line=int(line), column=int(column), message=msg
+                )
+            ]
+        except ValueError:
+            return [RelaxNGErrorEntry(line=0, column=0, message=text)]

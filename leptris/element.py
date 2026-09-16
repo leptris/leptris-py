@@ -33,6 +33,16 @@ class _ElementMethods:
     def document(self) -> "Document":
         return self._document
 
+    @property
+    def sourceline(self) -> int:
+        """The 1-based source line this element's tag was parsed
+        from, or 0 for unknown/programmatically created nodes —
+        lxml's ``sourceline`` (libleptris 1.9.180+). The engine also
+        records Jing-convention columns; they are not exposed."""
+        position = _ffi.ffi.new("LeptrisSourcePosition*")
+        _ffi.lib.leptris_node_source_position(self._raw(), position)
+        return position.line
+
     def _check_alive(self) -> None:
         if self._document.closed:
             raise LeptrisError("operation on a closed document")
