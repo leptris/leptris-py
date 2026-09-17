@@ -98,3 +98,78 @@ class TestRelaxNG:
             pass
         with pytest.raises(RelaxNGError):
             v.validate(d)
+
+class TestRelaxNGV188:
+    """v1.9.187/188 engine features: externalRef, anyName, and
+    foreign-namespace annotation skipping."""
+
+    def _tmp_schema(self, files, main="main.rng"):
+        import tempfile, os
+
+        d = tempfile.mkdtemp()
+        for name, text in files.items():
+            with open(os.path.join(d, name), "w") as f:
+                f.write(text)
+        return os.path.join(d, main), d
+
+    def test_external_ref_bare_root(self):
+        # bare-<element> schema with nested externalRef (the #1155
+        # engine fix; grammar-root schemas worked from the start)
+        path, d = self._tmp_schema({
+            "main.rng": (
+                "<element name='library' "
+                "xmlns='http://relaxng.org/ns/structure/1.0'>"
+                "<oneOrMore><externalRef href='book.rng'/>"
+                "</oneOrMore></element>"
+            ),
+            "book.rng": (
+                "<element name='book' "
+                "xmlns='http://relaxng.org/ns/structure/1.0'>"
+                "<attribute name='id'><text/></attribute>"
+                "<element name='title'><text/></element></element>"
+            ),
+        })
+        try:
+            v = RelaxNG.from_file(path)
+            with Document.parse(
+                "<library><book id='1'><title>T</title></book>"
+                "<book id='2'><title>U</title></book></library>"
+            ) as doc:
+                assert v.validate(doc) is True
+            with Document.parse("<library><book id='1'/></library>") as doc:
+                assert v.validate(doc) is False
+                (entry,) = v.error_log
+                assert entry.message == (
+                    'element "book" incomplete; missing required '
+                    'element "title"'
+                )
+        finally:
+            import shutil
+
+            shutil.rmtree(d)
+
+    def test_any_name_elements_and_attributes(self):
+        rng = (
+            "<element name='bag' "
+            "xmlns='http://relaxng.org/ns/structure/1.0'>"
+            "<zeroOrMore><element><anyName/>"
+            "<zeroOrMore><attribute><anyName/></attribute>"
+            "</zeroOrMore><text/></element></zeroOrMore></element>"
+        )
+        v = RelaxNG(rng)
+        with Document.parse(
+            "<bag><x a='1'>t</x><y>u</y></bag>"
+        ) as doc:
+            assert v.validate(doc) is True
+
+    def test_foreign_namespace_annotations_skipped(self):
+        rng = (
+            "<element name='doc' "
+            "xmlns='http://relaxng.org/ns/structure/1.0' "
+            "xmlns:a='urn:ann'>"
+            "<a:note>annotation content</a:note>"
+            "<element name='body'><text/></element></element>"
+        )
+        v = RelaxNG(rng)
+        with Document.parse("<doc><body>b</body></doc>") as doc:
+            assert v.validate(doc) is True
