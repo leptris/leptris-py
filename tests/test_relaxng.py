@@ -1,5 +1,7 @@
 """RELAX NG validation (leptris.RelaxNG, libleptris 1.9.115+)."""
 
+import sys
+
 import pytest
 
 from leptris import Document, RelaxNG
@@ -112,6 +114,11 @@ class TestRelaxNGV188:
                 f.write(text)
         return os.path.join(d, main), d
 
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="engine base-dir derivation mishandles backslash "
+        "paths (leptris/leptris#1158; lands past 1.9.190)",
+    )
     def test_external_ref_bare_root(self):
         # bare-<element> schema with nested externalRef (the #1155
         # engine fix; grammar-root schemas worked from the start)
