@@ -21,8 +21,15 @@ directly, with no per-element Python calls:
     with Document.parse(xml) as doc:
         data = catalog(doc)
 
+Rows may also set ``"ns"`` (``{"form": "exact", "uri": ...}``,
+``"any"``, or the default ``"none"``) to select which same-local-name
+children they bind — e.g. one row per namespace. Rows sharing a name
+materialize as one ``list`` of per-row values in declaration order
+(each member keeps its own row's shape; an absent member is its
+row's absent value).
+
 Output is SHAPE-STABLE: every row of the plan appears in the result
-— a scalar row yields a ``str`` or ``None``, a collection/content row
+— a scalar row yields a a ``str`` or ``None``, a collection/content row
 always a ``list``, a nested row a ``dict`` or ``None``. Nested
 elements come back as ``{"attributes": {...}, "children": {...}}``
 keyed by wire name. CALLBACK rows yield
@@ -144,7 +151,7 @@ def _flatten(spec):
             raise TypeError(
                 f"plan #{index} ({name}): children must be a list"
             )
-        rows = {}
+        rows = []  # (wire_name, (kind, type_tag, child_index)); same-name rows allowed
         kids = []
         for row in raw_children:
             wire_name = row.get(
@@ -154,14 +161,6 @@ def _flatten(spec):
                 raise TypeError(
                     f"plan #{index} ({name}): every child row needs a str "
                     f"name (content rows may omit it)"
-                )
-            if wire_name in rows:
-                raise ValueError(
-                    f"plan #{index} ({name}): duplicate child row "
-                    f"{wire_name!r} — same-name rows (e.g. one per "
-                    f"namespace) are an engine capability (#1115) the "
-                    f"dict-keyed result shape cannot express yet; give "
-                    f"the rows distinct names"
                 )
             kind = _kind(
                 row.get("kind"), f"plan #{index} ({name}) row {wire_name!r}"
@@ -190,7 +189,7 @@ def _flatten(spec):
                     f"plan #{index} ({name}) row {wire_name!r}: ns form "
                     f"'exact' needs a uri"
                 )
-            rows[wire_name] = (kind, row.get("type_tag", 0), child_index)
+            rows.append((wire_name, (kind, row.get("type_tag", 0), child_index)))
             kids.append(
                 (
                     wire_name,
@@ -201,6 +200,28 @@ def _flatten(spec):
                     row_ns.get("uri"),
                 )
             )
+        # Same-name groups: values echo the producing row's type_tag
+        # (#1113 contract), so group rows get DISTINCT tags for exact
+        # attribution. User-set tags are kept; untagged group rows
+        # draw the smallest values unused within this plan.
+        _name_counts = {}
+        for k in kids:
+            _name_counts[k[0]] = _name_counts.get(k[0], 0) + 1
+        if any(c > 1 for c in _name_counts.values()):
+            _used = {k[2] for k in kids if k[2]}
+            _next_tag = 1
+            _kids2 = []
+            for k in kids:
+                wire, kind_, tag, child_index = k[:4]
+                if _name_counts[wire] > 1 and not tag:
+                    while _next_tag in _used:
+                        _next_tag += 1
+                    tag = _next_tag
+                    _used.add(_next_tag)
+                _kids2.append((wire, kind_, tag, child_index) + tuple(k[4:]))
+            kids = _kids2
+            rows = [(k[0], (k[1], k[2], k[3])) for k in kids]
+
         elements[index] = {
             "name": name,
             "ns_form": form,
@@ -319,8 +340,8 @@ class Plan:
                 (
                     tuple(element["attrs"]),
                     tuple(
-                        (name, row[0], row[2])
-                        for name, row in element["rows"].items()
+                        (name, row[0], row[2], row[1])
+                        for name, row in element["rows"]
                     ),
                 )
                 for element in elements
@@ -455,20 +476,73 @@ def _convert(result, elements, plan_index):
 
     def element(value, plan_index):
         plan = elements[plan_index]
-        row_list = list(plan["rows"].items())
+        row_list = plan["rows"]
+        multi_names = {
+            name
+            for name, count in __import__("collections").Counter(
+                name for name, _ in row_list
+            ).items()
+            if count > 1
+        }
         values = [
             lib.leptris_plan_value_at(value, i)
             for i in range(lib.leptris_plan_value_count(value))
         ]
         kinds = [lib.leptris_plan_value_kind(v) for v in values]
         names = [value_name(v) for v in values]
+        def emit(wire_name, item):
+            """Single row sets the key; a same-name group appends to
+            one list created at the group's first row (mirrors the C
+            converter's plan_row_emit)."""
+            if wire_name not in multi_names:
+                children[wire_name] = item
+                return
+            group = children.setdefault(wire_name, [])
+            group.append(item)
+
+        def tagged(v):
+            return lib.leptris_plan_value_type_tag(v)
+
         children = {}
         vi = 0
         for wire_name, row in row_list:
-            children[wire_name] = [] if row[0] in (
-                lib.LEPTRIS_PLAN_KIND_COLLECTION,
-                lib.LEPTRIS_PLAN_KIND_CONTENT,
-            ) else None
+            # pre-shape only for single rows; group members append
+            if wire_name not in multi_names:
+                children[wire_name] = [] if row[0] in (
+                    lib.LEPTRIS_PLAN_KIND_COLLECTION,
+                    lib.LEPTRIS_PLAN_KIND_CONTENT,
+                ) else None
+            if wire_name in multi_names and row[1]:
+                # group rows attribute by the row's type_tag echo
+                # (#1113 contract) — exact regardless of name/order
+                run = []
+                while vi < len(values) and tagged(values[vi]) == row[1]:
+                    run.append((values[vi], kinds[vi]))
+                    vi += 1
+                if not run:
+                    emit(
+                        wire_name,
+                        []
+                        if row[0]
+                        in (
+                            lib.LEPTRIS_PLAN_KIND_COLLECTION,
+                            lib.LEPTRIS_PLAN_KIND_CONTENT,
+                        )
+                        else None,
+                    )
+                    continue
+                first, kind = run[0]
+                if row[0] == lib.LEPTRIS_PLAN_KIND_NESTED:
+                    converted = [element(v, row[2]) for v, _ in run]
+                    emit(
+                        wire_name,
+                        converted[0] if len(converted) == 1 else converted,
+                    )
+                elif kind == lib.LEPTRIS_PLAN_VALUE_COLLECTION:
+                    emit(wire_name, list_items(first))
+                else:
+                    emit(wire_name, leaf(first))
+                continue
             if vi < len(values) and row_matches(
                 wire_name, row, values[vi], kinds[vi], names[vi]
             ):
@@ -487,13 +561,14 @@ def _convert(result, elements, plan_index):
                     converted = [
                         element(v, row[2]) for v, k in nested_matches
                     ]
-                    children[wire_name] = (
-                        converted[0] if len(converted) == 1 else converted
+                    emit(
+                        wire_name,
+                        converted[0] if len(converted) == 1 else converted,
                     )
                 elif kind == lib.LEPTRIS_PLAN_VALUE_COLLECTION:
-                    children[wire_name] = list_items(child)
+                    emit(wire_name, list_items(child))
                 else:
-                    children[wire_name] = leaf(child)
+                    emit(wire_name, leaf(child))
         attrs = {}
         for wire_name in plan["attrs"]:
             char = lib.leptris_plan_value_attribute(

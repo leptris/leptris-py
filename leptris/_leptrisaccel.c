@@ -2029,6 +2029,10 @@ typedef struct {
                         * pointer-equal (TODO.native/12) */
     int kind;          /* PK_* */
     int child_index;   /* -1 for non-nested */
+    int multi;         /* name shared by 2+ rows: the group emits a
+                        * list of per-row values in row order */
+    int tag;           /* attribution type_tag: group rows match
+                        * values by the row's #1113 tag echo */
 } PlanRowC;
 
 typedef struct {
@@ -2167,10 +2171,10 @@ accel_plan_shape_build(PyObject *module, PyObject *args)
         for (Py_ssize_t r = 0; r < plan->row_count && !failed; r++) {
             PyObject *row = PySequence_GetItem(row_fast, r);
             PyObject *name_obj;
-            int kind, child_index;
+            int kind, child_index, tag;
             if (row == NULL
-                || !PyArg_ParseTuple(row, "Oii", &name_obj, &kind,
-                                     &child_index))
+                || !PyArg_ParseTuple(row, "Oiii", &name_obj, &kind,
+                                     &child_index, &tag))
                 failed = 1;
             else {
                 PyObject *encoded =
@@ -2185,6 +2189,7 @@ accel_plan_shape_build(PyObject *module, PyObject *args)
                     plan->rows[r].key = name_obj;
                     plan->rows[r].kind = kind;
                     plan->rows[r].child_index = child_index;
+                    plan->rows[r].tag = tag;
                 }
             }
             Py_XDECREF(row);
@@ -2196,6 +2201,15 @@ accel_plan_shape_build(PyObject *module, PyObject *args)
             Py_DECREF(fast);
             return NULL;
         }
+        /* Same-name rows (#1115 shape): mark every row of a
+         * repeated-name group so conversion emits the group as one
+         * list of per-row values in declaration order. */
+        for (Py_ssize_t a = 0; a < plan->row_count; a++)
+            for (Py_ssize_t b = a + 1; b < plan->row_count; b++)
+                if (plan->rows[a].name && plan->rows[b].name
+                    && strcmp(plan->rows[a].name,
+                              plan->rows[b].name) == 0)
+                    plan->rows[a].multi = plan->rows[b].multi = 1;
     }
     Py_DECREF(fast);
     PyObject *capsule = PyCapsule_New(
@@ -2256,6 +2270,29 @@ plan_collection_items(const void *value, PyObject *callback_type)
     return out;
 }
 
+/* Emit one row's value under its key. A same-name group appends
+ * to one list created at the group's first row. */
+static int
+plan_row_emit(PyObject *children, const PlanRowC *row, PyObject *item)
+{
+    if (!row->multi)
+        return PyDict_SetItem(children, row->key, item);
+    PyObject *list = PyDict_GetItemWithError(children, row->key);
+    if (list == NULL) {
+        if (PyErr_Occurred()) return -1;
+        list = PyList_New(0);
+        if (list == NULL) return -1;
+        if (PyDict_SetItem(children, row->key, list) < 0) {
+            Py_DECREF(list);
+            return -1;
+        }
+        Py_DECREF(list);
+        list = PyDict_GetItemWithError(children, row->key);
+        if (list == NULL) return -1;
+    }
+    return PyList_Append(list, item);
+}
+
 static PyObject *
 plan_convert_element(const void *value, const PlanShapeC *shape,
                      Py_ssize_t plan_index)
@@ -2270,15 +2307,76 @@ plan_convert_element(const void *value, const PlanShapeC *shape,
     for (Py_ssize_t r = 0; r < plan->row_count; r++) {
         const PlanRowC *row = &plan->rows[r];
         if (vi >= (Py_ssize_t)vcount) {
-            if (PyDict_SetItem(
-                    children, row->key,
-                    (row->kind == PK_COLLECTION || row->kind == PK_CONTENT)
-                        ? (PyObject *)PyList_New(0) : Py_None) < 0) {
+            PyObject *absent =
+                (row->kind == PK_COLLECTION || row->kind == PK_CONTENT)
+                    ? (PyObject *)PyList_New(0) : Py_None;
+            if (absent == Py_None) Py_INCREF(absent);
+            int rc = plan_row_emit(children, row, absent);
+            Py_XDECREF(absent);
+            if (rc < 0) {
                 Py_DECREF(children);
                 return NULL;
             }
             continue;
         }
+        if (row->multi && row->tag) {
+            /* Group rows attribute by the row's type_tag echo
+             * (#1113) — exact under shared names; the engine emits
+             * each row's values consecutively, row-major. */
+            Py_ssize_t start = vi;
+            while (vi < (Py_ssize_t)vcount
+                && (int)Fns.plan_value_type_tag(
+                       Fns.plan_value_at(value, (size_t)vi))
+                    == row->tag)
+                vi++;
+            Py_ssize_t run = vi - start;
+            PyObject *item;
+            if (run == 0) {
+                item =
+                    (row->kind == PK_COLLECTION || row->kind == PK_CONTENT)
+                        ? (PyObject *)PyList_New(0) : Py_None;
+                if (item == Py_None) Py_INCREF(item);
+            } else {
+                const void *first =
+                    Fns.plan_value_at(value, (size_t)start);
+                if (row->kind == PK_NESTED) {
+                    item = PyList_New(0);
+                    for (Py_ssize_t k = 0; k < run && item != NULL;
+                         k++) {
+                        PyObject *converted = plan_convert_element(
+                            Fns.plan_value_at(value, (size_t)(start + k)),
+                            shape, row->child_index);
+                        if (converted == NULL
+                            || PyList_Append(item, converted) < 0) {
+                            Py_XDECREF(converted);
+                            Py_CLEAR(item);
+                            break;
+                        }
+                        Py_DECREF(converted);
+                    }
+                    if (item != NULL && PyList_Size(item) == 1) {
+                        PyObject *only = PyList_GetItem(item, 0);
+                        Py_INCREF(only);
+                        Py_DECREF(item);
+                        item = only;
+                    }
+                } else if (Fns.plan_value_kind(first) == PV_COLLECTION) {
+                    item = plan_collection_items(
+                        first, shape->callback_type);
+                } else {
+                    item = plan_leaf(first, shape->callback_type);
+                }
+            }
+            if (item == NULL
+                || plan_row_emit(children, row, item) < 0) {
+                Py_XDECREF(item);
+                Py_DECREF(children);
+                return NULL;
+            }
+            Py_XDECREF(item);
+            continue;
+        }
+
         const void *candidate = Fns.plan_value_at(value, (size_t)vi);
         int vkind = Fns.plan_value_kind(candidate);
         const char *vname_c = Fns.plan_value_name(candidate);
@@ -2312,10 +2410,13 @@ plan_convert_element(const void *value, const PlanShapeC *shape,
         }
 
         if (!matches) {
-            if (PyDict_SetItem(
-                    children, row->key,
-                    (row->kind == PK_COLLECTION || row->kind == PK_CONTENT)
-                        ? (PyObject *)PyList_New(0) : Py_None) < 0) {
+            PyObject *absent =
+                (row->kind == PK_COLLECTION || row->kind == PK_CONTENT)
+                    ? (PyObject *)PyList_New(0) : Py_None;
+            if (absent == Py_None) Py_INCREF(absent);
+            int rc = plan_row_emit(children, row, absent);
+            Py_XDECREF(absent);
+            if (rc < 0) {
                 Py_DECREF(children);
                 return NULL;
             }
@@ -2353,23 +2454,19 @@ plan_convert_element(const void *value, const PlanShapeC *shape,
                 vi++;
             }
             Py_ssize_t matched = PyList_Size(collected);
+            PyObject *nested_result;
             if (matched == 1) {
-                PyObject *only = PyList_GetItem(collected, 0);
-                Py_INCREF(only);
+                nested_result = PyList_GetItem(collected, 0);
+                Py_INCREF(nested_result);
                 Py_DECREF(collected);
-                if (PyDict_SetItem(children, row->key, only) < 0) {
-                    Py_DECREF(only);
-                    Py_DECREF(children);
-                    return NULL;
-                }
-                Py_DECREF(only);
             } else {
-                if (PyDict_SetItem(children, row->key, collected) < 0) {
-                    Py_DECREF(collected);
-                    Py_DECREF(children);
-                    return NULL;
-                }
-                Py_DECREF(collected);
+                nested_result = collected;
+            }
+            int rc = plan_row_emit(children, row, nested_result);
+            Py_DECREF(nested_result);
+            if (rc < 0) {
+                Py_DECREF(children);
+                return NULL;
             }
             continue;
         }
@@ -2383,7 +2480,7 @@ plan_convert_element(const void *value, const PlanShapeC *shape,
         else
             converted = plan_leaf(candidate, shape->callback_type);
         if (converted == NULL
-            || PyDict_SetItem(children, row->key, converted) < 0) {
+            || plan_row_emit(children, row, converted) < 0) {
             Py_XDECREF(converted);
             Py_DECREF(children);
             return NULL;
