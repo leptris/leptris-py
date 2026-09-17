@@ -114,11 +114,6 @@ class TestRelaxNGV188:
                 f.write(text)
         return os.path.join(d, main), d
 
-    @pytest.mark.skipif(
-        sys.platform == "win32",
-        reason="engine base-dir derivation mishandles backslash "
-        "paths (leptris/leptris#1158; lands past 1.9.190)",
-    )
     def test_external_ref_bare_root(self):
         # bare-<element> schema with nested externalRef (the #1155
         # engine fix; grammar-root schemas worked from the start)
@@ -168,6 +163,34 @@ class TestRelaxNGV188:
             "<bag><x a='1'>t</x><y>u</y></bag>"
         ) as doc:
             assert v.validate(doc) is True
+
+
+    def test_attribute_group_behind_ref(self):
+        # v1.9.191: attribute lists behind a <ref> are consumed —
+        # documents carrying the referenced attributes validate
+        # (190 rejected them). The omitted-required-attribute verdict
+        # is still upstream (leptris/leptris#1164) — not pinned here.
+        rng = (
+            "<grammar xmlns='http://relaxng.org/ns/structure/1.0'>"
+            "<define name='attrs'>"
+            "<attribute name='id'><text/></attribute>"
+            "<attribute name='lang'><text/></attribute>"
+            "</define><start><element name='doc'>"
+            "<ref name='attrs'/>"
+            "<element name='body'><text/></element>"
+            "</element></start></grammar>"
+        )
+        v = RelaxNG(rng)
+        with Document.parse(
+            "<doc id='1' lang='en'><body>b</body></doc>"
+        ) as doc:
+            assert v.validate(doc) is True
+            assert v.error_log == []
+        # extra attributes beyond the referenced list still fail
+        with Document.parse(
+            "<doc id='1' lang='en' bogus='x'><body>b</body></doc>"
+        ) as doc:
+            assert v.validate(doc) is False
 
     def test_foreign_namespace_annotations_skipped(self):
         rng = (
