@@ -2,7 +2,7 @@
 
 import pytest
 
-from leptris import Document, RelaxNG
+from leptris import Document, RelaxNG, libleptris_version
 from leptris.error import LeptrisError, RelaxNGError
 
 SCHEMA = """<element name='library' xmlns='http://relaxng.org/ns/structure/1.0'>
@@ -112,6 +112,11 @@ class TestRelaxNGV188:
                 f.write(text)
         return os.path.join(d, main), d
 
+    @pytest.mark.skipif(
+        tuple(int(x) for x in libleptris_version().split(".")[:3])
+        < (1, 9, 190),
+        reason="bare-root externalRef resolution lands in 1.9.190",
+    )
     def test_external_ref_bare_root(self):
         # bare-<element> schema with nested externalRef (the #1155
         # engine fix; grammar-root schemas worked from the start)
