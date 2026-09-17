@@ -127,15 +127,58 @@ class TestValidation:
         with pytest.raises(ValueError, match="uri"):
             Plan({"element_name": "r", "ns": {"form": "exact"}})
 
-    def test_duplicate_row_names_rejected(self):
-        with pytest.raises(ValueError, match="duplicate"):
-            Plan({
-                "element_name": "r",
-                "children": [
-                    {"name": "x", "kind": "scalar"},
-                    {"name": "x", "kind": "raw"},
-                ],
-            })
+    def test_same_name_rows_group_into_a_list(self):
+        # Same-name rows (the #1115 shape) materialize as one list of
+        # per-row values in declaration order — the namespace split.
+        plan = Plan({
+            "element_name": "r",
+            "children": [
+                {"name": "x", "kind": "scalar",
+                 "ns": {"form": "exact", "uri": "urn:p"}},
+                {"name": "x", "kind": "scalar"},
+            ],
+        })
+        xml = (
+            "<r xmlns:p='urn:p'><p:x>P</p:x><x>N</x>"
+            "<p:x>Q</p:x></r>"
+        )
+        with Document.parse(xml) as doc:
+            # row 1 (exact urn:p) takes its FIRST match — scalar rows
+            # are first-wins like single rows (a scalar row matching
+            # twice is a collection-shaped modeling error); row 2
+            # binds the no-namespace N
+            assert plan(doc)["children"]["x"] == ["P", "N"]
+
+    def test_same_name_rows_absent_member_keeps_row_shape(self):
+        plan = Plan({
+            "element_name": "r",
+            "children": [
+                {"name": "x", "kind": "scalar",
+                 "ns": {"form": "exact", "uri": "urn:none"}},
+                {"name": "x", "kind": "scalar"},
+            ],
+        })
+        with Document.parse("<r><x>N</x></r>") as doc:
+            assert plan(doc)["children"]["x"] == [None, "N"]
+
+    def test_same_name_collection_and_scalar_rows(self):
+        plan = Plan({
+            "element_name": "r",
+            "children": [
+                {"name": "x", "kind": "collection",
+                 "ns": {"form": "exact", "uri": "urn:p"}},
+                {"name": "x", "kind": "collection"},
+            ],
+        })
+        xml = (
+            "<r xmlns:p='urn:p'><p:x>P</p:x><x>N</x>"
+            "<p:x>Q</p:x></r>"
+        )
+        with Document.parse(xml) as doc:
+            assert plan(doc)["children"]["x"] == [
+                ["P", "Q"],
+                ["N"],
+            ]
 
 
 class TestLifecycle:
@@ -238,6 +281,21 @@ class TestDifferential:
                 ],
             },
             "<r><one/><many>a</many><many/><many>b</many></r>",
+        ),
+        (
+            {
+                "element_name": "r",
+                "children": [
+                    {"name": "x", "kind": "collection",
+                     "ns": {"form": "exact", "uri": "urn:p"}},
+                    {"name": "x", "kind": "scalar"},
+                    {"name": "x", "kind": "nested", "ns": "any",
+                     "plan": {"element_name": "x",
+                              "attributes": {"n": {}}}},
+                ],
+            },
+            "<r xmlns:p='urn:p'><p:x>P</p:x><x>N</x>"
+            "<p:x>Q</p:x><x n='1'/></r>",
         ),
         (
             {
@@ -360,18 +418,20 @@ class TestPlanRowNamespace:
                 }
             )
 
-    def test_same_name_rows_are_rejected_with_guidance(self):
-        with pytest.raises(ValueError, match="distinct names"):
-            Plan(
-                {
-                    "element_name": "r",
-                    "children": [
-                        {
-                            "name": "item",
-                            "kind": "scalar",
-                            "ns": {"form": "exact", "uri": "urn:p"},
-                        },
-                        {"name": "item", "kind": "scalar"},
-                    ],
-                }
-            )
+    def test_same_name_rows_are_supported(self):
+        plan = Plan(
+            {
+                "element_name": "r",
+                "children": [
+                    {
+                        "name": "item",
+                        "kind": "scalar",
+                        "ns": {"form": "exact", "uri": "urn:p"},
+                    },
+                    {"name": "item", "kind": "scalar"},
+                ],
+            }
+        )
+        xml = "<r xmlns:p='urn:p'><p:item>P</p:item><item>N</item></r>"
+        with Document.parse(xml) as doc:
+            assert plan(doc)["children"]["item"] == ["P", "N"]
