@@ -1,5 +1,5 @@
 {% set name = "leptris" %}
-{% set version = "1.9.186.0" %}
+{% set version = "1.9.192.0" %}
 
 package:
   name: {{ name|lower }}
