@@ -113,9 +113,9 @@ jobs:
             cibw: "cp39-manylinux_i686"
             dist: manylinux-i686
             archs_linux: "i686"
-            # engine #1173: 32-bit struct layout pins — leg activates
-            # when the engine lands them
-            allow_fail: true
+            # engine #1174 landed the ILP32 layout pins — leg went
+            # green (and required) with the 1.9.199 pin
+
           - os: ubuntu-latest
             cibw: "cp39-musllinux_i686"
             dist: musllinux-i686
@@ -138,9 +138,9 @@ jobs:
             cibw: "cp39-manylinux_s390x"
             dist: manylinux-s390x
             archs_linux: "s390x"
-            # engine big-endian correctness (leptris/leptris#1194):
-            # the full suite runs 286F/160P/46E under qemu-s390x —
-            # leg activates when the engine lands big-endian fixes
+            # engine big-endian fixed in v1.9.200 (leptris/leptris#1194):
+            # held at allow_fail for one observed-green release before
+            # flipping to required
             allow_fail: true
           - os: windows-latest
             cibw: "cp39-win32"
