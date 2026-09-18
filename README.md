@@ -215,15 +215,18 @@ with html.document("<td>c") as doc:
 
 Since libleptris 1.9.76 the output is byte-exact with lxml's
 `etree.HTMLParser` (minimized attributes are empty strings; no
-empty `<head/>` is emitted) — leptris/leptris#813. One known
-divergence (libleptris 1.9.104+): a leading `script`/`style` run
-stays in `body` where lxml's libxml2 lifts it to `head`
-(leptris/leptris#659).
+empty `<head/>` is emitted) — leptris/leptris#813. The one
+deliberate `html4` divergence: a leading `script`/`style` run
+stays in `body` (the fragment shape), where lxml's libxml2 lifts
+it to `head`.
 
 Two modes (libleptris 1.9.104+): the default `html4` keeps this
 compatibility shape; `mode="whatwg"` selects the WHATWG-conformant
-engine (leading script/style/noscript/template runs lift into the
-implied head — not lxml byte-compatible).
+engine — with libleptris 1.9.196 the WHATWG conformance corpus is
+at zero divergences (leptris/leptris#659 complete): tree
+construction, foster parenting, adoption agency, in-select/table
+scope, and the foreign-content rules all match the specification.
+**leptris fully provides HTML.**
 
 ## Migrating from lxml
 
