@@ -102,14 +102,23 @@ jobs:
             cibw: "cp39-manylinux_i686"
             dist: manylinux-i686
             archs_linux: "i686"
+            # engine #1173: 32-bit struct layout pins — leg activates
+            # when the engine lands them
+            continue-on-error: true
           - os: ubuntu-latest
             cibw: "cp39-musllinux_i686"
             dist: musllinux-i686
             archs_linux: "i686"
+            # engine #1173: 32-bit struct layout pins — leg activates
+            # when the engine lands them
+            continue-on-error: true
           - os: ubuntu-latest
             cibw: "cp39-musllinux_armv7l"
             dist: musllinux-armv7l
             archs_linux: "armv7l"
+            # engine #1173: 32-bit struct layout pins — leg activates
+            # when the engine lands them
+            continue-on-error: true
           - os: ubuntu-latest
             cibw: "cp39-manylinux_ppc64le"
             dist: manylinux-ppc64le
@@ -122,6 +131,8 @@ jobs:
             cibw: "cp39-win32"
             dist: win-x86
             archs_win: "x86"
+            # engine #1173: 32-bit struct layout pins
+            continue-on-error: true
           - os: macos-latest
             cibw: "cp39-macosx*"
             dist: macos-universal
