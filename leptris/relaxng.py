@@ -12,11 +12,19 @@ from collections import namedtuple
 
 from .error import RelaxNGError
 
-RelaxNGErrorEntry = namedtuple("RelaxNGErrorEntry", ["line", "column", "message"])
-RelaxNGErrorEntry.__doc__ = "One RELAX NG validation failure (Jing-compatible position)."
+RelaxNGErrorEntry = namedtuple(
+    "RelaxNGErrorEntry", ["line", "column", "message", "kind", "offender"]
+)
+RelaxNGErrorEntry.__doc__ = (
+    "One RELAX NG validation failure: Jing-compatible position plus the "
+    "engine's failure class (kind, e.g. 'missing-required-attr') and the "
+    "offending element/attribute name (None when the engine does not "
+    "attribute one)."
+)
 RelaxNGErrorEntry.__repr__ = lambda self: (
     f"RelaxNGErrorEntry(line={self.line}, column={self.column}, "
-    f"message={self.message!r})"
+    f"message={self.message!r}, kind={self.kind!r}, "
+    f"offender={self.offender!r})"
 )
 
 
@@ -68,21 +76,35 @@ class RelaxNG(_engine.CompiledSource):
             Returns the full list instead of the first failure's
             ``"line:col: error: message"`` string."""
         lib, ffi = _ffi.lib, _ffi.ffi
-        count = lib.leptris_rng_error_count(self._handle)
+        records = ffi.new("LeptrisRngErrorRecord**")
+        count = lib.leptris_rng_error_report(self._handle, records)
         if count:
-            entries = []
+            out = []
             for i in range(count):
-                message = lib.leptris_rng_error_message(self._handle, i)
-                entries.append(
+                record = records[0][i]
+                out.append(
                     RelaxNGErrorEntry(
-                        line=lib.leptris_rng_error_line(self._handle, i),
-                        column=lib.leptris_rng_error_column(self._handle, i),
-                        message=ffi.string(message).decode("utf-8", "replace")
-                        if message != ffi.NULL
+                        line=record.line,
+                        column=record.column,
+                        message=ffi.string(record.message).decode(
+                            "utf-8", "replace"
+                        )
+                        if record.message != ffi.NULL
                         else "",
+                        kind=ffi.string(record.kind).decode(
+                            "utf-8", "replace"
+                        )
+                        if record.kind != ffi.NULL
+                        else None,
+                        offender=ffi.string(record.offender).decode(
+                            "utf-8", "replace"
+                        )
+                        if record.offender != ffi.NULL
+                        else None,
                     )
                 )
-            return entries
+            return out
+        # fallback: pre-1.9.195 engines surface the first failure only
         message = lib.leptris_rng_error(self._handle)
         if message == ffi.NULL:
             return []
@@ -92,8 +114,16 @@ class RelaxNG(_engine.CompiledSource):
         try:
             return [
                 RelaxNGErrorEntry(
-                    line=int(line), column=int(column), message=msg
+                    line=int(line),
+                    column=int(column),
+                    message=msg,
+                    kind=None,
+                    offender=None,
                 )
             ]
         except ValueError:
-            return [RelaxNGErrorEntry(line=0, column=0, message=text)]
+            return [
+                RelaxNGErrorEntry(
+                    line=0, column=0, message=text, kind=None, offender=None
+                )
+            ]
