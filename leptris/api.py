@@ -230,7 +230,14 @@ def iterparse(source, events=("end",), *, full_document: bool = False):
     iterator_addr = int(ffi.cast("uintptr_t", iterator))
     from .element import _accel
 
+    # leptris_iterparse_new_ex retains the buffer and reads it lazily
+    # in bounded slices; cffi drops the bytes object at call return,
+    # so the generator must hold it for the iterator's lifetime —
+    # reading freed memory otherwise (flaky mis-parses, SIGSEGV)
+    keepalive = data if hasattr(source, "read") else None
+
     def generate():
+        _ = keepalive  # capture: keeps the input buffer alive
         try:
             while True:
                 # next + wrap in one C call; the element is borrowed
