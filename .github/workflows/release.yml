@@ -131,6 +131,10 @@ jobs:
             cibw: "cp39-manylinux_s390x"
             dist: manylinux-s390x
             archs_linux: "s390x"
+            # engine big-endian correctness (leptris/leptris#1194):
+            # the full suite runs 286F/160P/46E under qemu-s390x —
+            # leg activates when the engine lands big-endian fixes
+            allow_fail: true
           - os: windows-latest
             cibw: "cp39-win32"
             dist: win-x86

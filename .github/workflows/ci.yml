@@ -96,7 +96,7 @@ jobs:
       matrix:
         # every GitHub-hosted family: x86_64 + aarch64 linux,
         # arm64 + intel macos, amd64 windows
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest]
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest, windows-11-arm]
     steps:
       - uses: actions/checkout@v4
 
