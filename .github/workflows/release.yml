@@ -98,6 +98,30 @@ jobs:
           - os: ubuntu-24.04-arm
             cibw: "cp39-musllinux_aarch64"
             dist: musllinux-aarch64
+          - os: ubuntu-latest
+            cibw: "cp39-manylinux_i686"
+            dist: manylinux-i686
+            archs_linux: "i686"
+          - os: ubuntu-latest
+            cibw: "cp39-musllinux_i686"
+            dist: musllinux-i686
+            archs_linux: "i686"
+          - os: ubuntu-latest
+            cibw: "cp39-musllinux_armv7l"
+            dist: musllinux-armv7l
+            archs_linux: "armv7l"
+          - os: ubuntu-latest
+            cibw: "cp39-manylinux_ppc64le"
+            dist: manylinux-ppc64le
+            archs_linux: "ppc64le"
+          - os: ubuntu-latest
+            cibw: "cp39-manylinux_s390x"
+            dist: manylinux-s390x
+            archs_linux: "s390x"
+          - os: windows-latest
+            cibw: "cp39-win32"
+            dist: win-x86
+            archs_win: "x86"
           - os: macos-latest
             cibw: "cp39-macosx*"
             dist: macos-universal
@@ -152,7 +176,16 @@ jobs:
           repository: leptris/leptris-py
           ref: main
 
+      # cross-arch Linux legs (i686/armv7l/ppc64le/s390x) build in
+      # emulated containers; native legs are unaffected
+      - name: Set up QEMU
+        if: matrix.os == 'ubuntu-latest'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: all
+
       - uses: actions/setup-python@v5
+        if: matrix.os != 'ubuntu-latest' || matrix.archs_linux != 'i686'
         with:
           python-version: "3.x"
 
@@ -172,6 +205,7 @@ jobs:
           CIBW_BUILD: ${{ matrix.cibw }}
           CIBW_ARCHS_MACOS: ${{ matrix.archs }}
           CIBW_ARCHS_WINDOWS: ${{ matrix.archs_win }}
+          CIBW_ARCHS_LINUX: ${{ matrix.archs_linux }}
           CIBW_ENABLE: ${{ matrix.enable }}
           CIBW_BEFORE_ALL_LINUX: "bash scripts/vendor_libleptris.sh"
           CIBW_BEFORE_ALL_MACOS: "bash scripts/vendor_libleptris.sh"
