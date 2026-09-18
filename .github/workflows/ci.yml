@@ -7,7 +7,10 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.head_ref || github.ref_name }}
+  # github.ref is refs/pull/N/merge per PR (unique) and refs/heads/X
+  # per branch — head_ref-based keys collided across forks using the
+  # same branch name and cancelled each other's runs
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:

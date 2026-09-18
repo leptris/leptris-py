@@ -17,6 +17,13 @@ name: Build and publish leptris
 on:
   workflow_dispatch:
   workflow_call:
+
+# Serialize per ref: a double dispatch must never run CONCURRENTLY
+# (racing 23-job builds and duplicate PyPI uploads), but an in-flight
+# publish is never cancelled — the duplicate queues behind it
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
     inputs:
       publish:
         description: 'Publish the wheel to PyPI (trusted publisher)'
