@@ -38,6 +38,28 @@ leptris` works with no extra setup on macOS (x86_64/arm64), Linux
   (single-mode by design); a pure-cffi fallback would contradict
   the binding's purpose. Revisit only on real demand.
 
+### Wheel platforms
+
+Every release ships a universal wheel per platform (abi3, covering
+all CPython 3.9+) plus the matching free-threaded cp314t wheel and
+a source distribution. Each wheel runs the full test suite on its
+platform as part of the release build.
+
+| Platform | Wheels | Notes |
+|---|---|---|
+| Linux x86_64 (glibc ≥ 2.17) | abi3 + cp314t | manylinux |
+| Linux x86_64 (musl) | abi3 + cp314t | musllinux (Alpine) |
+| Linux aarch64 (glibc / musl) | abi3 + cp314t | native runners |
+| Linux ppc64le | abi3 | full suite under qemu |
+| Linux s390x | abi3 (pending) | engine big-endian fixes in flight |
+| Linux i686 / armv7l (musl) | pending | engine 32-bit layouts in flight |
+| macOS x86_64 + arm64 | abi3 + cp314t | universal2; x86_64 slice Rosetta-tested |
+| Windows x64 + ARM64 | abi3 + cp314t | suite runs on both architectures |
+
+The pending rows are wired in the release pipeline and activate
+automatically when the engine releases land ([leptris/leptris#1173,
+#1194](https://github.com/leptris/leptris/issues)).
+
 For a **development checkout** (or to use your own libleptris
 build), the loader also accepts a shared library
 (`libleptris.dylib` / `.so` / `.dll`) on the loader path, or one
