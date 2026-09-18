@@ -225,7 +225,12 @@ jobs:
           CIBW_BEFORE_ALL_LINUX: "bash scripts/vendor_libleptris.sh"
           CIBW_BEFORE_ALL_MACOS: "bash scripts/vendor_libleptris.sh"
           CIBW_BEFORE_ALL_WINDOWS: "bash scripts/vendor_libleptris.sh"
-          CIBW_TEST_COMMAND: "python {project}/scripts/wheel_smoke.py"
+          # The FULL suite runs on every wheel platform (including
+          # the qemu legs — 492 tests, ~2s native): wheel_smoke.py
+          # stays the zero-dependency import-level check for local
+          # debugging, but release wheels prove the whole binding.
+          CIBW_TEST_REQUIRES: "pytest"
+          CIBW_TEST_COMMAND: "pytest {project}/tests/ -q"
         with:
           output-dir: wheelhouse
 
