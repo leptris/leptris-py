@@ -317,6 +317,19 @@ ffi.cdef(
     int leptris_rng_error_line(LeptrisRelaxNG rng, size_t i);
     int leptris_rng_error_column(LeptrisRelaxNG rng, size_t i);
 
+    /* The whole report in one call (libleptris >= 1.9.195, #1154's
+     * used-export makes it bindable): handle-owned record array,
+     * live until the next validate or free. */
+    typedef struct {
+        const char* kind;
+        const char* message;
+        const char* offender;
+        unsigned int line;
+        unsigned int column;
+    } LeptrisRngErrorRecord;
+    size_t leptris_rng_error_report(LeptrisRelaxNG rng,
+                                    LeptrisRngErrorRecord** out);
+
     /* Parser-recorded source position (#1124, libleptris >= 1.9.180).
      * Columns follow Jing's convention: col_start is the byte after
      * the start tag's '>', col_end after the final '>'. Zeros for

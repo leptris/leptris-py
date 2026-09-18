@@ -203,3 +203,62 @@ class TestRelaxNGV188:
         v = RelaxNG(rng)
         with Document.parse("<doc><body>b</body></doc>") as doc:
             assert v.validate(doc) is True
+
+class TestRelaxNGV195:
+    """v1.9.195 engine fixes, Jing-verified locally."""
+
+    def test_required_attribute_behind_ref_enforced(self):
+        # engine #1164: omitting a required attribute that lives
+        # behind a <ref> used to validate true (190-194); Jing
+        # rejects: 1:16: element "doc" missing required attribute "id"
+        rng = (
+            "<grammar xmlns='http://relaxng.org/ns/structure/1.0'>"
+            "<define name='attrs'>"
+            "<attribute name='id'><text/></attribute>"
+            "</define><start><element name='doc'>"
+            "<ref name='attrs'/>"
+            "<element name='body'><text/></element>"
+            "</element></start></grammar>"
+        )
+        v = RelaxNG(rng)
+        with Document.parse("<doc><body>b</body></doc>") as doc:
+            assert v.validate(doc) is False
+            (entry,) = v.error_log
+            assert entry.line == 1
+            assert entry.message == (
+                'element "doc" missing required attribute "id"'
+            )
+        with Document.parse("<doc id='1'><body>b</body></doc>") as doc:
+            assert v.validate(doc) is True
+
+    def test_stray_character_data_under_element_only(self):
+        # engine #1153: text that is not whitespace under an
+        # element-only content model now fails like Jing
+        rng = (
+            "<element name='r' "
+            "xmlns='http://relaxng.org/ns/structure/1.0'>"
+            "<element name='a'/></element>"
+        )
+        v = RelaxNG(rng)
+        with Document.parse("<r>stray<a/></r>") as doc:
+            assert v.validate(doc) is False
+        with Document.parse("<r><a/></r>") as doc:
+            assert v.validate(doc) is True
+
+    def test_error_report_kind_and_offender(self):
+        # the 1.9.195 one-call report feeds error_log; entries carry
+        # the engine's failure class and attributed name
+        rng = (
+            "<element name='doc' "
+            "xmlns='http://relaxng.org/ns/structure/1.0'>"
+            "<optional><attribute name='y'/></optional>"
+            "<attribute name='x'/></element>"
+        )
+        v = RelaxNG(rng)
+        with Document.parse("<doc/>") as doc:
+            assert v.validate(doc) is False
+            (entry,) = v.error_log
+            assert entry.message == (
+                'element "doc" missing required attribute "x"'
+            )
+            assert entry.kind is not None
