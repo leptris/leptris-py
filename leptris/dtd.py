@@ -28,32 +28,6 @@ DTDErrorEntry.__repr__ = lambda self: (
     f"line={self.line}, column={self.column})"
 )
 
-# PE-loader buffers must come from the same libc heap the engine
-# free()s from (leptris/leptris#1217 tracks a first-class allocator
-# export). A private FFI handle keeps libc declarations out of the
-# drift-gated cdef mirror: dlopen(None) covers POSIX; the Windows
-# wheels build the engine with MSVC /MD, so ucrtbase carries its
-# heap (msvcrt as a legacy fallback).
-try:
-    from cffi import FFI as _CFFI
-
-    _libc_ffi = _CFFI()
-    _libc_ffi.cdef("void* malloc(size_t); void free(void*);")
-    _libc = None
-    for _candidate in (None, "ucrtbase.dll", "msvcrt.dll"):
-        try:
-            _libc = _libc_ffi.dlopen(_candidate)
-            break
-        except OSError:
-            continue
-except Exception:  # pragma: no cover
-    _libc = None
-
-
-def _noop_free(_handle):
-    pass
-
-
 class DTD(_engine.CompiledSource):
     """A compiled DTD (lxml's ``etree.DTD`` equivalent)."""
 
@@ -125,11 +99,6 @@ class DTD(_engine.CompiledSource):
             self._pe_keepalive = None
             lib.leptris_dtd_set_pe_loader(self._handle, ffi.NULL, ffi.NULL)
             return
-        if _libc is None:  # pragma: no cover
-            raise DTDError(
-                "parameter-entity loader requires a libc allocator"
-            )
-
         def trampoline(_user_data, system_id, out_len):
             name = (
                 ffi.string(system_id).decode("utf-8", "replace")
@@ -140,7 +109,9 @@ class DTD(_engine.CompiledSource):
             if not isinstance(data, (bytes, bytearray)):
                 return ffi.NULL
             data = bytes(data)
-            buf = _libc.malloc(len(data) + 1)
+            # leptris_alloc_buffer: the engine's own heap — the
+            # parser free()s PE buffers from it (#1219)
+            buf = lib.leptris_alloc_buffer(len(data) + 1)
             if buf == ffi.NULL:
                 return ffi.NULL
             ffi.memmove(buf, data, len(data))
