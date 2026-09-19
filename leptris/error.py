@@ -26,6 +26,10 @@ class XQueryError(LeptrisError):
     """XQuery compilation or evaluation failed."""
 
 
+class DTDError(LeptrisError):
+    """DTD parsing or validation failure."""
+
+
 class RelaxNGError(LeptrisError):
     """RELAX NG schema compilation or validation failed
     (lxml's etree.RelaxNGError equivalent)."""
