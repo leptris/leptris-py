@@ -167,22 +167,32 @@ class _ElementMethods:
         results = self.findall(path, namespaces)
         return results[0] if results else None
 
-    def digest(self, drop_whitespace: bool = False) -> int:
+    def digest(self, drop_whitespace: bool = False,
+               attr_order: bool = False) -> int:
         """On-demand content digest of this subtree (Merkle hash).
 
         Stable across processes: element name/prefix/namespace,
         attributes sorted by (namespace, local), children
         recursively in document order; text/CDATA/comment/PI hash
         their content. Equality implies subtree equivalence under
-        the flag; inequality implies nothing — descend and decide.
-        With drop_whitespace=True, whitespace-only text nodes are
-        skipped (logically-equivalent pretty-printed trees hash
-        equal). Zero cost when never called.
+        the flags; inequality implies nothing — descend and decide.
+
+        - drop_whitespace=True: whitespace-only text nodes are
+          skipped (logically-equivalent pretty-printed trees hash
+          equal).
+        - attr_order=True (libleptris 1.9.208+): attributes hash in
+          DOCUMENT order instead of the sorted canonical order —
+          equality then additionally implies attribute-order
+          identity, and documents differing only in attribute
+          order hash DIFFERENT.
+
+        Zero cost when never called.
         """
         self._check_alive()
+        flags = (1 if drop_whitespace else 0) | (2 if attr_order else 0)
         return _ffi.lib.leptris_node_digest(
             _ffi.ffi.cast("LeptrisNodeRef", self._cd()),
-            1 if drop_whitespace else 0,
+            flags,
         )
 
     def findtext(self, path: str, default=None, namespaces=None) -> Optional[str]:
