@@ -84,6 +84,27 @@ ffi.cdef(
     const char* leptris_doctype_get_name(LeptrisDoctype dt);
     const char* leptris_doctype_get_public_id(LeptrisDoctype dt);
     const char* leptris_doctype_get_system_id(LeptrisDoctype dt);
+    /* DTD validation (libleptris 1.9.202+) */
+    typedef struct LeptrisDTD LeptrisDTD;
+    typedef struct {
+        char* message;
+        char* element_name;
+        int line;
+        int column;
+    } LeptrisDTDError;
+    LeptrisDTD* leptris_dtd_parse(const char* dtd_content, size_t len);
+    LeptrisDTD* leptris_document_get_dtd(LeptrisDocument doc);
+    int leptris_dtd_parse_external_subset(LeptrisDTD* dtd, const char* content,
+                                          size_t len);
+    void leptris_dtd_set_pe_loader(LeptrisDTD* dtd,
+                                   char* (*loader)(void* user_data,
+                                                   const char* system_id,
+                                                   size_t* out_len),
+                                   void* user_data);
+    int leptris_dtd_validate(LeptrisDocument doc, LeptrisDTD* dtd,
+                             LeptrisDTDError* error);
+    void leptris_dtd_free(LeptrisDTD* dtd);
+    void leptris_dtd_error_free(LeptrisDTDError* error);
     typedef struct LeptrisDiffInternal* LeptrisDiff;
     LeptrisDiff leptris_diff(LeptrisDocument a, LeptrisDocument b, unsigned int flags, int* status);
     void leptris_diff_free(LeptrisDiff diff);
