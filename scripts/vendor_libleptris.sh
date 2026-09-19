@@ -21,6 +21,41 @@ CMAKE_FLAGS=(-DCMAKE_BUILD_TYPE=Release
     -DLEPTRIS_BUILD_BENCHMARKS=OFF
     -DLEPTRIS_ENABLE_UTF8PROC=OFF -DLEPTRIS_ENABLE_ICONV=OFF)
 
+# The wheel bundles the engine SOURCE beside the binary (packaging
+# doctrine: compiled packages carry the lib AND its source so the
+# vendored build can be reproduced locally). Build inputs only —
+# tests/benchmarks/CLI corpora stay out (size).
+vendor_engine_source() {
+    local dest="$VENDOR/engine"
+    rm -rf "$dest"
+    mkdir -p "$dest"
+    cp "$SRC/CMakeLists.txt" "$dest/"
+    cp "$SRC/vcpkg.json" "$dest/" 2>/dev/null || true
+    cp "$SRC/LICENSE" "$dest/" 2>/dev/null || true
+    cp "$SRC/LICENSE.md" "$dest/" 2>/dev/null || true
+    cp -R "$SRC/cmake" "$dest/cmake"
+    cp -R "$SRC/src" "$dest/src"
+    find "$dest/src" -name build -type d -exec rm -rf {} + 2>/dev/null || true
+    cat > "$VENDOR/README.md" << VEOF
+libleptris v${VERSION} is vendored here.
+
+- libleptris.{so,dylib,dll} — the engine this package runs on
+- engine/ — the exact source it was built from; rebuild with:
+
+      cmake -B build -S engine \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DLEPTRIS_BUILD_SHARED=ON -DLEPTRIS_BUILD_STATIC=OFF \
+        -DBUILD_TESTING=OFF -DLEPTRIS_BUILD_CLI=OFF \
+        -DLEPTRIS_BUILD_BENCHMARKS=OFF \
+        -DLEPTRIS_ENABLE_UTF8PROC=OFF -DLEPTRIS_ENABLE_ICONV=OFF
+      cmake --build build
+
+Source installs (the sdist) compile this tree automatically via
+setup.py; LEPTRIS_LIB_PATH overrides the vendored library.
+VEOF
+    echo "vendored engine source: $dest (libleptris v${VERSION})"
+}
+
 find_lib() {
     find "$1" -type f \
         \( -name 'libleptris.1*.dylib' -o -name 'libleptris.so.1*' -o \
@@ -46,6 +81,7 @@ if [ "$(uname -s)" = "Darwin" ]; then
         "$(find_lib "$SRC/build-arm64")" \
         "$(find_lib "$SRC/build-x86_64")" \
         -output "$VENDOR/libleptris.dylib"
+    vendor_engine_source
     echo "vendored: $VENDOR/libleptris.dylib (universal2, libleptris v${VERSION})"
     exit 0
 fi
@@ -65,4 +101,5 @@ case "$lib" in
     *.dll)    dest="$VENDOR/leptris.dll" ;;
 esac
 cp "$lib" "$dest"
+vendor_engine_source
 echo "vendored: $dest ($(basename "$lib"), libleptris v${VERSION})"

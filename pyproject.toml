@@ -41,7 +41,15 @@ bench = ["lxml"]
 packages = ["leptris"]
 
 [tool.setuptools.package-data]
-leptris = ["py.typed", "_vendor/*"]
+leptris = [
+    "py.typed",
+    "_vendor/*",
+    "_vendor/engine/*",
+    "_vendor/engine/*/*",
+    "_vendor/engine/*/*/*",
+    "_vendor/engine/*/*/*/*",
+    "_vendor/engine/*/*/*/*/*",
+]
 
 [tool.setuptools.exclude-package-data]
-leptris = ["*.c"]
+leptris = ["_leptrisaccel.c"]

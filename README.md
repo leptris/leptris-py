@@ -19,7 +19,9 @@ leptris` works with no extra setup on macOS (x86_64/arm64), Linux
 - `cffi` (installed automatically)
 - nothing else for wheel installs — the pinned libleptris is
   vendored into `leptris/_vendor/` by the wheel build
-  (`scripts/vendor_libleptris.sh`)
+  (`scripts/vendor_libleptris.sh`). Wheels carry the compiled
+  library AND its exact source (`_vendor/engine/`, with rebuild
+  instructions in `_vendor/README.md`)
 - source installs (`pip install --no-binary leptris`) need a C
   toolchain + cmake; the sdist bundles the pinned engine source
   and compiles it at install time — no `LEPTRIS_LIB_PATH`
