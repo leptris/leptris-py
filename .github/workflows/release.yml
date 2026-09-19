@@ -262,14 +262,15 @@ jobs:
       - name: Verify artifacts bundle the engine (binary + source)
         run: |
           python - << 'PY'
-          import glob, json, re, sys, tarfile, urllib.request, zipfile
+          import glob, json, sys, tarfile, urllib.request, zipfile
 
           # never race a duplicate publish: if this exact version is
           # already live, the run that put it there won — fail here
-          # with the reason instead of confusing 400s per file
-          version = re.search(
-              r'^version = "(.+)"', open("pyproject.toml").read(), re.M
-          ).group(1)
+          # with the reason instead of confusing 400s per file.
+          # (publish never checks out the repo — read the version
+          # from the artifacts it is about to upload)
+          wheel_name = sorted(glob.glob("dist/*.whl"))[0]
+          version = wheel_name.split("/")[1].split("-")[1]
           live = json.load(
               urllib.request.urlopen("https://pypi.org/pypi/leptris/json")
           )["releases"]
