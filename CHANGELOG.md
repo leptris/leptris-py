@@ -1,6 +1,15 @@
 # Changelog
 
 
+## 1.9.208.0 — 2026-09-20
+
+Adopts libleptris 1.9.208 (pin 1.9.206 -> 1.9.208):
+
+- **#1242 complete**: the root-doc memo survives element
+  unregistration (leptris#1246 — intermittent all-NULL attribute
+  reads on iterparse) and set_root failures record a fresh
+  thread-local error (leptris#1245) instead of stale messages
+
 ## 1.9.206.0 — 2026-09-19
 
 Adopts libleptris 1.9.206 (pin 1.9.204 -> 1.9.206):
