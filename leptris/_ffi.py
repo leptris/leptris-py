@@ -105,6 +105,13 @@ ffi.cdef(
                              LeptrisDTDError* error);
     void leptris_dtd_free(LeptrisDTD* dtd);
     void leptris_dtd_error_free(LeptrisDTDError* error);
+    /* engine-heap allocation for FFI-supplied buffers (1.9.204+):
+       released with leptris_free_string; PE-loader buffers are
+       consumed and freed by the parser */
+    char* leptris_alloc_buffer(size_t len);
+    /* document-level declaration/doctype removal (1.9.204+) */
+    LeptrisStatus leptris_document_clear_declaration(LeptrisDocument doc);
+    LeptrisStatus leptris_document_remove_doctype(LeptrisDocument doc);
     typedef struct LeptrisDiffInternal* LeptrisDiff;
     LeptrisDiff leptris_diff(LeptrisDocument a, LeptrisDocument b, unsigned int flags, int* status);
     void leptris_diff_free(LeptrisDiff diff);

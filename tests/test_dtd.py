@@ -163,3 +163,24 @@ class TestPELoader:
         dtd.set_pe_loader(None)
         dtd.parse_external_subset(self.EXT)
         assert dtd.validate(doc) is True  # cleared: unresolved again
+
+
+class TestPELoaderEngineAllocator:
+    """1.9.204+: buffers come from leptris_alloc_buffer (the
+    engine's heap) — exercised implicitly by TestPELoader; this
+    adds a large-model stress through the same path."""
+
+    DOC = """<!DOCTYPE d [
+<!ELEMENT d (e)>
+]>
+<d><e>hi</e></d>"""
+
+    def test_large_loaded_model(self):
+        doc = Document.parse(self.DOC)
+        dtd = DTD.from_document(doc)
+        model = ("(a" + ",a" * 200 + ")").encode()
+        dtd.set_pe_loader(lambda sys_id: b"(#PCDATA)")
+        dtd.parse_external_subset(
+            '<!ENTITY % model SYSTEM "m.ent"><!ELEMENT e %model;>'
+        )
+        assert dtd.validate(doc) is True

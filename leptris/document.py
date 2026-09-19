@@ -328,6 +328,34 @@ class Document:
             raise LeptrisError("XInclude processing failed")
         return self
 
+    def clear_declaration(self) -> "Document":
+        """Un-set the XML declaration: serialization emits none,
+        exactly as if the input had none. Idempotent.
+
+        .. versionadded:: 1.9.204.0
+        """
+        if self._freed:
+            raise LeptrisError("operation on a closed document")
+        _ffi.lib.leptris_document_clear_declaration(self._cd())
+        return self
+
+    def remove_doctype(self) -> bool:
+        """Un-set the document's DOCTYPE (libleptris 1.9.204+).
+
+        Returns True when a DOCTYPE was removed, False when the
+        document had none.
+
+        .. versionadded:: 1.9.204.0
+        """
+        if self._freed:
+            raise LeptrisError("operation on a closed document")
+        rc = _ffi.lib.leptris_document_remove_doctype(self._cd())
+        if rc == 0:
+            return True
+        if rc == -6:  # LEPTRIS_ERROR_NOT_FOUND
+            return False
+        raise LeptrisError(f"remove_doctype failed (status {rc})")
+
     def close(self) -> None:
         if not self._freed:
             from .element import _accel
