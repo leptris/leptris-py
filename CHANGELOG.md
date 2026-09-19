@@ -1,6 +1,16 @@
 # Changelog
 
 
+## 1.9.206.0 — 2026-09-19
+
+Adopts libleptris 1.9.206 (pin 1.9.204 -> 1.9.206):
+
+- **big-endian close-tag fix** (leptris#1197): the engine's
+  close-tag fast-path compare masked the wrong end of its 8-byte
+  name load on BE, rejecting ordinary paired-tag documents with
+  "malformed input" — fixed upstream in leptris#1239 with a
+  memory-order mask; big-endian hosts (s390x) now parse correctly
+
 ## 1.24.1 — 2026-08-31
 
 Adopts libleptris 1.9.26-1.9.27 (pin 1.9.25 -> 1.9.27):
