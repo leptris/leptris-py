@@ -263,5 +263,24 @@ jobs:
           merge-multiple: true
           path: dist/
 
+      - name: Verify artifacts bundle the engine (binary + source)
+        run: |
+          python - << 'PY'
+          import glob, tarfile, zipfile, sys
+
+          wheels = sorted(glob.glob("dist/*.whl"))
+          sdists = sorted(glob.glob("dist/*.tar.gz"))
+          assert wheels and sdists, f"missing artifacts: {len(wheels)} wheels, {len(sdists)} sdists"
+          for w in wheels:
+              names = zipfile.ZipFile(w).namelist()
+              assert any(n.endswith((".so", ".dylib", ".dll")) and "_vendor/" in n for n in names), f"{w}: no vendored engine binary"
+              assert any(n.endswith("_vendor/engine/CMakeLists.txt") for n in names), f"{w}: no vendored engine source"
+              assert any(n.endswith("_vendor/README.md") for n in names), f"{w}: no vendored rebuild notes"
+          for s in sdists:
+              names = tarfile.open(s).getnames()
+              assert any(n.endswith("vendor/libleptris/CMakeLists.txt") for n in names), f"{s}: no engine source for build-on-install"
+          print(f"artifact doctrine OK: {len(wheels)} wheels, {len(sdists)} sdist")
+          PY
+
       - name: Publish to PyPI (trusted publisher)
         uses: pypa/gh-action-pypi-publish@release/v1
