@@ -110,6 +110,27 @@ ffi.cdef(
        consumed and freed by the parser */
     char* leptris_alloc_buffer(size_t len);
     /* document-level declaration/doctype removal (1.9.204+) */
+    /* unified narration record kinds (types.h, 1.9.208) */
+    typedef enum {
+        LEPTRIS_DIAG_INVALID = 0,
+        LEPTRIS_DIAG_NOT_ALLOWED_ANYWHERE,
+        LEPTRIS_DIAG_NOT_ALLOWED_HERE,
+        LEPTRIS_DIAG_NOT_ALLOWED_YET,
+        LEPTRIS_DIAG_INCOMPLETE,
+        LEPTRIS_DIAG_MISSING_REQUIRED_ATTR,
+        LEPTRIS_DIAG_ATTR_NOT_ALLOWED,
+        LEPTRIS_DIAG_ATTR_VALUE_INVALID,
+        LEPTRIS_DIAG_CHAR_CONTENT_INVALID,
+        LEPTRIS_DIAG_RECOVER,
+        LEPTRIS_DIAG_COUNT_
+    } LeptrisDiagKind;
+    /* parse recover channel (#1200, 1.9.206+) */
+    size_t leptris_document_parse_diag_count(LeptrisDocument doc);
+    int leptris_document_parse_diag(LeptrisDocument doc,
+                                    size_t index,
+                                    LeptrisDiagKind* kind,
+                                    char* message,
+                                    size_t message_cap);
     LeptrisStatus leptris_document_clear_declaration(LeptrisDocument doc);
     LeptrisStatus leptris_document_remove_doctype(LeptrisDocument doc);
     typedef struct LeptrisDiffInternal* LeptrisDiff;

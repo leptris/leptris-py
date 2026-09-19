@@ -11,6 +11,26 @@ import os
 from typing import List, Optional, Tuple
 
 from . import _ffi
+
+from collections import namedtuple
+
+ParseDiagnostic = namedtuple("ParseDiagnostic", ["kind", "message"])
+ParseDiagnostic.__doc__ = (
+    "One recover-class parse event: the diagnostic kind name"
+    " (e.g. 'RECOVER') and the engine's message."
+)
+_DIAG_KIND_NAMES = {
+    0: "INVALID",
+    1: "NOT_ALLOWED_ANYWHERE",
+    2: "NOT_ALLOWED_HERE",
+    3: "NOT_ALLOWED_YET",
+    4: "INCOMPLETE",
+    5: "MISSING_REQUIRED_ATTR",
+    6: "ATTR_NOT_ALLOWED",
+    7: "ATTR_VALUE_INVALID",
+    8: "CHAR_CONTENT_INVALID",
+    9: "RECOVER",
+}
 from .error import LeptrisError, ParseError, status_message
 
 
@@ -327,6 +347,34 @@ class Document:
         if rc != 0:
             raise LeptrisError("XInclude processing failed")
         return self
+
+    @property
+    def parse_diagnostics(self):
+        """Recover-class events recorded while parsing this
+        document (libleptris 1.9.206+): the input was not
+        conformant, the document is still usable (duplicate
+        attributes today). One :class:`ParseDiagnostic`
+        (kind, message) per event; empty for a clean parse.
+
+        .. versionadded:: 1.9.208.0
+        """
+        if self._freed:
+            raise LeptrisError("operation on a closed document")
+        lib, ffi = _ffi.lib, _ffi.ffi
+        count = lib.leptris_document_parse_diag_count(self._cd())
+        out = []
+        for index in range(count):
+            kind = ffi.new("LeptrisDiagKind*")
+            buf = ffi.new("char[256]")
+            if not lib.leptris_document_parse_diag(
+                self._cd(), index, kind, buf, 256
+            ):
+                break
+            out.append(ParseDiagnostic(
+                kind=_DIAG_KIND_NAMES.get(kind[0], f"kind{kind[0]}"),
+                message=ffi.string(buf).decode("utf-8", "replace"),
+            ))
+        return out
 
     def clear_declaration(self) -> "Document":
         """Un-set the XML declaration: serialization emits none,

@@ -453,3 +453,17 @@ class TestSourceLine:
         with Document.parse("<a/>") as doc:
             result = style(doc)
             assert result.getroot()[0].sourceline == 0
+
+
+class TestDigestAttrOrder:
+    def test_attr_order_flag_changes_identity(self):
+        a = fromstring('<r x="1" y="2"/>')
+        b = fromstring('<r y="2" x="1"/>')
+        assert a.digest() == b.digest()          # canonical order
+        assert a.digest(attr_order=True) != b.digest(attr_order=True)
+
+    def test_flags_compose(self):
+        r = fromstring('<r x="1"><c> </c></r>')
+        pretty = fromstring('<r x="1">\n  <c> </c>\n</r>')
+        assert r.digest(drop_whitespace=True, attr_order=True) == \
+            pretty.digest(drop_whitespace=True, attr_order=True)
