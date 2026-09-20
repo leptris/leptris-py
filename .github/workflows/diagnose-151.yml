@@ -86,6 +86,7 @@ jobs:
           print(f"{which}: ALL OK")
           PY
           set -e
+          export PYTHONPATH="$PWD"
           python tmp/fixtures/ops151.py xquery
           python tmp/fixtures/ops151.py xslt
           python tmp/fixtures/ops151.py iterparse
