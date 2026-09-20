@@ -9,7 +9,7 @@ name: diagnose #151 windows ops
 
 on:
   pull_request:
-    branches: [diagnose/151-windows-ops]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
