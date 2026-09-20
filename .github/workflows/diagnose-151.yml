@@ -1,0 +1,95 @@
+name: diagnose #151 windows ops
+
+# Diagnostic (leptris-py#151): run the exact serialbench xml-format
+# operations on Windows against the serialbench fixtures — XQuery
+# union count, XSLT apply, iterparse — each in its own process and
+# then all together. The iterparse half was a UAF fixed in
+# 1.9.201.1 (#155); this checks whether XQuery/XSLT still crash
+# once iterparse is healthy.
+
+on:
+  pull_request:
+    branches: [diagnose/151-windows-ops]
+  workflow_dispatch:
+
+jobs:
+  windows-ops:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build libleptris from the pinned release tarball
+        shell: bash
+        run: |
+          set -e
+          LIBLEPTRIS_VERSION=$(cat libleptris-version.txt)
+          mkdir -p tmp/libleptris && cd tmp/libleptris
+          curl -sL "https://codeload.github.com/leptris/leptris/tar.gz/refs/tags/v${LIBLEPTRIS_VERSION}" | tar xz --strip-components=1
+          cmake -B build -S . \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLEPTRIS_BUILD_SHARED=ON -DLEPTRIS_BUILD_STATIC=OFF \
+            -DBUILD_TESTING=OFF -DLEPTRIS_BUILD_CLI=OFF \
+            -DLEPTRIS_BUILD_BENCHMARKS=OFF \
+            -DLEPTRIS_ENABLE_UTF8PROC=OFF -DLEPTRIS_ENABLE_ICONV=OFF
+          cmake --build build --config Release
+          LIB=$(find build -type f -o -type l 2>/dev/null | grep -iE '(lib)?leptris\.(dylib|so|dll)$' | head -1)
+          echo "LEPTRIS_LIB_PATH=$PWD/$LIB" >> "$GITHUB_ENV"
+      - name: Install binding
+        shell: bash
+        run: |
+          python -m pip install pytest cffi setuptools
+          python setup.py build_ext --inplace
+        env:
+          LEPTRIS_LIB_PATH: ${{ env.LEPTRIS_LIB_PATH }}
+      - name: Fetch serialbench fixtures
+        shell: bash
+        run: |
+          mkdir -p tmp/fixtures
+          for f in small medium large; do
+            curl -sL -o "tmp/fixtures/${f}.xml" "https://raw.githubusercontent.com/serialbench/fixtures/main/${f}.xml"
+          done
+          ls -la tmp/fixtures
+      - name: Run the #151 operations (each op isolated, then combined)
+        shell: bash
+        run: |
+          cat > tmp/fixtures/ops151.py << 'PY'
+          import io, sys
+          import leptris
+
+          which = sys.argv[1]
+          fixtures = {n: open(f"tmp/fixtures/{n}.xml").read()
+                      for n in ("small", "medium", "large")}
+
+          if which in ("xquery", "combined"):
+              for n, doc in fixtures.items():
+                  d = leptris.fromstring(doc)
+                  for expr in ("count(//user | //record)", "count(//*)", "//user[1]/name"):
+                      leptris.XQuery(expr)(d)
+                  print(f"xquery {n}: ok")
+          if which in ("xslt", "combined"):
+              style = leptris.XSLT(
+                  '<xsl:stylesheet version="1.0" '
+                  'xmlns:xsl="http://www.w3.org/1999/XSL/Transform">'
+                  '<xsl:template match="/"><out>'
+                  '<xsl:value-of select="count(//user | //record)"/>'
+                  '</out></xsl:template></xsl:stylesheet>')
+              for n, doc in fixtures.items():
+                  d = leptris.fromstring(doc)
+                  out = style(d)
+                  print(f"xslt {n}: ok")
+          if which in ("iterparse", "combined"):
+              for n, doc in fixtures.items():
+                  count = sum(1 for _ in leptris.iterparse(io.StringIO(doc)))
+                  print(f"iterparse {n}: ok ({count})")
+          print(f"{which}: ALL OK")
+          PY
+          set -e
+          python tmp/fixtures/ops151.py xquery
+          python tmp/fixtures/ops151.py xslt
+          python tmp/fixtures/ops151.py iterparse
+          python tmp/fixtures/ops151.py combined
+          for i in 1 2 3 4 5; do python tmp/fixtures/ops151.py combined > /dev/null && echo "combined run $i ok" || exit 1; done
+        env:
+          LEPTRIS_LIB_PATH: ${{ env.LEPTRIS_LIB_PATH }}
