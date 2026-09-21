@@ -90,6 +90,9 @@ static struct {
     void *(*element_first_child_any)(void *);
     const char *(*element_prefix_fn)(void *);
     void *(*element_previous_sibling_any_fn)(void *);
+    size_t (*attribute_count)(void *);
+    size_t (*element_attribute_pairs)(void *, const char**, const char**,
+                                      void**, size_t);
     void *(*element_first_attribute)(void *);
     void *(*attribute_next)(void *);
     const char *(*attribute_get_name)(void *);
@@ -147,7 +150,7 @@ static struct {
     void *(*xquery_eval)(void *, void *, void *);
 } Fns;
 
-#define FN_COUNT 68
+#define FN_COUNT 70
 
 static int bound = 0;
 static PyObject *LeptrisErrorType = NULL;
@@ -1027,6 +1030,8 @@ accel_bind(PyObject *module, PyObject *args)
     (void **)&Fns.element_first_child_any,
     (void **)&Fns.element_prefix_fn,
     (void **)&Fns.element_previous_sibling_any_fn,
+    (void **)&Fns.attribute_count,
+    (void **)&Fns.element_attribute_pairs,
     (void **)&Fns.element_first_attribute,
     (void **)&Fns.attribute_next,
     (void **)&Fns.attribute_get_name,
@@ -2938,7 +2943,60 @@ accel_xquery_eval(PyObject *module, PyObject *args)
     return finish_result(result, document);
 }
 
+/* attribute_pairs(element) -> [(name, value), ...] in one C pass
+ * (#1254): replaces the N-call first_attribute/next walk on the
+ * binding hot path. Names/values are engine-owned; decoded here. */
+static PyObject *
+accel_attribute_pairs(PyObject *module, PyObject *arg)
+{
+    AccelElement *self = (AccelElement *)arg;
+    if (!PyObject_TypeCheck(arg, ElementType)) {
+        PyErr_SetString(PyExc_TypeError, "expected an Element");
+        return NULL;
+    }
+    if (check_poisoned(self) < 0)
+        return NULL;
+    size_t n = Fns.attribute_count(self->raw);
+    if (n == 0)
+        return PyList_New(0);
+    const char **names = PyMem_Malloc(n * sizeof(char *));
+    const char **values = PyMem_Malloc(n * sizeof(char *));
+    if (names == NULL || values == NULL) {
+        PyMem_Free(names);
+        PyMem_Free(values);
+        return PyErr_NoMemory();
+    }
+    size_t got = Fns.element_attribute_pairs(
+        self->raw, names, values, NULL, n);
+    PyObject *list = PyList_New((Py_ssize_t)got);
+    for (size_t i = 0; list != NULL && i < got; i++) {
+        PyObject *name = PyUnicode_DecodeUTF8(
+            names[i], strlen(names[i]), "strict");
+        PyObject *value = name != NULL
+            ? PyUnicode_DecodeUTF8(values[i], strlen(values[i]), "strict")
+            : NULL;
+        PyObject *pair = name != NULL && value != NULL
+            ? PyTuple_Pack(2, name, value)
+            : NULL;
+        if (pair != NULL &&
+            PyList_SetItem(list, (Py_ssize_t)i, pair) == 0) {
+            /* SetItem steals pair on success */
+        } else {
+            Py_XDECREF(pair);
+            Py_DECREF(list);
+            list = NULL;
+        }
+        Py_XDECREF(name);
+        Py_XDECREF(value);
+    }
+    PyMem_Free(names);
+    PyMem_Free(values);
+    return list;
+}
+
 static PyMethodDef accel_methods[] = {
+    {"attribute_pairs", accel_attribute_pairs, METH_O,
+     "attribute_pairs(element) -> [(name, value), ...]"},
     {"create", accel_create, METH_VARARGS,
      "create(address, ptr, document) -> Element"},
     {"materialize", accel_materialize, METH_VARARGS,

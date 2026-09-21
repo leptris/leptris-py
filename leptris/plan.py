@@ -378,6 +378,40 @@ class Plan:
         finally:
             _ffi.lib.leptris_plan_result_free(result)
 
+    def materialize(self, source) -> Optional[dict]:
+        """Fused parse + walk + free (libleptris 1.9.216+): byte-parity
+        with ``__call__(parse(source))`` without materializing the
+        Document — the binding hot path for one-shot conversions.
+        Parse failures raise :class:`LeptrisError`.
+
+        .. versionadded:: 1.9.216.0
+        """
+        if isinstance(source, str):
+            source = source.encode("utf-8")
+        elif isinstance(source, (bytearray, memoryview)):
+            source = bytes(source)
+        if not isinstance(source, bytes):
+            raise TypeError("expected str or bytes")
+        ffi = _ffi.ffi
+        status = ffi.new("LeptrisStatus*")
+        result = _ffi.lib.leptris_plan_materialize(
+            source, len(source), self._handle, status
+        )
+        if result == ffi.NULL:
+            raise LeptrisError(
+                f"plan materialize failed: status {int(status[0])}"
+            )
+        try:
+            if self._shape is not None:
+                from .element import _accel
+
+                return _accel.plan_convert(
+                    int(ffi.cast("uintptr_t", result)), self._shape
+                )
+            return _convert(result, self._elements, plan_index=0)
+        finally:
+            _ffi.lib.leptris_plan_result_free(result)
+
     def close(self) -> None:
         if getattr(self, "_handle", None) is not None:
             _ffi.lib.leptris_plan_free(self._handle)
