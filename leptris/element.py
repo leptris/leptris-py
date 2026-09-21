@@ -71,6 +71,16 @@ class _ElementMethods:
         self._check_alive()
         return iter(_accel.children(self))
 
+    def attribute_pairs(self) -> list:
+        """All attributes as ``(name, value)`` pairs in one C pass
+        (libleptris 1.9.216+): replaces the per-attribute walk on
+        hot paths that touch every attribute.
+
+        .. versionadded:: 1.9.216.0
+        """
+        self._check_alive()
+        return _accel.attribute_pairs(self)
+
     def iter(self, tag: Optional[str] = None) -> Iterator["Element"]:
         # The C cursor walks first_child/next_sibling/parent directly —
         # no expression is built and no engine evaluation happens, so
@@ -278,6 +288,8 @@ _BIND_NAMES = (
     "leptris_element_first_child_any",
     "leptris_element_prefix",
     "leptris_element_previous_sibling_any",
+    "leptris_element_attribute_count",
+    "leptris_element_attribute_pairs",
     "leptris_element_first_attribute",
     "leptris_attribute_next",
     "leptris_attribute_get_name",

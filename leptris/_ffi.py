@@ -194,6 +194,11 @@ ffi.cdef(
     const char* leptris_element_attribute(LeptrisElement elem, const char* name);
     LeptrisElement leptris_element_next_sibling_any(LeptrisElement elem);
     LeptrisElement leptris_element_previous_sibling_any(LeptrisElement elem);
+    /* bulk attribute face (#1254, 1.9.216+): one C pass; strings and
+     * handles stay engine-owned */
+    size_t leptris_element_attribute_pairs(
+        LeptrisElement elem, const char** out_names, const char** out_values,
+        LeptrisAttribute* out_attrs, size_t max_count);
     LeptrisAttribute leptris_element_first_attribute(LeptrisElement elem);
     LeptrisAttribute leptris_attribute_next(LeptrisAttribute attr);
     const char* leptris_attribute_get_name(LeptrisAttribute attr);
@@ -311,6 +316,7 @@ ffi.cdef(
     #define LEPTRIS_PLAN_FLAG_ORDERED 0x2
     #define LEPTRIS_PLAN_FLAG_CDATA 0x4
     #define LEPTRIS_PLAN_FLAG_NS_LENIENT 0x8
+    #define LEPTRIS_PLAN_FLAG_EMIT_ORDER_SPINE 0x10
     typedef enum {
         LEPTRIS_PLAN_NS_NONE = 0,
         LEPTRIS_PLAN_NS_EXACT = 1,
@@ -318,8 +324,17 @@ ffi.cdef(
     } LeptrisPlanNsForm;
     typedef struct {
         const char* wire_name;
+        const char* expected_value;
+    } leptris_attr_predicate;
+    typedef struct {
+        const char* wire_name;
         uint8_t kind;
         uint8_t type_tag;
+        /* #1272 (additive, 1.9.216+): predicate_count = 0 keeps the
+         * historical behavior; strings deep-copied at build */
+        uint16_t predicate_count;
+        uint16_t pad_pred;
+        const leptris_attr_predicate* predicates;
     } leptris_attr_plan;
     typedef struct {
         const char* wire_name;
@@ -331,6 +346,10 @@ ffi.cdef(
         uint8_t ns_form;
         uint8_t pad0;
         const char* ns_uri;
+        /* #1272 (additive, 1.9.216+): element-side predicates */
+        uint16_t predicate_count;
+        uint16_t pad_pred;
+        const leptris_attr_predicate* predicates;
     } leptris_child_plan;
     typedef struct {
         const char* element_name;
@@ -405,9 +424,20 @@ ffi.cdef(
     LeptrisPlan leptris_plan_build(const leptris_plan_spec* spec, LeptrisStatus* status);
     void leptris_plan_free(LeptrisPlan plan);
     LeptrisPlanResult leptris_plan_walk(LeptrisDocument doc, LeptrisElement ctx, LeptrisPlan plan, LeptrisStatus* status);
+    /* fused parse+walk+free (#1269b, 1.9.216+): parse_string +
+     * walk(root) + free(doc) in one call — byte-parity result */
+    LeptrisPlanResult leptris_plan_materialize(
+        const char* source, size_t source_len,
+        LeptrisPlan plan, LeptrisStatus* status);
     void leptris_plan_result_free(LeptrisPlanResult result);
     LeptrisPlanValueKind leptris_plan_value_kind(const LeptrisPlanResult v);
     const char* leptris_plan_value_name(const LeptrisPlanResult v);
+    /* #1273 order identity + #1269a in-pass types (1.9.216+) */
+    uint8_t leptris_plan_value_node_kind(const LeptrisPlanResult v);
+    uint32_t leptris_plan_value_order_index(const LeptrisPlanResult v);
+    int leptris_plan_value_int(const LeptrisPlanResult v, int64_t* out);
+    int leptris_plan_value_float(const LeptrisPlanResult v, double* out);
+    int leptris_plan_value_bool(const LeptrisPlanResult v, int* out);
     uint8_t leptris_plan_value_type_tag(const LeptrisPlanResult v);
     const char* leptris_plan_value_string(const LeptrisPlanResult v);
     size_t leptris_plan_value_length(const LeptrisPlanResult v);
