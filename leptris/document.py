@@ -66,6 +66,69 @@ class Document:
     __slots__ = ("_ptr", "_freed", "_accel_registry", "_raw_addr", "_buffer")
 
     @classmethod
+    def create(cls) -> "Document":
+        """A fresh, empty document for programmatic construction.
+
+        Pair with :meth:`create_element` and :meth:`set_root`, or
+        build through :meth:`Element.create_child`. The tree
+        serializes with the standard writers.
+
+        .. versionadded:: 1.9.216.0
+        """
+        from .element import _accel
+
+        registry = _accel.new_registry()
+        addr = _ffi.lib.leptris_document_create()
+        if addr == _ffi.ffi.NULL:
+            raise LeptrisError("document_create failed")
+        return cls._from_parts(
+            int(_ffi.ffi.cast("uintptr_t", addr)), registry
+        )
+
+    def create_element(self, name) -> "Element":
+        """Create an element owned by this document (unattached).
+
+        Attach it with :meth:`set_root`, or build in place with
+        :meth:`Element.create_child`.
+
+        .. versionadded:: 1.9.216.0
+        """
+        if self._freed:
+            raise LeptrisError("operation on a closed document")
+        if isinstance(name, str):
+            name = name.encode("utf-8")
+        if not isinstance(name, bytes) or not name:
+            raise ValueError("element name must be a non-empty str")
+        from .element import _accel
+
+        raw = _ffi.lib.leptris_element_create(self._cd(), name)
+        if raw == _ffi.ffi.NULL:
+            raise LeptrisError("element_create failed")
+        return _accel.create(
+            int(_ffi.ffi.cast("uintptr_t", raw)),
+            _ffi.ffi.cast("LeptrisElement", raw),
+            self,
+        )
+
+    def set_root(self, element) -> "Document":
+        """Attach ``element`` as this document's root.
+
+        .. versionadded:: 1.9.216.0
+        """
+        if self._freed:
+            raise LeptrisError("operation on a closed document")
+        from .element import Element
+
+        if not isinstance(element, Element):
+            raise TypeError("expected an Element")
+        rc = _ffi.lib.leptris_document_set_root(
+            self._cd(), element._cd()
+        )
+        if rc != 0:
+            raise LeptrisError(f"set_root failed (status {rc})")
+        return self
+
+    @classmethod
     def _from_parts(cls, address, registry, buffer=None):
         doc = cls.__new__(cls)
         doc._ptr = _ffi.ffi.NULL

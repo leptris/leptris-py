@@ -423,6 +423,17 @@ ffi.cdef(
     uint32_t leptris_plan_abi_version(void);
     LeptrisPlan leptris_plan_build(const leptris_plan_spec* spec, LeptrisStatus* status);
     void leptris_plan_free(LeptrisPlan plan);
+    /* programmatic construction (engine creation surface, 1.9.216) */
+    LeptrisDocument leptris_document_create(void);
+    LeptrisStatus leptris_document_set_root(LeptrisDocument doc, LeptrisElement elem);
+    LeptrisElement leptris_element_create(LeptrisDocument doc, const char* name);
+    LeptrisElement leptris_element_create_child(LeptrisElement parent, const char* name);
+    LeptrisStatus leptris_element_append_child(LeptrisElement parent, LeptrisElement child);
+    LeptrisStatus leptris_element_insert_before(LeptrisElement sibling, LeptrisElement new_node);
+    LeptrisStatus leptris_element_insert_after(LeptrisElement sibling, LeptrisElement new_node);
+    LeptrisStatus leptris_element_set_text(LeptrisElement elem, const char* text);
+    LeptrisStatus leptris_element_set_attribute(LeptrisElement elem,
+                                                const char* name, const char* value);
     LeptrisPlanResult leptris_plan_walk(LeptrisDocument doc, LeptrisElement ctx, LeptrisPlan plan, LeptrisStatus* status);
     /* fused parse+walk+free (#1269b, 1.9.216+): parse_string +
      * walk(root) + free(doc) in one call — byte-parity result */
