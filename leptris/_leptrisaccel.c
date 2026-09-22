@@ -90,6 +90,7 @@ static struct {
     void *(*element_first_child_any)(void *);
     const char *(*element_prefix_fn)(void *);
     void *(*element_previous_sibling_any_fn)(void *);
+    int (*element_set_text)(void *, const char *);
     size_t (*attribute_count)(void *);
     size_t (*element_attribute_pairs)(void *, const char**, const char**,
                                       void**, size_t);
@@ -150,7 +151,7 @@ static struct {
     void *(*xquery_eval)(void *, void *, void *);
 } Fns;
 
-#define FN_COUNT 70
+#define FN_COUNT 71
 
 static int bound = 0;
 static PyObject *LeptrisErrorType = NULL;
@@ -258,6 +259,29 @@ registry_of(PyObject *document)
 }
 
 /* ---- field getsets -------------------------------------------------- */
+
+static int
+elem_set_text(AccelElement *self, PyObject *value, void *closure)
+{
+    if (check_poisoned(self) < 0)
+        return -1;
+    if (value == NULL) {
+        PyErr_SetString(PyExc_NotImplementedError, "deleting text");
+        return -1;
+    }
+    PyObject *encoded = PyUnicode_AsUTF8String(value);
+    if (encoded == NULL)
+        return -1;
+    const char *text = PyBytes_AsString(encoded);
+    int rc = Fns.element_set_text(self->raw, text);
+    Py_DECREF(encoded);
+    if (rc != 0) {
+        PyErr_SetString(LeptrisErrorType, "set_text failed");
+        return -1;
+    }
+    return 0;
+}
+
 
 static PyObject *
 elem_get_ptr(AccelElement *self, void *closure)
@@ -700,7 +724,8 @@ static PyGetSetDef element_getsets[] = {
     {"_document", (getter)elem_get_document, (setter)elem_set_document,
      "Owning Document.", NULL},
     {"tag", (getter)elem_get_tag, NULL, "Element name (Clark notation).", NULL},
-    {"text", (getter)elem_get_text, NULL, "First-run text content.", NULL},
+    {"text", (getter)elem_get_text, (setter)elem_set_text,
+     "First-run text content (settable; libleptris 1.9.216+).", NULL},
     {"attrib", (getter)elem_get_attrib, NULL, "Attributes as a dict.", NULL},
     {"tail", (getter)elem_get_tail, NULL, "Trailing text run.", NULL},
     {"namespace", (getter)elem_get_namespace, NULL, "Namespace URI.", NULL},
@@ -1030,6 +1055,7 @@ accel_bind(PyObject *module, PyObject *args)
     (void **)&Fns.element_first_child_any,
     (void **)&Fns.element_prefix_fn,
     (void **)&Fns.element_previous_sibling_any_fn,
+    (void **)&Fns.element_set_text,
     (void **)&Fns.attribute_count,
     (void **)&Fns.element_attribute_pairs,
     (void **)&Fns.element_first_attribute,

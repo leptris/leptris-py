@@ -71,6 +71,69 @@ class _ElementMethods:
         self._check_alive()
         return iter(_accel.children(self))
 
+    def create_child(self, name) -> "Element":
+        """Create + append a child element in one call
+        (libleptris 1.9.216+). The child is owned by this
+        element's document.
+
+        .. versionadded:: 1.9.216.0
+        """
+        self._check_alive()
+        if isinstance(name, str):
+            name = name.encode("utf-8")
+        if not isinstance(name, bytes) or not name:
+            raise ValueError("element name must be a non-empty str")
+        from .document import Document
+
+        document = self._document
+        if document is None or document._freed:
+            raise LeptrisError("operation on a closed document")
+        raw = _ffi.lib.leptris_element_create_child(
+            self._cd(), name
+        )
+        if raw == _ffi.ffi.NULL:
+            raise LeptrisError("element_create_child failed")
+        return _accel.create(
+            int(_ffi.ffi.cast("uintptr_t", raw)),
+            _ffi.ffi.cast("LeptrisElement", raw),
+            document,
+        )
+
+    def append(self, child) -> None:
+        """Append an element created through the same document
+        (libleptris 1.9.216+).
+
+        .. versionadded:: 1.9.216.0
+        """
+        self._check_alive()
+        from .document import Document
+
+        if not isinstance(child, Element):
+            raise TypeError("expected an Element")
+        if child._document is not self._document:
+            raise ValueError("child belongs to a different document")
+        rc = _ffi.lib.leptris_element_append_child(
+            self._cd(), child._cd()
+        )
+        if rc != 0:
+            raise LeptrisError(f"append failed (status {rc})")
+
+    def set(self, name, value) -> None:
+        """Set an attribute (lxml's ``.set()``; libleptris 1.9.216+).
+
+        .. versionadded:: 1.9.216.0
+        """
+        self._check_alive()
+        if isinstance(name, str):
+            name = name.encode("utf-8")
+        if isinstance(value, str):
+            value = value.encode("utf-8")
+        rc = _ffi.lib.leptris_element_set_attribute(
+            self._cd(), name, value
+        )
+        if rc != 0:
+            raise LeptrisError(f"set_attribute failed (status {rc})")
+
     def attribute_pairs(self) -> list:
         """All attributes as ``(name, value)`` pairs in one C pass
         (libleptris 1.9.216+): replaces the per-attribute walk on
@@ -288,6 +351,7 @@ _BIND_NAMES = (
     "leptris_element_first_child_any",
     "leptris_element_prefix",
     "leptris_element_previous_sibling_any",
+    "leptris_element_set_text",
     "leptris_element_attribute_count",
     "leptris_element_attribute_pairs",
     "leptris_element_first_attribute",

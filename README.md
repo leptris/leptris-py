@@ -269,7 +269,7 @@ scope, and the foreign-content rules all match the specification.
 | `elem.xpath(expr, namespaces=…)` | same | plus `variables={…}` (leptris extension) |
 | `etree.c14n` / `etree.XInclude` | `c14n(…)` / `doc.process_xinclude()` | |
 | `etree.XMLSyntaxError` | `ParseError` | XPath failures raise `XPathError`; XSLT raises `XSLTError`, XQuery `XQueryError` — all subclass `LeptrisError` |
-| `etree.Element`, `SubElement`, `append`, `set`, `remove` | **not exposed** | libleptris has partial mutation upstream (node content setters, `set_root`, `remove_children`) — not surfaced here; build trees elsewhere |
+| `etree.Element`/`SubElement`/`append`/`set` | **create path** | `Document.create()` + `create_element(name)` + `set_root()`, `Element.create_child(name)`/`append(el)`/`set(name, value)` + the `.text` setter — libleptris 1.9.216+; `remove` via `Document.remove_*` (doctype/child) |
 | document-level comments / PIs | `doc.toplevel_comments()` / `doc.toplevel_pis()` | prolog then epilog; requires libleptris 1.9.3+ |
 | `etree.iterparse` | `leptris.iterparse(source, full_document=False)` | bounded by the largest subtree; yields `("end", element)`; elements borrowed until the next yield; tags resolve namespaces (Clark notation, libleptris 1.9.4+). **Truncated or malformed input raises ParseError** (both modes, libleptris 1.9.15+). `full_document=True` yields every element in completion order |
 | smart strings | plain `str` | XPath string/attribute results |
