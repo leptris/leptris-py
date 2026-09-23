@@ -150,6 +150,28 @@ ffi.cdef(
     void           leptris_document_free(LeptrisDocument doc);
     LeptrisElement  leptris_document_root(LeptrisDocument doc);
     char*          leptris_document_serialize(LeptrisDocument doc, LeptrisSerializeOptions* options);
+    /* #1309 (1.9.225+): the ext options grew html_method (tri-state:
+     * 0 = document default, 1 = force HTML, -1 = force XML); the
+     * size-aware entries keep older bindings safe */
+    typedef struct {
+        int indent_text;
+        const char* indent_unit;
+        int expand_empty;
+        int html_method;
+    } LeptrisSerializeExtOptions;
+    char* leptris_document_serialize_ext_sized(
+        LeptrisDocument doc, const LeptrisSerializeOptions* options,
+        const LeptrisSerializeExtOptions* ext, size_t ext_size);
+    char* leptris_element_serialize_ext_sized(
+        LeptrisElement elem, const LeptrisSerializeOptions* options,
+        const LeptrisSerializeExtOptions* ext, size_t ext_size);
+    /* HTML-flavored document construction + serialization */
+    LeptrisDocument leptris_document_create_html(void);
+    char* leptris_document_serialize_html(
+        LeptrisDocument doc, LeptrisSerializeOptions* options);
+    int leptris_document_save_html(
+        LeptrisDocument doc, const char* filepath,
+        LeptrisSerializeOptions* options);
     int            leptris_xinclude_process(LeptrisDocument doc, const char* base_path);
     int            leptris_document_save_file(LeptrisDocument doc, const char* filepath, LeptrisSerializeOptions* options);
 

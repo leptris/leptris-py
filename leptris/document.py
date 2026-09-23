@@ -356,6 +356,7 @@ class Document:
         encoding: Optional[str] = None,
         pretty_print: bool = False,
         xml_declaration: Optional[bool] = None,
+        method: Optional[str] = None,
     ) -> None:
         if self._freed:
             raise LeptrisError("operation on a closed document")
@@ -368,8 +369,21 @@ class Document:
                     encoding=encoding,
                     pretty_print=pretty_print,
                     xml_declaration=xml_declaration,
+                    method=method,
                 )
             )
+            return
+        if method == "html":
+            if isinstance(path := os.fspath(file), str):
+                path = path.encode("utf-8")
+            options, _keepalive = serialize_options(
+                encoding, pretty_print, xml_declaration
+            )
+            status = _ffi.lib.leptris_document_save_html(
+                self._cd(), path, options
+            )
+            if status != 0:
+                raise LeptrisError(status_message(status))
             return
         path = os.fspath(file)
         if isinstance(path, str):
@@ -378,6 +392,26 @@ class Document:
         status = _ffi.lib.leptris_document_save_file(self._cd(), path, options)
         if status != 0:
             raise LeptrisError(status_message(status))
+
+    def save_html(
+        self,
+        path,
+        *,
+        encoding: Optional[str] = None,
+        pretty_print: bool = False,
+    ) -> None:
+        """Save as HTML (libleptris 1.9.225+): void-element shapes
+        and block layout regardless of the document's flavor.
+
+        .. versionadded:: 1.9.226.0
+        """
+        self.write(
+            path,
+            encoding=encoding,
+            pretty_print=pretty_print,
+            xml_declaration=False,
+            method="html",
+        )
 
     @property
     def version(self) -> Optional[str]:
