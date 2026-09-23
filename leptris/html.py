@@ -25,6 +25,24 @@ _PARSE = {
 }
 
 
+def create() -> Document:
+    """A fresh, empty HTML document for programmatic construction
+    (libleptris 1.9.225+): the engine marks it HTML-flavored, so it
+    serializes with HTML void-element shapes by default. Pair with
+    :meth:`Document.create_element`/:meth:`set_root` — or build a
+    fragment through any parsed document.
+
+    .. versionadded:: 1.9.226.0
+    """
+    addr = _ffi.lib.leptris_document_create_html()
+    if addr == _ffi.ffi.NULL:
+        raise ParseError("document_create_html failed")
+    registry = _accel.new_registry()
+    return Document._from_parts(
+        int(_ffi.ffi.cast("uintptr_t", addr)), registry
+    )
+
+
 def document(html: "str | bytes", *, mode: str = "html4") -> Document:
     """Parse HTML into a Document (use as a context manager).
 

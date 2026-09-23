@@ -46,12 +46,21 @@ def tostring(
     encoding: Optional[str] = None,
     pretty_print: bool = False,
     xml_declaration: Optional[bool] = None,
+    method: Optional[str] = None,
 ) -> Union[bytes, str]:
     """Serialize an Element subtree or a whole Document.
 
     Returns bytes; pass encoding="unicode" for str (lxml convention).
     An explicit encoding implies an XML declaration unless
     xml_declaration=False.
+
+    method="html" (libleptris 1.9.225+) forces the HTML output
+    method — void-element shapes, block layout. HTML-parsed and
+    :func:`leptris.html.create` documents serialize as HTML by
+    default.
+
+    .. versionchanged:: 1.9.226.0
+        added ``method``.
     """
     ffi = _ffi.ffi
     if isinstance(element_or_document, Document):
@@ -62,7 +71,33 @@ def tostring(
         raise TypeError("expected an Element or Document")
     if doc.closed:
         raise LeptrisError("operation on a closed document")
+    if method not in (None, "html"):
+        raise ValueError(f"unknown method {method!r}; expected None or 'html'")
     c_encoding = None if encoding in (None, "unicode") else encoding
+    if method == "html":
+        # #1309: force the §16.2 HTML method. Documents take the
+        # one-call entry; elements ride the size-aware ext entry
+        # (html_method = 1).
+        options, _keepalive = serialize_options(
+            c_encoding, pretty_print, xml_declaration
+        )
+        if elem is None:
+            ptr = _ffi.lib.leptris_document_serialize_html(
+                doc._cd(), options
+            )
+        else:
+            ext = ffi.new("LeptrisSerializeExtOptions*")
+            ext.html_method = 1
+            ptr = _ffi.lib.leptris_element_serialize_ext_sized(
+                elem._cd(), options, ext, ffi.sizeof("LeptrisSerializeExtOptions")
+            )
+        if ptr == ffi.NULL:
+            raise LeptrisError("serialization failed")
+        data = ffi.string(ptr)
+        _ffi.lib.leptris_free_string(ptr)
+        if encoding == "unicode":
+            return data.decode("utf-8")
+        return data
     if (
         elem is None
         and c_encoding is None
