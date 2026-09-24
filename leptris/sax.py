@@ -17,6 +17,7 @@ from typing import Optional, Tuple
 
 from . import _ffi
 from .error import ParseError
+from .error import ParseError
 
 
 class SAXHandler:
@@ -242,3 +243,165 @@ class StreamingParser:
             self.close()
         except Exception:
             pass
+
+
+def records(source) -> "SaxRecords":
+    """Parse a whole document into a flat record tape in ONE
+    crossing (libleptris 1.9.226+, ``leptris_sax_records_parse``):
+    no per-event callback dispatch — iterate the records afterward.
+
+    .. versionadded:: 1.9.237.1
+    """
+    return SaxRecords(source)
+
+
+class SaxRecord:
+    """One record of the flat SAX tape: an element (name, attrs,
+    tree links, offsets) or a text run. Views decode from the
+    tape's buffer lazily; everything dies with the tape."""
+
+    __slots__ = ("_tape", "_index")
+
+    def __init__(self, tape, index):
+        self._tape = tape
+        self._index = index
+
+    @property
+    def kind(self) -> str:
+        return "element" if self._tape.kind_of(self._index) == 0 else "text"
+
+    @property
+    def parent(self):
+        raw = self._tape.parent_of(self._index)
+        return None if raw == 0xFFFFFFFF else raw
+
+    @property
+    def next_sibling(self):
+        raw = self._tape.next_sib_of(self._index)
+        return None if raw == 0xFFFFFFFF else raw
+
+    @property
+    def name(self):
+        return self._tape.view(self._index)
+
+    @property
+    def text(self):
+        if self.kind != "text":
+            return None
+        return self._tape.view(self._index)
+
+    @property
+    def line(self) -> int:
+        return self._tape.line_of(self._index)
+
+    @property
+    def self_closing(self) -> bool:
+        return self._tape.self_closing_of(self._index)
+
+    @property
+    def attrs(self) -> list:
+        return self._tape.attrs_of(self._index)
+
+    def __repr__(self) -> str:
+        if self.kind == "element":
+            return f"<SaxRecord element {self.name!r} at {self._index}>"
+        return f"<SaxRecord text at {self._index}>"
+
+
+class SaxRecords:
+    """The whole-document flat SAX tape (libleptris 1.9.226+,
+    leptris_sax_records_parse): ONE crossing drains the document
+    into a record table — no per-event callback dispatch. Iterate
+    records in document order; attribute and name views decode
+    lazily from the tape buffer.
+
+    .. versionadded:: 1.9.237.1
+    """
+
+    __slots__ = ("_handle", "_count", "_data", "_attrs", "_nattrs",
+                 "_buffer")
+
+    def __init__(self, source):
+        from . import _ffi as _binding
+
+        ffi = _binding.ffi
+        lib = _binding.lib
+        if isinstance(source, str):
+            source = source.encode("utf-8")
+        elif isinstance(source, (bytearray, memoryview)):
+            source = bytes(source)
+        if not isinstance(source, bytes):
+            raise TypeError("expected str or bytes")
+        out = ffi.new("LeptrisSaxRecords**")
+        rc = lib.leptris_sax_records_parse(source, len(source), 0, out)
+        if rc != 0 or out[0] == ffi.NULL:
+            raise ParseError(
+                f"SAX records parse failed (status {rc})"
+            )
+        self._handle = out[0]
+        self._count = lib.leptris_sax_records_count(self._handle)
+        self._data = lib.leptris_sax_records_data(self._handle)
+        nattrs = ffi.new("size_t*")
+        self._attrs = lib.leptris_sax_records_attrs(self._handle, nattrs)
+        self._nattrs = nattrs[0]
+        self._buffer = lib.leptris_sax_records_buffer(self._handle)
+
+    def __len__(self) -> int:
+        return self._count
+
+    def free(self) -> None:
+        if getattr(self, "_handle", None) is not None:
+            _ffi.lib.leptris_sax_records_free(self._handle)
+            self._handle = None
+
+    def __enter__(self) -> "SaxRecords":
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.free()
+
+    def __del__(self):
+        try:
+            self.free()
+        except Exception:
+            pass
+
+    # -- internals used by the SaxRecord views -----------------------
+
+    def kind_of(self, index):
+        return self._data[index].kind
+
+    def parent_of(self, index):
+        return self._data[index].parent
+
+    def next_sib_of(self, index):
+        return self._data[index].next_sib
+
+    def line_of(self, index):
+        return self._data[index].line
+
+    def self_closing_of(self, index):
+        return bool(self._data[index].self_closing)
+
+    def view(self, index):
+        rec = self._data[index]
+        raw = _ffi.ffi.string(self._buffer + rec.off)
+        return raw[: rec.len].decode("utf-8", "replace")
+
+    def attrs_of(self, index):
+        rec = self._data[index]
+        out = []
+        for i in range(rec.attr_count):
+            attr = self._attrs[rec.attr_first + i]
+            name = _ffi.ffi.string(self._buffer + attr.name_off)[
+                : attr.name_len
+            ].decode("utf-8", "replace")
+            value = _ffi.ffi.string(self._buffer + attr.value_off)[
+                : attr.value_len
+            ].decode("utf-8", "replace")
+            out.append((name, value))
+        return out
+
+    def __iter__(self):
+        for index in range(self._count):
+            yield SaxRecord(self, index)

@@ -452,6 +452,41 @@ ffi.cdef(
     void leptris_node_visit_entering(LeptrisNodeRef root,
                                      LeptrisNodeVisitor visitor,
                                      void* user_data);
+    /* SAX records tape (#1298, 1.9.226+): whole-document parse into
+     * a flat record table — ONE crossing, no per-event dispatch */
+    typedef struct LeptrisSaxRecord {
+        uint32_t kind;
+        uint32_t parent;
+        uint32_t next_sib;
+        uint32_t off;
+        uint32_t len;
+        uint32_t line;
+        uint32_t start_tag_end;
+        uint32_t elem_end;
+        uint32_t attr_first;
+        uint32_t attr_count;
+        uint8_t  self_closing;
+    } LeptrisSaxRecord;
+    typedef struct LeptrisSaxAttr {
+        uint32_t name_off;
+        uint32_t name_len;
+        uint32_t value_off;
+        uint32_t value_len;
+        uint8_t  value_has_ws;
+    } LeptrisSaxAttr;
+    typedef struct LeptrisSaxRecords LeptrisSaxRecords;
+    LeptrisStatus leptris_sax_records_parse(const char* xml,
+                                            size_t len,
+                                            unsigned flags,
+                                            LeptrisSaxRecords** out);
+    size_t leptris_sax_records_count(const LeptrisSaxRecords* recs);
+    const LeptrisSaxRecord* leptris_sax_records_data(
+        const LeptrisSaxRecords* recs);
+    const LeptrisSaxAttr* leptris_sax_records_attrs(
+        const LeptrisSaxRecords* recs, size_t* out_attr_count);
+    const char* leptris_sax_records_buffer(
+        const LeptrisSaxRecords* recs);
+    void leptris_sax_records_free(LeptrisSaxRecords* recs);
     /* programmatic construction (engine creation surface, 1.9.216) */
     LeptrisDocument leptris_document_create(void);
     LeptrisStatus leptris_document_set_root(LeptrisDocument doc, LeptrisElement elem);
