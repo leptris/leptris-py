@@ -134,6 +134,42 @@ class _ElementMethods:
         if rc != 0:
             raise LeptrisError(f"set_attribute failed (status {rc})")
 
+    def visit_entering(self, visit) -> None:
+        """Walk this subtree in document order, calling
+        ``visit(node, depth)`` ONCE per node as it is entered
+        (libleptris 1.9.232+, ``leptris_node_visit_entering``):
+        elements are not re-visited after their subtree -- half the
+        callbacks of a full enter/leave walk. ``depth`` is 0 at this
+        element. One C call; nodes are wrapped lazily in the
+        callback.
+
+        The walk is read-only: mutating the tree from the callback
+        is not supported (engine contract).
+
+        .. versionadded:: 1.9.232.0
+        """
+        self._check_alive()
+        document = self._document
+        if document is None or document._freed:
+            raise LeptrisError("operation on a closed document")
+        ffi = _ffi.ffi
+        lib = _ffi.lib
+        from .node import Node
+
+        def trampoline(_user_data, node, entering, depth):
+            ptr = ffi.cast("LeptrisNodeRef", node)
+            if lib.leptris_node_get_type(ptr) == _ffi.NODE_ELEMENT:
+                visit(_make(ptr, document), depth)
+            else:
+                visit(Node(ptr, document), depth)
+
+        cb = ffi.callback(
+            "void(void*, LeptrisNodeRef, int, int)"
+        )(trampoline)
+        lib.leptris_node_visit_entering(
+            ffi.cast("LeptrisNodeRef", self._cd()), cb, ffi.NULL
+        )
+
     def attribute_pairs(self) -> list:
         """All attributes as ``(name, value)`` pairs in one C pass
         (libleptris 1.9.216+): replaces the per-attribute walk on
