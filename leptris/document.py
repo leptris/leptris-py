@@ -85,13 +85,19 @@ class Document:
             int(_ffi.ffi.cast("uintptr_t", addr)), registry
         )
 
-    def create_element(self, name) -> "Element":
+    def create_element(self, name, attrs=None) -> "Element":
         """Create an element owned by this document (unattached).
+
+        With ``attrs`` (a name → value dict, libleptris 1.9.237+)
+        the element and all its attributes are built in ONE C call
+        (``leptris_element_new_with_attributes``).
 
         Attach it with :meth:`set_root`, or build in place with
         :meth:`Element.create_child`.
 
         .. versionadded:: 1.9.216.0
+        .. versionchanged:: 1.9.237.0
+            added ``attrs``.
         """
         if self._freed:
             raise LeptrisError("operation on a closed document")
@@ -101,7 +107,32 @@ class Document:
             raise ValueError("element name must be a non-empty str")
         from .element import _accel
 
-        raw = _ffi.lib.leptris_element_create(self._cd(), name)
+        if attrs:
+            if not isinstance(attrs, dict):
+                raise TypeError("attrs must be a dict or None")
+            names = list(attrs)
+            name_arr = _ffi.ffi.new("const char*[]", len(names))
+            value_arr = _ffi.ffi.new("const char*[]", len(names))
+            keepalive = []
+            for index, (attr_name, attr_value) in enumerate(
+                attrs.items()
+            ):
+                name_c = _ffi.ffi.new(
+                    "char[]", str(attr_name).encode("utf-8")
+                )
+                value_c = _ffi.ffi.new(
+                    "char[]", str(attr_value).encode("utf-8")
+                )
+                name_arr[index] = name_c
+                value_arr[index] = value_c
+                keepalive.append(name_c)
+                keepalive.append(value_c)
+            raw = _ffi.lib.leptris_element_new_with_attributes(
+                self._cd(), name, name_arr, value_arr, len(names)
+            )
+            del keepalive
+        else:
+            raw = _ffi.lib.leptris_element_create(self._cd(), name)
         if raw == _ffi.ffi.NULL:
             raise LeptrisError("element_create failed")
         return _accel.create(

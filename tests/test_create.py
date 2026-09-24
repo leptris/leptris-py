@@ -130,3 +130,32 @@ class TestHtmlFacadeParity:
         parsed = html_fromstring("<p>hi</p>")
         assert parsed.tag == "html"
         assert html_document("<p>hi</p>").root is not None
+
+
+class TestNewWithAttributes:
+    """Single-crossing construction (libleptris 1.9.237+): the
+    element and every attribute in one C call."""
+
+    def test_create_element_with_attrs(self):
+        doc = Document.create()
+        el = doc.create_element("item", {"id": "7", "kind": "x"})
+        assert el.attribute_pairs() == [("id", "7"), ("kind", "x")]
+
+    def test_create_child_with_attrs(self):
+        doc = Document.create()
+        root = doc.create_element("r")
+        doc.set_root(root)
+        child = root.create_child("item", {"id": "7"})
+        child.text = "v"
+        assert root[0].attribute_pairs() == [("id", "7")]
+        assert child.text == "v"
+
+    def test_empty_attrs_dict_uses_create(self):
+        doc = Document.create()
+        el = doc.create_element("r", {})
+        assert el.attribute_pairs() == []
+
+    def test_attrs_type_check(self):
+        doc = Document.create()
+        with pytest.raises(TypeError):
+            doc.create_element("r", [("a", "1")])
