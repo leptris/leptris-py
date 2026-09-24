@@ -445,6 +445,13 @@ ffi.cdef(
     uint32_t leptris_plan_abi_version(void);
     LeptrisPlan leptris_plan_build(const leptris_plan_spec* spec, LeptrisStatus* status);
     void leptris_plan_free(LeptrisPlan plan);
+    /* entering-only subtree visitation (1.9.232+, #1332): once per
+     * node -- elements are not re-visited after their subtree */
+    typedef void (*LeptrisNodeVisitor)(void* user_data, LeptrisNodeRef node,
+                                       int entering, int depth);
+    void leptris_node_visit_entering(LeptrisNodeRef root,
+                                     LeptrisNodeVisitor visitor,
+                                     void* user_data);
     /* programmatic construction (engine creation surface, 1.9.216) */
     LeptrisDocument leptris_document_create(void);
     LeptrisStatus leptris_document_set_root(LeptrisDocument doc, LeptrisElement elem);
