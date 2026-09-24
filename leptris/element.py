@@ -71,10 +71,12 @@ class _ElementMethods:
         self._check_alive()
         return iter(_accel.children(self))
 
-    def create_child(self, name) -> "Element":
+    def create_child(self, name, attrs=None) -> "Element":
         """Create + append a child element in one call
         (libleptris 1.9.216+). The child is owned by this
-        element's document.
+        element's document. With ``attrs`` (1.9.237+) the child
+        is built through the single-crossing
+        ``leptris_element_new_with_attributes`` entry.
 
         .. versionadded:: 1.9.216.0
         """
@@ -88,6 +90,14 @@ class _ElementMethods:
         document = self._document
         if document is None or document._freed:
             raise LeptrisError("operation on a closed document")
+        if attrs:
+            child = document.create_element(name, attrs)
+            rc = _ffi.lib.leptris_element_append_child(
+                self._cd(), child._cd()
+            )
+            if rc != 0:
+                raise LeptrisError(f"append failed (status {rc})")
+            return child
         raw = _ffi.lib.leptris_element_create_child(
             self._cd(), name
         )

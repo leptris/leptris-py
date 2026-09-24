@@ -456,6 +456,11 @@ ffi.cdef(
     LeptrisDocument leptris_document_create(void);
     LeptrisStatus leptris_document_set_root(LeptrisDocument doc, LeptrisElement elem);
     LeptrisElement leptris_element_create(LeptrisDocument doc, const char* name);
+    /* single-crossing element construction (1.9.237+): one call
+     * creates the element and sets every attribute */
+    LeptrisElement leptris_element_new_with_attributes(
+        LeptrisDocument doc, const char* name, const char** attr_names,
+        const char** attr_values, size_t attr_count);
     LeptrisElement leptris_element_create_child(LeptrisElement parent, const char* name);
     LeptrisStatus leptris_element_append_child(LeptrisElement parent, LeptrisElement child);
     LeptrisStatus leptris_element_insert_before(LeptrisElement sibling, LeptrisElement new_node);
