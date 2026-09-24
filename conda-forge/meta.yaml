@@ -1,5 +1,5 @@
 {% set name = "leptris" %}
-{% set version = "1.9.216.0" %}
+{% set version = "1.9.232.0" %}
 
 package:
   name: {{ name|lower }}
@@ -7,7 +7,7 @@ package:
 
 source:
   url: https://pypi.org/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
-  sha256: baaa45b02fb461c45b792d382eff05d6d629067fdda008f29f5477ab4c4aa747
+  sha256: 7f6dffc78e57275c4e0fe7d77ccff72b2295f285a4fb46967ce55701c5d61114
 
 build:
   number: 0
