@@ -180,6 +180,8 @@ class Document:
         recover: bool = False,
         attribute_defaults: bool = False,
         remove_blank_text: bool = False,
+        skip_dup_detection: bool = False,
+        skip_source_positions: bool = False,
     ) -> "Document":
         """Parse XML. With recover=True a malformed document yields an
         empty (rootless) Document instead of raising ParseError
@@ -192,7 +194,14 @@ class Document:
         asked). With remove_blank_text=True, whitespace-only text
         nodes are dropped at parse time (lxml's parser option of
         the same name) — ~35% faster on pretty-printed documents,
-        and pretty-printing via tostring() re-indents anyway."""
+        and pretty-printing via tostring() re-indents anyway.
+
+        Perf opt-outs (libleptris 1.9.273+): with
+        ``skip_dup_detection=True`` duplicate attributes are
+        admitted silently (first still wins for queries; no
+        recover diagnostic); with ``skip_source_positions=True``
+        element source columns degrade to zeros (lines still
+        resolve). Defaults keep every feature ON."""
         if isinstance(xml, str):
             xml = xml.encode("utf-8")
         if not isinstance(xml, (bytes, bytearray, memoryview)):
@@ -230,7 +239,9 @@ class Document:
             len(data),
             recover,
             (1 if remove_blank_text else 0)
-            | (2 if attribute_defaults else 0),
+            | (2 if attribute_defaults else 0)
+            | (8 if skip_dup_detection else 0)
+            | (16 if skip_source_positions else 0),
         )
         if address is None and not recover:
             # Non-UTF-8 encodings fail the UTF-8 fast path; retry
