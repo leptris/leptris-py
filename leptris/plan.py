@@ -62,6 +62,11 @@ _FLAG_BITS = {
     "ordered": 0x2,
     "cdata": 0x4,
     "ns_lenient": 0x8,
+    # 1.9.216+ (#1273): the walk also emits unmatched sibling
+    # non-element nodes (text runs / comments / PIs) as SCALAR
+    # values, so ordered hosts can rebuild element_order without
+    # re-parsing
+    "order_spine": 0x10,
 }
 
 #: CALLBACK row payload: the raw string value, the document byte
@@ -77,6 +82,30 @@ def _kind(name, where):
         raise ValueError(
             f"{where}: unknown kind {name!r}; expected one of: {valid}"
         ) from None
+
+
+def _predicates(raw, where):
+    """Normalize a row's ``predicates`` (``{attr: expected, ...}``)
+    to a list of (name, value) pairs. AND across pairs; same-name
+    rows with different predicates partition the match space
+    (exclusive — first matching row wins per occurrence)."""
+    if not raw:
+        return []
+    if not isinstance(raw, dict):
+        raise TypeError(
+            f"{where}: predicates must be a dict of "
+            "{attr_name: expected_value}"
+        )
+    pairs = []
+    for attr_name, expected in raw.items():
+        if not isinstance(attr_name, str) or not attr_name:
+            raise ValueError(
+                f"{where}: predicate names must be non-empty str"
+            )
+        if not isinstance(expected, str):
+            expected = str(expected)
+        pairs.append((attr_name, expected))
+    return pairs
 
 
 def _flatten(spec):
@@ -144,7 +173,14 @@ def _flatten(spec):
                     f"plan #{index} ({name}): attribute row "
                     f"{wire_name!r} must be scalar, collection or callback"
                 )
-            attrs[wire_name] = (kind, row.get("type_tag", 0))
+            attrs[wire_name] = (
+                kind,
+                row.get("type_tag", 0),
+                _predicates(
+                    row.get("predicates"),
+                    f"plan #{index} ({name}) attribute {wire_name!r}",
+                ),
+            )
 
         raw_children = subtree.get("children") or []
         if not isinstance(raw_children, list):
@@ -189,6 +225,10 @@ def _flatten(spec):
                     f"plan #{index} ({name}) row {wire_name!r}: ns form "
                     f"'exact' needs a uri"
                 )
+            row_predicates = _predicates(
+                row.get("predicates"),
+                f"plan #{index} ({name}) row {wire_name!r}",
+            )
             rows.append((wire_name, (kind, row.get("type_tag", 0), child_index)))
             kids.append(
                 (
@@ -198,6 +238,7 @@ def _flatten(spec):
                     child_index,
                     row_form,
                     row_ns.get("uri"),
+                    row_predicates,
                 )
             )
         # Same-name groups: values echo the producing row's type_tag
@@ -272,7 +313,7 @@ class Plan:
             if attr_rows:
                 arr = ffi.new("leptris_attr_plan[]", len(attr_rows))
                 keepalive.append(arr)
-                for slot, (wire_name, (kind, type_tag)) in zip(
+                for slot, (wire_name, (kind, type_tag, predicates)) in zip(
                     arr, attr_rows
                 ):
                     wire_c = ffi.new("char[]", wire_name.encode("utf-8"))
@@ -280,6 +321,26 @@ class Plan:
                     slot.wire_name = wire_c
                     slot.kind = kind
                     slot.type_tag = type_tag
+                    if predicates:
+                        pred_arr = ffi.new(
+                            "leptris_attr_predicate[]", len(predicates)
+                        )
+                        keepalive.append(pred_arr)
+                        for pred_slot, (p_name, p_value) in zip(
+                            pred_arr, predicates
+                        ):
+                            p_name_c = ffi.new(
+                                "char[]", p_name.encode("utf-8")
+                            )
+                            p_value_c = ffi.new(
+                                "char[]", p_value.encode("utf-8")
+                            )
+                            keepalive.append(p_name_c)
+                            keepalive.append(p_value_c)
+                            pred_slot.wire_name = p_name_c
+                            pred_slot.expected_value = p_value_c
+                        slot.predicate_count = len(predicates)
+                        slot.predicates = pred_arr
                 struct.attribute_plans = arr
             else:
                 struct.attribute_plans = ffi.NULL
@@ -296,6 +357,7 @@ class Plan:
                         child_index,
                         row_ns_form,
                         row_ns_uri,
+                        predicates,
                     ) = kid
                     wire_c = ffi.new("char[]", wire_name.encode("utf-8"))
                     keepalive.append(wire_c)
@@ -313,6 +375,26 @@ class Plan:
                         slot.ns_uri = row_uri_c
                     else:
                         slot.ns_uri = ffi.NULL
+                    if predicates:
+                        pred_arr = ffi.new(
+                            "leptris_attr_predicate[]", len(predicates)
+                        )
+                        keepalive.append(pred_arr)
+                        for pred_slot, (p_name, p_value) in zip(
+                            pred_arr, predicates
+                        ):
+                            p_name_c = ffi.new(
+                                "char[]", p_name.encode("utf-8")
+                            )
+                            p_value_c = ffi.new(
+                                "char[]", p_value.encode("utf-8")
+                            )
+                            keepalive.append(p_name_c)
+                            keepalive.append(p_value_c)
+                            pred_slot.wire_name = p_name_c
+                            pred_slot.expected_value = p_value_c
+                        slot.predicate_count = len(predicates)
+                        slot.predicates = pred_arr
                 struct.child_plans = arr
             else:
                 struct.child_plans = ffi.NULL
@@ -445,7 +527,7 @@ def _convert(result, elements, plan_index):
             else None
         )
 
-    def leaf(value):
+    def leaf(value, type_tag=0):
         if (
             lib.leptris_plan_value_kind(value)
             == lib.LEPTRIS_PLAN_VALUE_CALLBACK
@@ -455,11 +537,26 @@ def _convert(result, elements, plan_index):
                 lib.leptris_plan_value_position(value),
                 lib.leptris_plan_value_type_tag(value),
             )
+        # #1269a (1.9.216+): rows with type_tag 1/2/3 execute the
+        # type in-pass — surface native int/float/bool, soft-fail
+        # to the string on a parse miss (the engine contract)
+        if type_tag == 1:
+            out = ffi.new("int64_t*")
+            if lib.leptris_plan_value_int(value, out) == 0:
+                return out[0]
+        elif type_tag == 2:
+            out = ffi.new("double*")
+            if lib.leptris_plan_value_float(value, out) == 0:
+                return out[0]
+        elif type_tag == 3:
+            out = ffi.new("int*")
+            if lib.leptris_plan_value_bool(value, out) == 0:
+                return bool(out[0])
         return string(value)
 
-    def list_items(value):
+    def list_items(value, type_tag=0):
         return [
-            leaf(lib.leptris_plan_value_at(value, i))
+            leaf(lib.leptris_plan_value_at(value, i), type_tag)
             for i in range(lib.leptris_plan_value_count(value))
         ]
 
@@ -573,9 +670,9 @@ def _convert(result, elements, plan_index):
                         converted[0] if len(converted) == 1 else converted,
                     )
                 elif kind == lib.LEPTRIS_PLAN_VALUE_COLLECTION:
-                    emit(wire_name, list_items(first))
+                    emit(wire_name, list_items(first, row[1]))
                 else:
-                    emit(wire_name, leaf(first))
+                    emit(wire_name, leaf(first, row[1]))
                 continue
             if vi < len(values) and row_matches(
                 wire_name, row, values[vi], kinds[vi], names[vi]
@@ -600,9 +697,9 @@ def _convert(result, elements, plan_index):
                         converted[0] if len(converted) == 1 else converted,
                     )
                 elif kind == lib.LEPTRIS_PLAN_VALUE_COLLECTION:
-                    emit(wire_name, list_items(child))
+                    emit(wire_name, list_items(child, row[1]))
                 else:
-                    emit(wire_name, leaf(child))
+                    emit(wire_name, leaf(child, row[1]))
         attrs = {}
         for wire_name in plan["attrs"]:
             char = lib.leptris_plan_value_attribute(

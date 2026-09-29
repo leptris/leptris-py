@@ -144,6 +144,9 @@ static struct {
     size_t (*plan_value_position)(const void *);
     size_t (*plan_value_count)(const void *);
     void *(*plan_value_at)(const void *, size_t);
+    int (*plan_value_int)(const void *, long long *);
+    int (*plan_value_float)(const void *, double *);
+    int (*plan_value_bool)(const void *, int *);
     const char *(*plan_value_attribute)(const void *, const char *);
     void *(*xpath_eval_vars_ctx)(void *, void *, const char *, void *);
     const void *(*sax_records)(void *, size_t *);
@@ -151,7 +154,7 @@ static struct {
     void *(*xquery_eval)(void *, void *, void *);
 } Fns;
 
-#define FN_COUNT 71
+#define FN_COUNT 74
 
 static int bound = 0;
 static PyObject *LeptrisErrorType = NULL;
@@ -1106,6 +1109,9 @@ accel_bind(PyObject *module, PyObject *args)
     (void **)&Fns.plan_value_position,
     (void **)&Fns.plan_value_count,
     (void **)&Fns.plan_value_at,
+    (void **)&Fns.plan_value_int,
+    (void **)&Fns.plan_value_float,
+    (void **)&Fns.plan_value_bool,
     (void **)&Fns.plan_value_attribute,
     (void **)&Fns.xpath_eval_vars_ctx,
     (void **)&Fns.sax_records,
@@ -2253,8 +2259,27 @@ accel_plan_shape_build(PyObject *module, PyObject *args)
 }
 
 static PyObject *
-plan_leaf(const void *value, PyObject *callback_type)
+plan_leaf(const void *value, PyObject *callback_type, int type_tag)
 {
+    /* #1269a: rows with type_tag 1/2/3 execute the type in-pass;
+     * surface native int/float/bool, soft-fail to the string on a
+     * parse miss (the engine contract). */
+    if (type_tag == 1) {
+        long long out = 0;
+        if (Fns.plan_value_int(value, &out) == 0)
+            return PyLong_FromLongLong(out);
+    } else if (type_tag == 2) {
+        double out = 0;
+        if (Fns.plan_value_float(value, &out) == 0)
+            return PyFloat_FromDouble(out);
+    } else if (type_tag == 3) {
+        int out = 0;
+        if (Fns.plan_value_bool(value, &out) == 0) {
+            if (out)
+                Py_RETURN_TRUE;
+            Py_RETURN_FALSE;
+        }
+    }
     int kind = Fns.plan_value_kind(value);
     if (kind == PV_CALLBACK) {
         const char *s = Fns.plan_value_string(value);
@@ -2283,7 +2308,8 @@ plan_leaf(const void *value, PyObject *callback_type)
 }
 
 static PyObject *
-plan_collection_items(const void *value, PyObject *callback_type)
+plan_collection_items(const void *value, PyObject *callback_type,
+                       int type_tag)
 {
     size_t count = Fns.plan_value_count(value);
     PyObject *out = PyList_New((Py_ssize_t)count);
@@ -2291,7 +2317,7 @@ plan_collection_items(const void *value, PyObject *callback_type)
         return NULL;
     for (size_t i = 0; i < count; i++) {
         PyObject *item = plan_leaf(
-            Fns.plan_value_at(value, i), callback_type);
+            Fns.plan_value_at(value, i), callback_type, type_tag);
         if (item == NULL || PyList_SetItem(out, (Py_ssize_t)i, item) < 0) {
             Py_XDECREF(item);
             Py_DECREF(out);
@@ -2393,9 +2419,10 @@ plan_convert_element(const void *value, const PlanShapeC *shape,
                     }
                 } else if (Fns.plan_value_kind(first) == PV_COLLECTION) {
                     item = plan_collection_items(
-                        first, shape->callback_type);
+                        first, shape->callback_type, row->tag);
                 } else {
-                    item = plan_leaf(first, shape->callback_type);
+                    item = plan_leaf(
+                        first, shape->callback_type, row->tag);
                 }
             }
             if (item == NULL
@@ -2507,9 +2534,10 @@ plan_convert_element(const void *value, const PlanShapeC *shape,
         PyObject *converted;
         if (vkind == PV_COLLECTION)
             converted = plan_collection_items(
-                candidate, shape->callback_type);
+                candidate, shape->callback_type, row->tag);
         else
-            converted = plan_leaf(candidate, shape->callback_type);
+            converted = plan_leaf(
+                candidate, shape->callback_type, row->tag);
         if (converted == NULL
             || plan_row_emit(children, row, converted) < 0) {
             Py_XDECREF(converted);
