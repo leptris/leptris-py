@@ -568,6 +568,43 @@ def _convert(result, elements, plan_index):
             else ""
         )
 
+    def children_snapshot(value):
+        """ONE crossing for the whole child list (#1432-class,
+        1.9.273+): names + handles in bulk. Returns
+        (values, names, kinds) or None when the engine reports the
+        list needs a bigger blob (retry semantics belong to the
+        host) — the caller then falls back to per-item access."""
+        count = lib.leptris_plan_value_count(value)
+        if count == 0:
+            return [], [], []
+        cap = lib.leptris_plan_value_children_snapshot(
+            value, ffi.NULL, 0, ffi.NULL, ffi.NULL, ffi.NULL
+        )
+        if cap == 0:
+            return None
+        blob = ffi.new("char[]", cap)
+        offsets = ffi.new("size_t[]", count + 1)
+        tags = ffi.new("uint8_t[]", count)
+        handles = ffi.new("LeptrisPlanResult[]", count)
+        rc = lib.leptris_plan_value_children_snapshot(
+            value, blob, cap, offsets, tags, handles
+        )
+        if rc != 0:
+            return None
+        values = [handles[i] for i in range(count)]
+        names = []
+        for i in range(count):
+            if offsets[i] == (1 << 64) - 1:  # SIZE_MAX: content run
+                names.append(ffi.NULL)
+            else:
+                names.append(
+                    ffi.string(blob + offsets[i])
+                    .decode("utf-8", "replace")
+                    or None
+                )
+        kinds = [lib.leptris_plan_value_kind(v) for v in values]
+        return values, names, kinds
+
     def row_matches(wire_name, row, value, value_kind, vname):
         """Values arrive in plan-row order; match each upcoming value
         to the row that produced it (collection wrappers and content
@@ -608,6 +645,7 @@ def _convert(result, elements, plan_index):
     def element(value, plan_index):
         plan = elements[plan_index]
         row_list = plan["rows"]
+        snapshot = children_snapshot(value)
         multi_names = {
             name
             for name, count in __import__("collections").Counter(
@@ -615,12 +653,15 @@ def _convert(result, elements, plan_index):
             ).items()
             if count > 1
         }
-        values = [
-            lib.leptris_plan_value_at(value, i)
-            for i in range(lib.leptris_plan_value_count(value))
-        ]
-        kinds = [lib.leptris_plan_value_kind(v) for v in values]
-        names = [value_name(v) for v in values]
+        if snapshot is not None:
+            values, names, kinds = snapshot
+        else:
+            values = [
+                lib.leptris_plan_value_at(value, i)
+                for i in range(lib.leptris_plan_value_count(value))
+            ]
+            kinds = [lib.leptris_plan_value_kind(v) for v in values]
+            names = [value_name(v) for v in values]
         def emit(wire_name, item):
             """Single row sets the key; a same-name group appends to
             one list created at the group's first row (mirrors the C

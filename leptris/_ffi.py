@@ -445,6 +445,14 @@ ffi.cdef(
     uint32_t leptris_plan_abi_version(void);
     LeptrisPlan leptris_plan_build(const leptris_plan_spec* spec, LeptrisStatus* status);
     void leptris_plan_free(LeptrisPlan plan);
+    /* children snapshot (#1432-class, 1.9.273+): ONE crossing for
+     * the whole child list — names blob + offsets + type_tags +
+     * borrowed child handles; retry with the returned blob capacity */
+    size_t leptris_plan_value_children_snapshot(
+        const LeptrisPlanResult v,
+        char* names_blob, size_t blob_cap,
+        size_t* name_offsets, uint8_t* type_tags,
+        LeptrisPlanResult* child_handles);
     /* entering-only subtree visitation (1.9.232+, #1332): once per
      * node -- elements are not re-visited after their subtree */
     typedef void (*LeptrisNodeVisitor)(void* user_data, LeptrisNodeRef node,
