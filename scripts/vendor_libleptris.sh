@@ -86,7 +86,25 @@ if [ "$(uname -s)" = "Darwin" ]; then
     exit 0
 fi
 
-cmake -S "$SRC" -B "$SRC/build" "${CMAKE_FLAGS[@]}"
+# MSVC defaults to the HOST arch: without an explicit -A the
+# vendored DLL is x64 even in ARM64/x86 wheels (untestable cross
+# legs stay green while the wheel cannot import). CIBW_ARCHS_WINDOWS
+# carries the target (AMD64/ARM64/x86); a local run falls back to
+# the host's PROCESSOR_ARCHITECTURE.
+winarch="${CIBW_ARCHS_WINDOWS:-$PROCESSOR_ARCHITECTURE}"
+case "$(uname -s)" in
+    MINGW*|MSYS*)
+        case "$winarch" in
+            ARM64) platform=(-A ARM64) ;;
+            x86)   platform=(-A Win32) ;;
+            *)     platform=(-A x64) ;;
+        esac
+        cmake -S "$SRC" -B "$SRC/build" "${CMAKE_FLAGS[@]}" "${platform[@]}"
+        ;;
+    *)
+        cmake -S "$SRC" -B "$SRC/build" "${CMAKE_FLAGS[@]}"
+        ;;
+esac
 cmake --build "$SRC/build" --config Release
 
 lib=$(find_lib "$SRC/build")
