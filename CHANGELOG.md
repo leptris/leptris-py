@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 1.9.280.0 — 2026-09-30
+
+Adopts libleptris 1.9.280 (pin 1.9.278 -> 1.9.280; no public-header
+changes): the rootmap generation bump links on MSVC x86
+(leptris/leptris#1456 — cmpxchg8b CAS loop; `_InterlockedIncrement64`
+is an x64/ARM-only intrinsic). **The first win32 (32-bit Windows)
+wheel ships with this release** — the leg goes required alongside it.
+
 ## 1.9.278.1 — 2026-09-30
 
 Windows wheel correctness:
