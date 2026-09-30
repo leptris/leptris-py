@@ -592,9 +592,10 @@ def _convert(result, elements, plan_index):
         if rc != 0:
             return None
         values = [handles[i] for i in range(count)]
+        size_max = (1 << (ffi.sizeof("size_t") * 8)) - 1
         names = []
         for i in range(count):
-            if offsets[i] == (1 << 64) - 1:  # SIZE_MAX: content run
+            if offsets[i] == size_max:  # SIZE_MAX: content run
                 names.append(ffi.NULL)
             else:
                 names.append(
