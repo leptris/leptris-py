@@ -221,6 +221,10 @@ ffi.cdef(
     size_t leptris_element_attribute_pairs(
         LeptrisElement elem, const char** out_names, const char** out_values,
         LeptrisAttribute* out_attrs, size_t max_count);
+    /* typed attribute face: one crossing, engine-side conversion */
+    int leptris_element_attribute_int(LeptrisElement elem, const char* name, int default_value);
+    double leptris_element_attribute_double(LeptrisElement elem, const char* name, double default_value);
+    int leptris_element_attribute_bool(LeptrisElement elem, const char* name, int default_value);
     LeptrisAttribute leptris_element_first_attribute(LeptrisElement elem);
     LeptrisAttribute leptris_attribute_next(LeptrisAttribute attr);
     const char* leptris_attribute_get_name(LeptrisAttribute attr);
