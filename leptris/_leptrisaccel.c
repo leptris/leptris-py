@@ -740,6 +740,99 @@ static PyGetSetDef element_getsets[] = {
     {NULL}
 };
 
+/* typed attribute getters: conversion engine-side, one crossing.
+ * Plain names only — a Clark "{uri}local" name would silently
+ * compare against a literal attribute name and misreport, so it is
+ * rejected outright. */
+static PyObject *
+elem_get_int(AccelElement *self, PyObject *args)
+{
+    PyObject *name;
+    long default_value = 0;
+    if (!PyArg_ParseTuple(args, "U|l", &name, &default_value))
+        return NULL;
+    if (check_poisoned(self) < 0)
+        return NULL;
+    if (!bound || self->raw == NULL)
+        return PyLong_FromLong(default_value);
+    PyObject *encoded = PyUnicode_AsUTF8String(name);
+    if (encoded == NULL)
+        return NULL;
+    const char *utf8 = PyBytes_AsString(encoded);
+    if (utf8 == NULL || utf8[0] == '{') {
+        Py_XDECREF(encoded);
+        if (utf8 != NULL)
+            PyErr_SetString(PyExc_ValueError,
+                            "typed attribute getters take a plain name");
+        return NULL;
+    }
+    long value = Fns.element_attribute_int(
+        self->raw, utf8, (int)default_value);
+    Py_DECREF(encoded);
+    return PyLong_FromLong(value);
+}
+
+static PyObject *
+elem_get_float(AccelElement *self, PyObject *args)
+{
+    PyObject *name;
+    double default_value = 0.0;
+    if (!PyArg_ParseTuple(args, "U|d", &name, &default_value))
+        return NULL;
+    if (check_poisoned(self) < 0)
+        return NULL;
+    if (!bound || self->raw == NULL)
+        return PyFloat_FromDouble(default_value);
+    PyObject *encoded = PyUnicode_AsUTF8String(name);
+    if (encoded == NULL)
+        return NULL;
+    const char *utf8 = PyBytes_AsString(encoded);
+    if (utf8 == NULL || utf8[0] == '{') {
+        Py_XDECREF(encoded);
+        if (utf8 != NULL)
+            PyErr_SetString(PyExc_ValueError,
+                            "typed attribute getters take a plain name");
+        return NULL;
+    }
+    double value = Fns.element_attribute_double(
+        self->raw, utf8, default_value);
+    Py_DECREF(encoded);
+    return PyFloat_FromDouble(value);
+}
+
+static PyObject *
+elem_get_bool(AccelElement *self, PyObject *args)
+{
+    PyObject *name;
+    int default_value = 0;
+    if (!PyArg_ParseTuple(args, "U|p", &name, &default_value))
+        return NULL;
+    if (check_poisoned(self) < 0)
+        return NULL;
+    if (!bound || self->raw == NULL) {
+        if (default_value)
+            Py_RETURN_TRUE;
+        Py_RETURN_FALSE;
+    }
+    PyObject *encoded = PyUnicode_AsUTF8String(name);
+    if (encoded == NULL)
+        return NULL;
+    const char *utf8 = PyBytes_AsString(encoded);
+    if (utf8 == NULL || utf8[0] == '{') {
+        Py_XDECREF(encoded);
+        if (utf8 != NULL)
+            PyErr_SetString(PyExc_ValueError,
+                            "typed attribute getters take a plain name");
+        return NULL;
+    }
+    int value = Fns.element_attribute_bool(
+        self->raw, utf8, default_value);
+    Py_DECREF(encoded);
+    if (value)
+        Py_RETURN_TRUE;
+    Py_RETURN_FALSE;
+}
+
 static PyObject *
 elem_getprevious(AccelElement *self, PyObject *unused)
 {
@@ -894,6 +987,15 @@ static PyMethodDef element_methods[] = {
      "Next element sibling or None."},
     {"get", (PyCFunction)elem_get_method, METH_VARARGS,
      "get(name, default=None) -> attribute value."},
+    {"get_int", (PyCFunction)elem_get_int, METH_VARARGS,
+     "get_int(name, default=0) -> strict int; default when missing/"
+     "empty/unparseable."},
+    {"get_float", (PyCFunction)elem_get_float, METH_VARARGS,
+     "get_float(name, default=0.0) -> strict float; default when "
+     "missing/empty/unparseable."},
+    {"get_bool", (PyCFunction)elem_get_bool, METH_VARARGS,
+     "get_bool(name, default=False) -> true/1/yes truthy, false/0 "
+     "falsy, default otherwise."},
     {"getprevious", (PyCFunction)elem_getprevious, METH_NOARGS,
      "Previous element sibling or None."},
     {"keys", (PyCFunction)elem_keys, METH_NOARGS,
@@ -3003,40 +3105,6 @@ accel_xquery_eval(PyObject *module, PyObject *args)
     return finish_result(result, document);
 }
 
-/* attribute_typed(element, kind, name_bytes, int_default, double_default)
- * — the typed attribute face (leptris_element_attribute_{int,double,bool})
- * in one crossing. kind: 0 = int, 1 = double, 2 = bool. */
-static PyObject *
-accel_attribute_typed(PyObject *module, PyObject *args)
-{
-    PyObject *element;
-    int kind;
-    const char *name;
-    Py_ssize_t name_len;
-    int int_default;
-    double double_default;
-    if (!PyArg_ParseTuple(args, "O!iy#id", ElementType, &element, &kind,
-                          &name, &name_len, &int_default, &double_default))
-        return NULL;
-    AccelElement *self = (AccelElement *)element;
-    if (check_poisoned(self) < 0)
-        return NULL;
-    switch (kind) {
-    case 0:
-        return PyLong_FromLong(Fns.element_attribute_int(
-            self->raw, name, int_default));
-    case 1:
-        return PyFloat_FromDouble(Fns.element_attribute_double(
-            self->raw, name, double_default));
-    case 2:
-        if (Fns.element_attribute_bool(self->raw, name, int_default))
-            Py_RETURN_TRUE;
-        Py_RETURN_FALSE;
-    }
-    PyErr_SetString(PyExc_ValueError, "kind must be 0, 1, or 2");
-    return NULL;
-}
-
 /* attribute_pairs(element) -> [(name, value), ...] in one C pass
  * (#1254): replaces the N-call first_attribute/next walk on the
  * binding hot path. Names/values are engine-owned; decoded here. */
@@ -3091,9 +3159,6 @@ accel_attribute_pairs(PyObject *module, PyObject *arg)
 static PyMethodDef accel_methods[] = {
     {"attribute_pairs", accel_attribute_pairs, METH_O,
      "attribute_pairs(element) -> [(name, value), ...]"},
-    {"attribute_typed", accel_attribute_typed, METH_VARARGS,
-     "attribute_typed(element, kind, name, int_default, double_default)"
-     " -> int | float | bool (kind 0/1/2)"},
     {"create", accel_create, METH_VARARGS,
      "create(address, ptr, document) -> Element"},
     {"materialize", accel_materialize, METH_VARARGS,
