@@ -1,6 +1,111 @@
 # Changelog
 
 
+## 1.9.278.1 — 2026-09-30
+
+Windows wheel correctness:
+
+- the vendored engine DLL is now built for the WHEEL's architecture:
+  `scripts/vendor_libleptris.sh` selects the MSVC platform from
+  `CIBW_ARCHS_WINDOWS` and setup.py's sdist path from the installing
+  interpreter. **1.9.278.0's win_arm64 wheel shipped an x64 DLL inside
+  an ARM64 wheel** (unusable on ARM64 Windows — the cross-compiled
+  legs cannot run wheel tests, so CI never saw it); fixed here
+- musllinux i686 and armv7l wheels are now required and green; the
+  win32 wheel stays pending the engine's MSVC-x86 rootmap fix
+  (leptris/leptris#1456) — it has never shipped in any release
+
+## 1.9.278.0 — 2026-09-30
+
+Adopts libleptris 1.9.278 (pin 1.9.273 -> 1.9.278; no public-header
+changes — engine-internal perf and fixes):
+
+- XSLT: the stream gate also rejects `xsl:output` encoding; plain
+  sheets stream; `leptris_xslt_apply` materializes streamed output
+  into the returned document (fragment materialization for the
+  document face included)
+- DOM: `element_copy` routes source-view lengths (no `strlen` on the
+  copy path) and places attributes directly; XPath gains zero-arg
+  `position()`/`last()` fast paths
+- carries the 1.9.273 binding surface (that build never published —
+  its i686 leg caught a 32-bit word-size bug in the children
+  snapshot, fixed before this release): the plan children snapshot
+  and the `skip_dup_detection`/`skip_source_positions` parse opt-outs
+
+## 1.9.270.0 — 2026-09-29
+
+Adopts libleptris 1.9.270 (pin 1.9.268 -> 1.9.270): parse arena
+header carving and the lazy raw-attribute journal.
+
+## 1.9.268.0 — 2026-09-29
+
+Adopts libleptris 1.9.268 (pin 1.9.264 -> 1.9.268): the engine's DOM
+performance campaign, lockstep.
+
+## 1.9.264.0 — 2026-09-28
+
+Adopts libleptris 1.9.264 (pin 1.9.237 -> 1.9.264): the parse-arena
+performance wave and typed-atom identity.
+
+## 1.9.237.1 — 2026-09-25
+
+The SAX records tape: `leptris.sax.records(source)` drains a whole
+document's SAX event stream in one crossing — `SaxRecord` views over
+a packed tape (kind/name/text/attrs/parent/line), no per-event
+callbacks.
+
+## 1.9.237.0 — 2026-09-24
+
+Adopts libleptris 1.9.237 (pin 1.9.232 -> 1.9.237): single-crossing
+element construction — `Document.create_element(name, attrs)` builds
+through `leptris_element_new_with_attributes`.
+
+## 1.9.232.0 — 2026-09-24
+
+Adopts libleptris 1.9.232 (pin 1.9.216 -> 1.9.232) and carries the
+1.9.226/1.9.231 engine work whose own builds never published:
+
+- **the HTML builder, end to end**: `leptris.html.create()`,
+  HTML-aware serialization (`method="html"`, HTML-by-default for
+  HTML-parsed documents), and the extended serialize options
+- `Element.visit_entering(fn)` — one-callback document-order walk
+  (half the callbacks of a full enter/leave visit)
+- the #1285 DOM/HTML performance slices
+
+## 1.9.216.1 — 2026-09-23
+
+The programmatic construction surface: `Document.create()`,
+`Document.create_element()`, `Element.create_child()`/`append()`/`set()`,
+and the `text` setter (libleptris 1.9.216+).
+
+## 1.9.216.0 — 2026-09-22
+
+Adopts libleptris 1.9.216 (pin 1.9.214 -> 1.9.216): plan-ABI v1 and
+the bulk attribute face — `Element.attribute_pairs()` returns all
+attributes in one C pass.
+
+## 1.9.214.0 — 2026-09-21
+
+Adopts libleptris 1.9.214 (pin 1.9.213 -> 1.9.214): XQuery
+switch/group-by/if (QT3 lane-15 core) through `leptris.XQuery`.
+
+## 1.9.213.0 — 2026-09-20
+
+Adopts libleptris 1.9.213 (pin 1.9.210 -> 1.9.213): XQuery
+duration/date operand sets; ILP32/MSVC fixes.
+
+## 1.9.210.0 — 2026-09-20
+
+Adopts libleptris 1.9.210 (pin 1.9.208 -> 1.9.210): arena retain
+ceiling and the HTML classifier.
+
+## 1.9.208.1 — 2026-09-19
+
+Recovery build of 1.9.208.0 (a publish race shipped a mis-built
+wheel set under that version; PyPI versions are immutable, so the
+correct build ships as 1.9.208.1). A freshness gate now fails the
+release if the version is already live on PyPI.
+
 ## 1.9.208.0 — 2026-09-20
 
 Adopts libleptris 1.9.208 (pin 1.9.206 -> 1.9.208):
