@@ -46,8 +46,13 @@ class TestGetInt:
         assert elem.get_int("x", 5) == 5
         assert elem.get_int("w", 5) == 5  # trailing junk rejected
 
-    def test_accepts_str_and_bytes(self, elem):
-        assert elem.get_int(b"a") == 42
+    def test_plain_names_only(self, elem):
+        with pytest.raises(ValueError):
+            elem.get_int("{urn:x}a")
+
+    def test_str_only(self, elem):
+        with pytest.raises(TypeError):
+            elem.get_int(b"a")
 
 
 class TestGetFloat:
