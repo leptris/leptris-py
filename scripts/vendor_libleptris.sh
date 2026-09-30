@@ -91,9 +91,10 @@ fi
 # legs stay green while the wheel cannot import). CIBW_ARCHS_WINDOWS
 # carries the target (AMD64/ARM64/x86); a local run falls back to
 # the host's PROCESSOR_ARCHITECTURE.
-winarch="${CIBW_ARCHS_WINDOWS:-$PROCESSOR_ARCHITECTURE}"
 case "$(uname -s)" in
     MINGW*|MSYS*)
+        # nested default: unset env must not trip set -u
+        winarch="${CIBW_ARCHS_WINDOWS:-${PROCESSOR_ARCHITECTURE:-}}"
         case "$winarch" in
             ARM64) platform=(-A ARM64) ;;
             x86)   platform=(-A Win32) ;;
