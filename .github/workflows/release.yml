@@ -88,9 +88,8 @@ jobs:
   build:
     needs: test
     runs-on: ${{ matrix.os }}
-    # 32-bit legs (engine #1173, LP64 layout pins) run and report but
-    # do not fail the run or block publish until the engine lands
-    # 32-bit layouts
+    # Opt-in experimental legs may set allow_fail: true to report
+    # without failing the run or blocking publish
     continue-on-error: ${{ matrix.allow_fail == true }}
     strategy:
       fail-fast: false
@@ -120,16 +119,14 @@ jobs:
             cibw: "cp39-musllinux_i686"
             dist: musllinux-i686
             archs_linux: "i686"
-            # engine #1173: 32-bit struct layout pins — leg activates
-            # when the engine lands them
-            allow_fail: true
+            # engine #1174 landed the ILP32 layout pins — leg green
+            # across the 1.9.278 matrix
           - os: ubuntu-latest
             cibw: "cp39-musllinux_armv7l"
             dist: musllinux-armv7l
             archs_linux: "armv7l"
-            # engine #1173: 32-bit struct layout pins — leg activates
-            # when the engine lands them
-            allow_fail: true
+            # engine #1174 landed the 32-bit layout pins — leg green
+            # across the 1.9.278 matrix
           - os: ubuntu-latest
             cibw: "cp39-manylinux_ppc64le"
             dist: manylinux-ppc64le
@@ -142,8 +139,8 @@ jobs:
             cibw: "cp39-win32"
             dist: win-x86
             archs_win: "x86"
-            # engine #1173: 32-bit struct layout pins
-            allow_fail: true
+            # engine #1174 landed the ILP32 layout pins; the vendored
+            # DLL now builds with -A Win32 (vendor_libleptris.sh)
           - os: macos-latest
             cibw: "cp39-macosx*"
             dist: macos-universal

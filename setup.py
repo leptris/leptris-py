@@ -36,20 +36,29 @@ def _build_bundled_engine():
     if not os.path.isfile(os.path.join(src, "CMakeLists.txt")):
         return
     build = os.path.join(here, "build", "vendor-libleptris")
-    subprocess.run(
-        [
-            "cmake", "-S", src, "-B", build,
-            "-DCMAKE_BUILD_TYPE=Release",
-            "-DLEPTRIS_BUILD_SHARED=ON",
-            "-DLEPTRIS_BUILD_STATIC=OFF",
-            "-DBUILD_TESTING=OFF",
-            "-DLEPTRIS_BUILD_CLI=OFF",
-            "-DLEPTRIS_BUILD_BENCHMARKS=OFF",
-            "-DLEPTRIS_ENABLE_UTF8PROC=OFF",
-            "-DLEPTRIS_ENABLE_ICONV=OFF",
-        ],
-        check=True,
-    )
+    cmd = [
+        "cmake", "-S", src, "-B", build,
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DLEPTRIS_BUILD_SHARED=ON",
+        "-DLEPTRIS_BUILD_STATIC=OFF",
+        "-DBUILD_TESTING=OFF",
+        "-DLEPTRIS_BUILD_CLI=OFF",
+        "-DLEPTRIS_BUILD_BENCHMARKS=OFF",
+        "-DLEPTRIS_ENABLE_UTF8PROC=OFF",
+        "-DLEPTRIS_ENABLE_ICONV=OFF",
+    ]
+    if sys.platform == "win32":
+        # MSVC defaults to the host arch; a source install must
+        # build for the installing interpreter.
+        import platform
+
+        vsarch = (
+            "Win32" if sys.maxsize <= 2 ** 32
+            else "ARM64" if platform.machine().upper() == "ARM64"
+            else "x64"
+        )
+        cmd += ["-A", vsarch]
+    subprocess.run(cmd, check=True)
     subprocess.run(
         ["cmake", "--build", build, "--config", "Release"], check=True
     )
