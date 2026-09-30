@@ -94,6 +94,9 @@ static struct {
     size_t (*attribute_count)(void *);
     size_t (*element_attribute_pairs)(void *, const char**, const char**,
                                       void**, size_t);
+    int (*element_attribute_int)(void *, const char *, int);
+    double (*element_attribute_double)(void *, const char *, double);
+    int (*element_attribute_bool)(void *, const char *, int);
     void *(*element_first_attribute)(void *);
     void *(*attribute_next)(void *);
     const char *(*attribute_get_name)(void *);
@@ -154,7 +157,7 @@ static struct {
     void *(*xquery_eval)(void *, void *, void *);
 } Fns;
 
-#define FN_COUNT 74
+#define FN_COUNT 77
 
 static int bound = 0;
 static PyObject *LeptrisErrorType = NULL;
@@ -1061,6 +1064,9 @@ accel_bind(PyObject *module, PyObject *args)
     (void **)&Fns.element_set_text,
     (void **)&Fns.attribute_count,
     (void **)&Fns.element_attribute_pairs,
+    (void **)&Fns.element_attribute_int,
+    (void **)&Fns.element_attribute_double,
+    (void **)&Fns.element_attribute_bool,
     (void **)&Fns.element_first_attribute,
     (void **)&Fns.attribute_next,
     (void **)&Fns.attribute_get_name,
@@ -2997,6 +3003,40 @@ accel_xquery_eval(PyObject *module, PyObject *args)
     return finish_result(result, document);
 }
 
+/* attribute_typed(element, kind, name_bytes, int_default, double_default)
+ * — the typed attribute face (leptris_element_attribute_{int,double,bool})
+ * in one crossing. kind: 0 = int, 1 = double, 2 = bool. */
+static PyObject *
+accel_attribute_typed(PyObject *module, PyObject *args)
+{
+    PyObject *element;
+    int kind;
+    const char *name;
+    Py_ssize_t name_len;
+    int int_default;
+    double double_default;
+    if (!PyArg_ParseTuple(args, "O!iy#id", ElementType, &element, &kind,
+                          &name, &name_len, &int_default, &double_default))
+        return NULL;
+    AccelElement *self = (AccelElement *)element;
+    if (check_poisoned(self) < 0)
+        return NULL;
+    switch (kind) {
+    case 0:
+        return PyLong_FromLong(Fns.element_attribute_int(
+            self->raw, name, int_default));
+    case 1:
+        return PyFloat_FromDouble(Fns.element_attribute_double(
+            self->raw, name, double_default));
+    case 2:
+        if (Fns.element_attribute_bool(self->raw, name, int_default))
+            Py_RETURN_TRUE;
+        Py_RETURN_FALSE;
+    }
+    PyErr_SetString(PyExc_ValueError, "kind must be 0, 1, or 2");
+    return NULL;
+}
+
 /* attribute_pairs(element) -> [(name, value), ...] in one C pass
  * (#1254): replaces the N-call first_attribute/next walk on the
  * binding hot path. Names/values are engine-owned; decoded here. */
@@ -3051,6 +3091,9 @@ accel_attribute_pairs(PyObject *module, PyObject *arg)
 static PyMethodDef accel_methods[] = {
     {"attribute_pairs", accel_attribute_pairs, METH_O,
      "attribute_pairs(element) -> [(name, value), ...]"},
+    {"attribute_typed", accel_attribute_typed, METH_VARARGS,
+     "attribute_typed(element, kind, name, int_default, double_default)"
+     " -> int | float | bool (kind 0/1/2)"},
     {"create", accel_create, METH_VARARGS,
      "create(address, ptr, document) -> Element"},
     {"materialize", accel_materialize, METH_VARARGS,

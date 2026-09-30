@@ -190,6 +190,46 @@ class _ElementMethods:
         self._check_alive()
         return _accel.attribute_pairs(self)
 
+    def get_int(self, name, default: int = 0) -> int:
+        """Attribute value as ``int`` in one C call
+        (``leptris_element_attribute_int``): no string decode, the
+        conversion happens engine-side. Missing, empty, or
+        non-numeric values return ``default``.
+
+        .. versionadded:: 1.9.280.1
+        """
+        self._check_alive()
+        if isinstance(name, str):
+            name = name.encode("utf-8")
+        return _accel.attribute_typed(self, 0, name, int(default), 0.0)
+
+    def get_float(self, name, default: float = 0.0) -> float:
+        """Attribute value as ``float`` in one C call
+        (``leptris_element_attribute_double``). Missing, empty, or
+        unparseable values return ``default`` — strict, like
+        :meth:`get_int`.
+
+        .. versionadded:: 1.9.280.1
+        """
+        self._check_alive()
+        if isinstance(name, str):
+            name = name.encode("utf-8")
+        return _accel.attribute_typed(self, 1, name, 0, float(default))
+
+    def get_bool(self, name, default: bool = False) -> bool:
+        """Attribute value as ``bool`` in one C call
+        (``leptris_element_attribute_bool``). Truthy spellings
+        (case-insensitive): ``true``, ``1``, ``yes``; falsy:
+        ``false``, ``0``. Missing attributes and unrecognized
+        spellings return ``default``.
+
+        .. versionadded:: 1.9.280.1
+        """
+        self._check_alive()
+        if isinstance(name, str):
+            name = name.encode("utf-8")
+        return _accel.attribute_typed(self, 2, name, bool(default), 0.0)
+
     def iter(self, tag: Optional[str] = None) -> Iterator["Element"]:
         # The C cursor walks first_child/next_sibling/parent directly —
         # no expression is built and no engine evaluation happens, so
@@ -400,6 +440,9 @@ _BIND_NAMES = (
     "leptris_element_set_text",
     "leptris_element_attribute_count",
     "leptris_element_attribute_pairs",
+    "leptris_element_attribute_int",
+    "leptris_element_attribute_double",
+    "leptris_element_attribute_bool",
     "leptris_element_first_attribute",
     "leptris_attribute_next",
     "leptris_attribute_get_name",

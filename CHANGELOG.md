@@ -1,6 +1,16 @@
 # Changelog
 
 
+## 1.9.280.1 — 2026-09-30
+
+The typed attribute face: `Element.get_int(name, default)` /
+`get_float` / `get_bool` — the attribute value converts engine-side
+and crosses once (no string decode + Python parse). Semantics
+(pinned by spec): int and double are strict — missing, empty, or
+unparseable values return `default`; bool is truthy on
+`true`/`1`/`yes` (case-insensitive), falsy on `false`/`0`, and
+`default` on anything unrecognized.
+
 ## 1.9.280.0 — 2026-09-30
 
 Adopts libleptris 1.9.280 (pin 1.9.278 -> 1.9.280; no public-header
