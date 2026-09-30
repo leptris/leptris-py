@@ -53,14 +53,14 @@ platform as part of the release build.
 | Linux x86_64 (musl) | abi3 + cp314t | musllinux (Alpine) |
 | Linux aarch64 (glibc / musl) | abi3 + cp314t | native runners |
 | Linux ppc64le | abi3 | full suite under qemu |
-| Linux s390x | abi3 (pending) | engine big-endian fixes in flight |
-| Linux i686 / armv7l (musl) | pending | engine 32-bit layouts in flight |
+| Linux s390x | abi3 | big-endian; full suite under qemu |
+| Linux i686 (glibc + musl) | abi3 | full suite (musl under qemu) |
+| Linux armv7l (musl) | abi3 | full suite under qemu |
 | macOS x86_64 + arm64 | abi3 + cp314t | universal2; x86_64 slice Rosetta-tested |
 | Windows x64 + ARM64 | abi3 + cp314t | suite runs on both architectures |
+| Windows x86 (32-bit) | abi3 | first wheel in 1.9.280.0 (engine #1456) |
 
-The pending rows are wired in the release pipeline and activate
-automatically when the engine releases land ([leptris/leptris#1173,
-#1194](https://github.com/leptris/leptris/issues)).
+Every leg is required: a red leg fails the release before publish.
 
 For a **development checkout** (or to use your own libleptris
 build), the loader also accepts a shared library
@@ -113,6 +113,9 @@ from leptris import sax
 sax.parse(xml, handler)                       # one-shot
 with sax.StreamingParser(handler) as parser:  # push, constant memory
     parser.feed(chunk, final=last)
+
+for rec in sax.records(xml):                  # one-crossing records tape
+    ...                                       # (leptris 1.9.237.1+)
 ```
 
 ## XSLT and XPath version support
@@ -253,6 +256,25 @@ construction, foster parenting, adoption agency, in-select/table
 scope, and the foreign-content rules all match the specification.
 **leptris fully provides HTML.**
 
+Building HTML works like building XML, on an HTML-mode document —
+serialization emits void elements without closing tags and keeps
+`<br>`-style names un-XHTML-ed (libleptris 1.9.225+):
+
+```python
+from leptris import html
+import io
+
+doc = html.create()
+p = doc.create_element("p", {"class": "intro"})
+doc.set_root(p)
+p.text = "hello"
+buf = io.BytesIO(); doc.save_html(buf)   # <p class="intro">hello</p>
+```
+
+`tostring(node, method="html")` forces HTML output for any tree;
+HTML-parsed and `html.create()` documents serialize as HTML by
+default.
+
 ## Migrating from lxml
 
 | lxml | leptris | Notes |
@@ -276,12 +298,14 @@ scope, and the foreign-content rules all match the specification.
 | `elem.nsmap` | **absent** | use `elem.namespace` / `elem.prefix` and `xpath(namespaces=…)` |
 | `etree.XPath` compiled objects | `leptris.XPath(expression)` | compile once, evaluate many; contexts, namespaces, and variables supported |
 | `etree.XSLT` | `leptris.XSLT(stylesheet)` | compile once, apply to any Document — see the [version support matrix](#xslt-and-xpath-version-support) above |
-| parser options (`resolve_entities`, …) | **absent** | libleptris 1.2.0 has no per-parse options |
 | `elem.sourceline` | same | requires libleptris 1.3.0+ |
 | undeclared XPath prefix | raises in lxml | evaluates to an empty nodeset here |
 | ATTLIST default attributes | applied by lxml's default parser | excluded by default (ElementTree-like; XML 1.0 §5 permits either) — `Document.parse(xml, attribute_defaults=True)` opts in |
 | declared non-UTF-8 bytes (UTF-16, latin-1, …) | auto-detected | auto-detected — declared encodings route through the converter, others retry on failure (libleptris 1.9.15+) |
-| parser options (`remove_blank_text`, …) | `etree.XMLParser(remove_blank_text=True)` | `Document.parse(xml, remove_blank_text=True)` — ~35% faster on pretty-printed input; also `attribute_defaults=True`, `recover=True` |
+| parser options (`remove_blank_text`, …) | `etree.XMLParser(remove_blank_text=True)` | `Document.parse(xml, remove_blank_text=True)` — ~35% faster on pretty-printed input; also `attribute_defaults=True`, `recover=True`, and the perf opt-outs `skip_dup_detection=True` / `skip_source_positions=True` (1.9.273+, ~13% faster on diagnostics-free workloads) |
+| bulk attribute read | — | `elem.attribute_pairs()` — all attributes as `(name, value)` pairs in one C pass (1.9.216+) |
+| subtree walk | `elem.iter()` | `elem.visit_entering(fn)` — one callback per node entered, document order, no re-visit after the subtree (1.9.232+) |
+| content digest | — | `elem.digest([drop_whitespace][, attr_order])` — Merkle hash of the subtree; stable across processes (`attr_order`: 1.9.208+) |
 
 ## Layout
 
