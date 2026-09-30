@@ -139,8 +139,12 @@ jobs:
             cibw: "cp39-win32"
             dist: win-x86
             archs_win: "x86"
-            # engine #1174 landed the ILP32 layout pins; the vendored
-            # DLL now builds with -A Win32 (vendor_libleptris.sh)
+            # the vendored DLL now builds with -A Win32
+            # (vendor_libleptris.sh) and the ILP32 layout pins are in
+            # (#1174); the last blocker is the engine's rootmap
+            # generation bump (leptris/leptris#1456) — leg reports
+            # until a pin carries it, then goes required
+            allow_fail: true
           - os: macos-latest
             cibw: "cp39-macosx*"
             dist: macos-universal
