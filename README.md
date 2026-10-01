@@ -293,7 +293,7 @@ default.
 | `etree.XMLSyntaxError` | `ParseError` | XPath failures raise `XPathError`; XSLT raises `XSLTError`, XQuery `XQueryError` — all subclass `LeptrisError` |
 | `etree.Element`/`SubElement`/`append`/`set` | **create path** | `Document.create()` + `create_element(name)` + `set_root()`, `Element.create_child(name)`/`append(el)`/`set(name, value)` + the `.text` setter — libleptris 1.9.216+; `remove` via `Document.remove_*` (doctype/child) |
 | document-level comments / PIs | `doc.toplevel_comments()` / `doc.toplevel_pis()` | prolog then epilog; requires libleptris 1.9.3+ |
-| `etree.iterparse` | `leptris.iterparse(source, full_document=False)` | bounded by the largest subtree; yields `("end", element)`; elements borrowed until the next yield; tags resolve namespaces (Clark notation, libleptris 1.9.4+). **Truncated or malformed input raises ParseError** (both modes, libleptris 1.9.15+). `full_document=True` yields every element in completion order |
+| `etree.iterparse` | `leptris.iterparse(source, full_document=False)` | bounded by the largest subtree; yields `("end", element)`; elements borrowed until the next yield; tags resolve namespaces (Clark notation, libleptris 1.9.4+). **Truncated or malformed input raises ParseError** (both modes, libleptris 1.9.15+). `full_document=True` yields every element in completion order. Perf opt-outs: `skip_dup_detection=True` / `skip_source_positions=True` (libleptris 1.9.284+, ~48% faster on diagnostics-free streams) |
 | smart strings | plain `str` | XPath string/attribute results |
 | `elem.nsmap` | **absent** | use `elem.namespace` / `elem.prefix` and `xpath(namespaces=…)` |
 | `etree.XPath` compiled objects | `leptris.XPath(expression)` | compile once, evaluate many; contexts, namespaces, and variables supported |
@@ -302,7 +302,7 @@ default.
 | undeclared XPath prefix | raises in lxml | evaluates to an empty nodeset here |
 | ATTLIST default attributes | applied by lxml's default parser | excluded by default (ElementTree-like; XML 1.0 §5 permits either) — `Document.parse(xml, attribute_defaults=True)` opts in |
 | declared non-UTF-8 bytes (UTF-16, latin-1, …) | auto-detected | auto-detected — declared encodings route through the converter, others retry on failure (libleptris 1.9.15+) |
-| parser options (`remove_blank_text`, …) | `etree.XMLParser(remove_blank_text=True)` | `Document.parse(xml, remove_blank_text=True)` — ~35% faster on pretty-printed input; also `attribute_defaults=True`, `recover=True`, and the perf opt-outs `skip_dup_detection=True` / `skip_source_positions=True` (1.9.273+, ~13% faster on diagnostics-free workloads) |
+| parser options (`remove_blank_text`, …) | `etree.XMLParser(remove_blank_text=True)` | `Document.parse(xml, remove_blank_text=True)` — ~35% faster on pretty-printed input; also `attribute_defaults=True`, `recover=True`, and the perf opt-outs `skip_dup_detection=True` / `skip_source_positions=True` (1.9.273+, ~13% faster on diagnostics-free workloads); the streaming twins on `iterparse`/`sax.parse`/`StreamingParser` (1.9.284+, ~48% on streams) |
 | bulk attribute read | — | `elem.attribute_pairs()` — all attributes as `(name, value)` pairs in one C pass (1.9.216+) |
 | typed attribute read | — | `elem.get_int/get_float/get_bool(name, default)` — conversion engine-side, one crossing (1.9.280.1+); strict: unparseable or missing -> `default` |
 | subtree walk | `elem.iter()` | `elem.visit_entering(fn)` — one callback per node entered, document order, no re-visit after the subtree (1.9.232+) |

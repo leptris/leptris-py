@@ -153,7 +153,15 @@ _shared_recorder = None
 _shared_recorder_lock = threading.Lock()
 
 
-def parse(xml, handler: SAXHandler) -> None:
+def _skip_flags(skip_dup_detection, skip_source_positions) -> int:
+    """Door A opt-out bits (libleptris 1.9.284+): the same values
+    LeptrisParseFlags uses on the DOM path."""
+    return ((8 if skip_dup_detection else 0)
+            | (16 if skip_source_positions else 0))
+
+
+def parse(xml, handler: SAXHandler, *, skip_dup_detection: bool = False,
+          skip_source_positions: bool = False) -> None:
     """One-shot SAX parse of a complete document.
 
     Runs on a module-level recorder reused across calls (reset —
@@ -170,16 +178,32 @@ def parse(xml, handler: SAXHandler) -> None:
         xml = xml.encode("utf-8")
     handler.last_error = None
     lib, ffi = _ffi.lib, _ffi.ffi
+    flags = _skip_flags(skip_dup_detection, skip_source_positions)
     with _shared_recorder_lock:
-        if _shared_recorder is None:
-            _shared_recorder = lib.leptris_sax_recorder_new()
-            if _shared_recorder == ffi.NULL:
+        if flags:
+            # reset() restores creation-time flags to defaults
+            # (leptris/leptris#1472), so flagged calls cannot share
+            # the reused recorder — fresh per call; the arena-reuse
+            # saving is traded for the skip saving
+            recorder = lib.leptris_sax_recorder_new_flags(flags)
+            if recorder == ffi.NULL:
                 raise ParseError("could not create SAX recorder")
-        lib.leptris_sax_recorder_reset(_shared_recorder)
-        rc = lib.leptris_sax_recorder_feed(
-            _shared_recorder, xml, len(xml), 1
-        )
-        _drain(handler, _shared_recorder, "document")
+            rc = lib.leptris_sax_recorder_feed(recorder, xml, len(xml), 1)
+            _drain(handler, recorder, "document")
+            _raise_if_failed(handler)
+            lib.leptris_sax_recorder_free(recorder)
+            if rc != 0 and handler.last_error is None:
+                raise ParseError("SAX parse failed")
+            return
+        recorder = _shared_recorder
+        if recorder is None:
+            recorder = lib.leptris_sax_recorder_new()
+            if recorder == ffi.NULL:
+                raise ParseError("could not create SAX recorder")
+            _shared_recorder = recorder
+        lib.leptris_sax_recorder_reset(recorder)
+        rc = lib.leptris_sax_recorder_feed(recorder, xml, len(xml), 1)
+        _drain(handler, recorder, "document")
         _raise_if_failed(handler)
     if rc != 0 and handler.last_error is None:
         raise ParseError("SAX parse failed")
@@ -198,7 +222,9 @@ class StreamingParser:
     DeprecationWarning.
     """
 
-    def __init__(self, handler: SAXHandler, *, streaming: bool = True):
+    def __init__(self, handler: SAXHandler, *, streaming: bool = True,
+                 skip_dup_detection: bool = False,
+                 skip_source_positions: bool = False):
         if not streaming:
             import warnings
 
@@ -210,7 +236,11 @@ class StreamingParser:
             )
         self._handler = handler
         handler.last_error = None  # same reuse contract as sax.parse
-        self._recorder = _ffi.lib.leptris_sax_recorder_new()
+        flags = _skip_flags(skip_dup_detection, skip_source_positions)
+        new_recorder = (_ffi.lib.leptris_sax_recorder_new_flags(flags)
+                        if flags
+                        else _ffi.lib.leptris_sax_recorder_new())
+        self._recorder = new_recorder
         if self._recorder == _ffi.ffi.NULL:
             raise ParseError("could not create SAX recorder")
 

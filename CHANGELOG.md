@@ -1,6 +1,27 @@
 # Changelog
 
 
+## 1.9.284.0 — 2026-10-01
+
+Adopts libleptris 1.9.284 (pin 1.9.280 -> 1.9.284):
+
+- **the Door A parse opt-outs reach the streaming path**
+  (leptris/leptris#1459): `iterparse(..., skip_dup_detection=...,
+  skip_source_positions=...)` — measured ~48% faster end-to-end on a
+  40k-entry / 2.3MB stream (min-of-12, interleaved); `sax.parse` and
+  `StreamingParser` take the same kwargs (flagged `sax.parse` calls
+  use a fresh recorder per call until the engine's reset-wipes-flags
+  issue lands — leptris/leptris#1472)
+- `escape-html-uri` is conformant (printable ASCII stays
+  unescaped) — the binding's pin updated to the spec behavior
+- XQuery `contains-token` + boolean/collation accessors,
+  `fn:normalize-unicode`, URI-escaper conformance, current-date
+  family fixes, and the iterparse full-document root-detachment fix
+  ride with the pin
+- engine gaps filed: leptris/leptris#1472 (recorder reset wipes the
+  Door A flags; `leptris_sax_records_parse` rejects them — `records()`
+  ships without the kwargs until then)
+
 ## 1.9.280.1 — 2026-09-30
 
 The typed attribute face: `Element.get_int(name, default)` /

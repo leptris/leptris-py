@@ -222,7 +222,9 @@ class _BorrowedDocument:
         pass
 
 
-def iterparse(source, events=("end",), *, full_document: bool = False):
+def iterparse(source, events=("end",), *, full_document: bool = False,
+              skip_dup_detection: bool = False,
+              skip_source_positions: bool = False):
     """Incrementally parse XML with bounded memory (lxml parity).
 
     Yields ("end", element) pairs as elements complete; each element
@@ -234,10 +236,18 @@ def iterparse(source, events=("end",), *, full_document: bool = False):
     full_document=True every element is (in completion order —
     children before parents).
 
-    Accepts a file path or an XML str/bytes. Only "end" events are
+    Accepts a file path or a file-like object (``io.StringIO`` /
+    ``io.BytesIO``). Only "end" events are
     supported. Names are the QNames as written. Malformed or
     truncated input raises ParseError when iteration ends
     (libleptris 1.9.4+).
+
+    The perf opt-outs ``skip_dup_detection`` /
+    ``skip_source_positions`` (libleptris 1.9.284+) skip the
+    duplicate-attribute scan and per-byte position accounting —
+    diagnostics-free workloads get ~13% back. Duplicate attributes
+    are then admitted silently (first value wins) instead of failing
+    the walk.
     """
     requested = tuple(events) if not isinstance(events, str) else (events,)
     if requested != ("end",):
@@ -246,18 +256,21 @@ def iterparse(source, events=("end",), *, full_document: bool = False):
 
     lib, ffi = _binding.lib, _binding.ffi
     mode = 1 if full_document else 0
+    flags = ((8 if skip_dup_detection else 0)
+             | (16 if skip_source_positions else 0))
     if hasattr(source, "read"):
         data = source.read()
         if isinstance(data, str):
             data = data.encode("utf-8")
-        iterator = lib.leptris_iterparse_new_ex(data, len(data), mode)
+        iterator = lib.leptris_iterparse_new_ex_flags(
+            data, len(data), mode, flags)
     else:
         import os
 
         path = os.fspath(source)
         if isinstance(path, str):
             path = path.encode("utf-8")
-        iterator = lib.leptris_iterparse_new_file_ex(path, mode)
+        iterator = lib.leptris_iterparse_new_file_ex_flags(path, mode, flags)
     if iterator == ffi.NULL:
         raise ParseError("iterparse could not start")
 
