@@ -512,7 +512,10 @@ class TestXPath20Functions:
         assert root.xpath("format-integer(5, 'a')") == "e"
         assert root.xpath("contains-token('a b c', 'b')") is True
         assert root.xpath("codepoints-to-string(65)") == "A"
-        assert root.xpath("escape-html-uri('<a>')") == "&lt;a&gt;"
+        # 1.9.284 conformant (fn:escape-html-uri escapes everything
+        # BUT printable ASCII — '<' and '>' are printable, so kept)
+        assert root.xpath("escape-html-uri('<a>')") == "<a>"
+        assert root.xpath("escape-html-uri('café')") == "caf%C3%A9"
         assert root.xpath("encode-for-uri('a b')") == "a%20b"
         assert root.xpath("string(node-name(//item[1]))") == "item"
 

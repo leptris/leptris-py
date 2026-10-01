@@ -295,6 +295,12 @@ ffi.cdef(
     } LeptrisIterparseMode;
     LeptrisIterparse leptris_iterparse_new_ex(const char* xml, size_t len, int mode);
     LeptrisIterparse leptris_iterparse_new_file_ex(const char* path, int mode);
+    /* streaming Door A opt-outs (#1459, 1.9.284+): the same 8/16
+     * bits as LeptrisParseFlags on the DOM path; 0 matches the
+     * unflagged entries */
+    LeptrisIterparse leptris_iterparse_new_ex_flags(const char* xml, size_t len, int mode, unsigned flags);
+    LeptrisIterparse leptris_iterparse_new_file_ex_flags(const char* path, int mode, unsigned flags);
+    LeptrisSaxRecorder leptris_sax_recorder_new_flags(unsigned flags);
     const char* leptris_iterparse_error(LeptrisIterparse it);
     size_t leptris_iterparse_ns_count(LeptrisIterparse it);
     const char* leptris_iterparse_ns_uri(LeptrisIterparse it, const char* prefix);
