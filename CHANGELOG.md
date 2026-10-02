@@ -1,9 +1,10 @@
 # Changelog
 
 
-## 1.9.289.0 — 2026-10-02
+## 1.9.290.0 — 2026-10-02
 
-Adopts libleptris 1.9.289 (pin 1.9.284 -> 1.9.289):
+Adopts libleptris 1.9.290 (pin 1.9.284 -> 1.9.290; the 1.9.290 tag
+is a consolidation release over 1.9.289 — no header changes):
 
 - **XSLT apply-time top-level params** (#1478 follow-up):
   `transform(doc, params={"n": "//v + 1"})` binds `xsl:param` values
