@@ -23,7 +23,10 @@ directly, with no per-element Python calls:
 
 Rows may also set ``"ns"`` (``{"form": "exact", "uri": ...}``,
 ``"any"``, or the default ``"none"``) to select which same-local-name
-children they bind — e.g. one row per namespace. Rows sharing a name
+children they bind — e.g. one row per namespace. Attribute rows
+(``attributes`` values) accept the same ``"ns"`` (libleptris
+1.9.289+): with ``exact``, the attribute's wire name is the LOCAL
+name and only attributes whose prefix binds ``uri`` match. Rows sharing a name
 materialize as one ``list`` of per-row values in declaration order
 (each member keeps its own row's shape; an absent member is its
 row's absent value).
@@ -115,7 +118,7 @@ def _flatten(spec):
         raise TypeError("a plan spec must be a dict")
     elements = []
 
-    def emit(subtree) -> int:
+    def emit(subtree, nested: bool = False) -> int:
         index = len(elements)
         elements.append(None)
 
@@ -173,13 +176,35 @@ def _flatten(spec):
                     f"plan #{index} ({name}): attribute row "
                     f"{wire_name!r} must be scalar, collection or callback"
                 )
+            where = f"plan #{index} ({name}) attribute {wire_name!r}"
+            ns = row.get("ns", {"form": "none"})
+            if isinstance(ns, str):
+                ns = {"form": ns}
+            if nested and ns.get("form", "none") != "none":
+                # any non-zero ns_form in a child plan's attribute
+                # rows drops the child element entirely (root plans
+                # are unaffected) — leptris/leptris#1490
+                raise ValueError(
+                    f"{where}: attribute ns in nested plans is "
+                    f"pending the engine fix (leptris/leptris#1490)"
+                )
+            form = _NS_FORMS.get(ns.get("form", "none"))
+            if form is None:
+                valid = ", ".join(sorted(_NS_FORMS))
+                raise ValueError(
+                    f"{where}: ns form must be one of: {valid}"
+                )
+            uri = ns.get("uri")
+            if form == _ffi.lib.LEPTRIS_PLAN_NS_EXACT and not (
+                isinstance(uri, str) and uri
+            ):
+                raise ValueError(f"{where}: ns form 'exact' needs a uri")
             attrs[wire_name] = (
                 kind,
                 row.get("type_tag", 0),
-                _predicates(
-                    row.get("predicates"),
-                    f"plan #{index} ({name}) attribute {wire_name!r}",
-                ),
+                _predicates(row.get("predicates"), where),
+                form,
+                uri,
             )
 
         raw_children = subtree.get("children") or []
@@ -208,7 +233,7 @@ def _flatten(spec):
                         f"plan #{index} ({name}) row {wire_name!r}: "
                         f"nested rows need a 'plan'"
                     )
-                child_index = emit(row["plan"])
+                child_index = emit(row["plan"], nested=True)
             row_ns = row.get("ns", {"form": "none"})
             if isinstance(row_ns, str):
                 row_ns = {"form": row_ns}
@@ -313,14 +338,21 @@ class Plan:
             if attr_rows:
                 arr = ffi.new("leptris_attr_plan[]", len(attr_rows))
                 keepalive.append(arr)
-                for slot, (wire_name, (kind, type_tag, predicates)) in zip(
-                    arr, attr_rows
-                ):
+                for slot, (
+                    wire_name, (kind, type_tag, predicates, ns_form, ns_uri)
+                ) in zip(arr, attr_rows):
                     wire_c = ffi.new("char[]", wire_name.encode("utf-8"))
                     keepalive.append(wire_c)
                     slot.wire_name = wire_c
                     slot.kind = kind
                     slot.type_tag = type_tag
+                    slot.ns_form = ns_form
+                    if ns_form == _ffi.lib.LEPTRIS_PLAN_NS_EXACT and ns_uri:
+                        uri_c = ffi.new("char[]", ns_uri.encode("utf-8"))
+                        keepalive.append(uri_c)
+                        slot.ns_uri = uri_c
+                    else:
+                        slot.ns_uri = ffi.NULL
                     if predicates:
                         pred_arr = ffi.new(
                             "leptris_attr_predicate[]", len(predicates)

@@ -73,8 +73,25 @@ class TestSaxParse:
         parser.close()
         assert handler.last_error is None
 
-    def test_records_kwargs_not_yet(self):
-        # leptris/leptris#1472: sax_records_parse rejects the Door A
-        # bits — the kwargs stay unexposed until the engine wires them
-        with pytest.raises(TypeError):
+    def test_flagged_records_still_fails_dup(self):
+        # 1.9.289 accepts the bits on clean input (#1472) but the
+        # one-shot records face still fails the walk on a redefined
+        # attribute — flagged sax.parse is the working skip path
+        with pytest.raises(ParseError):
             sax.records(DUP, skip_dup_detection=True)
+
+    def test_flagged_records_clean(self):
+        recs = sax.records(
+            "<r><i a='1'/></r>", skip_source_positions=True
+        )
+        elements = [r for r in recs if r.kind == "element"]
+        assert [r.name for r in elements] == ["r", "i"]
+
+    def test_flagged_parse_reuses_shared_recorder(self):
+        # flags survive reset since #1472: flagged calls share one
+        # recorder per combination like the unflagged path
+        h = sax.SAXHandler()
+        sax.parse(DUP, h, skip_dup_detection=True)
+        first = sax._shared_flagged_recorders[8]
+        sax.parse(DUP, h, skip_dup_detection=True)
+        assert sax._shared_flagged_recorders[8] is first

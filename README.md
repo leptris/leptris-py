@@ -297,7 +297,7 @@ default.
 | smart strings | plain `str` | XPath string/attribute results |
 | `elem.nsmap` | **absent** | use `elem.namespace` / `elem.prefix` and `xpath(namespaces=…)` |
 | `etree.XPath` compiled objects | `leptris.XPath(expression)` | compile once, evaluate many; contexts, namespaces, and variables supported |
-| `etree.XSLT` | `leptris.XSLT(stylesheet)` | compile once, apply to any Document — see the [version support matrix](#xslt-and-xpath-version-support) above |
+| `etree.XSLT` | `leptris.XSLT(stylesheet)` | compile once, apply to any Document — see the [version support matrix](#xslt-and-xpath-version-support) above; apply-time top-level params: `transform(doc, params={"n": "//v"})` (XPath-expression values, libleptris 1.9.287+) or `string_params` for the serialized result |
 | `elem.sourceline` | same | requires libleptris 1.3.0+ |
 | undeclared XPath prefix | raises in lxml | evaluates to an empty nodeset here |
 | ATTLIST default attributes | applied by lxml's default parser | excluded by default (ElementTree-like; XML 1.0 §5 permits either) — `Document.parse(xml, attribute_defaults=True)` opts in |
