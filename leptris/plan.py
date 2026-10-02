@@ -87,6 +87,33 @@ def _kind(name, where):
         ) from None
 
 
+def _check_row_sizes():
+    """The #1490 size discipline: trailing additive fields grow the
+    spec structs between engine minor releases, so this binding's
+    cdef row stride can legitimately differ from the loaded
+    engine's. A cdef SMALLER than the engine's shifts every row
+    after the first (silently wrong plans); a larger one only
+    appends zero bytes, which plan_build normalizes away."""
+    lib, ffi = _ffi.lib, _ffi.ffi
+    for cdef_name, accessor in (
+        ("leptris_plan_spec", "leptris_plan_spec_struct_size"),
+        ("leptris_element_plan", "leptris_plan_element_row_size"),
+        ("leptris_child_plan", "leptris_plan_child_row_size"),
+        ("leptris_attr_plan", "leptris_plan_attr_row_size"),
+        ("leptris_attr_predicate", "leptris_plan_predicate_row_size"),
+    ):
+        ours = ffi.sizeof(cdef_name)
+        engine = getattr(lib, accessor)()
+        if ours < engine:
+            raise LeptrisError(
+                f"{cdef_name}: cdef row size {ours} < engine row "
+                f"size {engine} — the plan cdef must grow"
+            )
+
+
+_check_row_sizes()
+
+
 def _predicates(raw, where):
     """Normalize a row's ``predicates`` (``{attr: expected, ...}``)
     to a list of (name, value) pairs. AND across pairs; same-name
@@ -177,34 +204,29 @@ def _flatten(spec):
                     f"{wire_name!r} must be scalar, collection or callback"
                 )
             where = f"plan #{index} ({name}) attribute {wire_name!r}"
-            ns = row.get("ns", {"form": "none"})
-            if isinstance(ns, str):
-                ns = {"form": ns}
-            if nested and ns.get("form", "none") != "none":
-                # any non-zero ns_form in a child plan's attribute
-                # rows drops the child element entirely (root plans
-                # are unaffected) — leptris/leptris#1490
-                raise ValueError(
-                    f"{where}: attribute ns in nested plans is "
-                    f"pending the engine fix (leptris/leptris#1490)"
-                )
-            form = _NS_FORMS.get(ns.get("form", "none"))
-            if form is None:
+            # attr-local names: the subtree-level form/ns/uri above
+            # must not be clobbered (a shadowed `form` once made the
+            # element row inherit the last attribute's ns form)
+            attr_ns = row.get("ns", {"form": "none"})
+            if isinstance(attr_ns, str):
+                attr_ns = {"form": attr_ns}
+            attr_form = _NS_FORMS.get(attr_ns.get("form", "none"))
+            if attr_form is None:
                 valid = ", ".join(sorted(_NS_FORMS))
                 raise ValueError(
                     f"{where}: ns form must be one of: {valid}"
                 )
-            uri = ns.get("uri")
-            if form == _ffi.lib.LEPTRIS_PLAN_NS_EXACT and not (
-                isinstance(uri, str) and uri
+            attr_uri = attr_ns.get("uri")
+            if attr_form == _ffi.lib.LEPTRIS_PLAN_NS_EXACT and not (
+                isinstance(attr_uri, str) and attr_uri
             ):
                 raise ValueError(f"{where}: ns form 'exact' needs a uri")
             attrs[wire_name] = (
                 kind,
                 row.get("type_tag", 0),
                 _predicates(row.get("predicates"), where),
-                form,
-                uri,
+                attr_form,
+                attr_uri,
             )
 
         raw_children = subtree.get("children") or []

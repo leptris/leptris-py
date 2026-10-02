@@ -410,6 +410,13 @@ ffi.cdef(
         uint32_t plan_count;
         const leptris_element_plan* plans;
     } leptris_plan_spec;
+    /* #1490 spec-struct size accessors (1.9.291+): the loaded
+     * engine's row sizes — hosts assert cdef_size >= these at load */
+    size_t leptris_plan_spec_struct_size(void);
+    size_t leptris_plan_element_row_size(void);
+    size_t leptris_plan_child_row_size(void);
+    size_t leptris_plan_attr_row_size(void);
+    size_t leptris_plan_predicate_row_size(void);
     typedef enum {
         LEPTRIS_PLAN_VALUE_ELEMENT = 0,
         LEPTRIS_PLAN_VALUE_SCALAR = 1,
