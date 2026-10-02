@@ -1,6 +1,23 @@
 # Changelog
 
 
+## 1.9.291.0 — 2026-10-03
+
+Adopts libleptris 1.9.291 (pin 1.9.290 -> 1.9.291):
+
+- **the #1490 size discipline**: the plan module asserts its cdef
+  row sizes against the loaded engine's `leptris_plan_*_row_size()`
+  accessors at import and refuses loudly on skew — the
+  trailing-additive struct growth can no longer corrupt spec arrays
+  silently
+- **attribute ns forms work in nested child plans** — the 1.9.290.0
+  guard is gone. (The original "child dropped" repro was a binding
+  bug — a shadowed local made the element row inherit the last
+  attribute's ns form; fixed, and commented on leptris/leptris#1490)
+- XPath `prefix:*` is namespace-scoped (no longer fused to
+  any-element opcodes) and `remove_child`/`remove_all_children`
+  leave clean orphans, riding the pin
+
 ## 1.9.290.0 — 2026-10-02
 
 Adopts libleptris 1.9.290 (pin 1.9.284 -> 1.9.290; the 1.9.290 tag

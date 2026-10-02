@@ -67,8 +67,6 @@ ATTR_NS_XML = (
 
 
 class TestPlanAttrNs:
-    # root-level scope: ns on attribute rows of the plan's own
-    # element (nested child plans reject ns until leptris/leptris#1490)
     def _value(self, ns):
         plan = Plan({
             "element_name": "i",
@@ -112,16 +110,20 @@ class TestPlanAttrNs:
     def test_string_shorthand(self):
         assert self._value("none") == "bare"
 
-    def test_nested_attr_ns_rejected(self):
-        with pytest.raises(ValueError, match="1490"):
-            Plan({
-                "element_name": "r",
-                "children": [
-                    {"name": "i", "kind": "nested",
-                     "plan": {"element_name": "i",
-                              "attributes": {"id": {
-                                  "kind": "scalar",
-                                  "ns": {"form": "exact",
-                                         "uri": "urn:a"}}}}},
-                ],
-            })
+    def test_nested_attr_ns_binds(self):
+        # leptris/leptris#1490 fixed (1.9.291): attr ns forms work
+        # in child plans — any non-zero ns_form dropped the child
+        plan = Plan({
+            "element_name": "r",
+            "children": [
+                {"name": "i", "kind": "nested",
+                 "plan": {"element_name": "i",
+                          "attributes": {"id": {
+                              "kind": "scalar",
+                              "ns": {"form": "exact",
+                                     "uri": "urn:a"}}}}},
+            ],
+        })
+        with Document.parse(ATTR_NS_XML) as doc:
+            data = plan(doc)
+        assert data["children"]["i"]["attributes"]["id"] == "A"
