@@ -57,6 +57,11 @@ ffi.cdef(
     LeptrisXslt leptris_xslt_parse(const char* stylesheet_xml, size_t len);
     LeptrisXslt leptris_xslt_parse_file(const char* path);
     LeptrisDocument leptris_xslt_apply(LeptrisXslt xslt, LeptrisDocument doc);
+    /* top-level params at apply time (#1478 follow-up, 1.9.287+):
+     * values in `pairs` are XPATH EXPRESSIONS; string_params values
+     * are literal strings */
+    LeptrisDocument leptris_xslt_apply_params(LeptrisXslt xslt, LeptrisDocument doc, const char* const* pairs, size_t count);
+    char* leptris_xslt_apply_string_params(LeptrisXslt xslt, LeptrisDocument doc, const char* const* pairs, size_t count);
     char* leptris_xslt_apply_string(LeptrisXslt xslt, LeptrisDocument doc);
     void leptris_xslt_free(LeptrisXslt xslt);
     int leptris_exslt_enable(LeptrisDocument doc);
@@ -367,6 +372,11 @@ ffi.cdef(
         uint16_t predicate_count;
         uint16_t pad_pred;
         const leptris_attr_predicate* predicates;
+        /* #1486 (additive trailing fields, 1.9.289+): attribute-level
+         * namespace form; NONE (0) keeps the wire_name behavior */
+        uint8_t ns_form;
+        uint8_t pad_ns;
+        const char* ns_uri;
     } leptris_attr_plan;
     typedef struct {
         const char* wire_name;

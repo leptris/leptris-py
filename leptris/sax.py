@@ -150,6 +150,7 @@ def _raise_if_failed(handler: SAXHandler) -> None:
 
 
 _shared_recorder = None
+_shared_flagged_recorders = {}
 _shared_recorder_lock = threading.Lock()
 
 
@@ -181,26 +182,24 @@ def parse(xml, handler: SAXHandler, *, skip_dup_detection: bool = False,
     flags = _skip_flags(skip_dup_detection, skip_source_positions)
     with _shared_recorder_lock:
         if flags:
-            # reset() restores creation-time flags to defaults
-            # (leptris/leptris#1472), so flagged calls cannot share
-            # the reused recorder — fresh per call; the arena-reuse
-            # saving is traded for the skip saving
-            recorder = lib.leptris_sax_recorder_new_flags(flags)
-            if recorder == ffi.NULL:
-                raise ParseError("could not create SAX recorder")
-            rc = lib.leptris_sax_recorder_feed(recorder, xml, len(xml), 1)
-            _drain(handler, recorder, "document")
-            _raise_if_failed(handler)
-            lib.leptris_sax_recorder_free(recorder)
-            if rc != 0 and handler.last_error is None:
-                raise ParseError("SAX parse failed")
-            return
-        recorder = _shared_recorder
-        if recorder is None:
-            recorder = lib.leptris_sax_recorder_new()
-            if recorder == ffi.NULL:
-                raise ParseError("could not create SAX recorder")
-            _shared_recorder = recorder
+            # flags survive reset since the #1472 fix (1.9.289):
+            # flagged calls share their own recorder per combination
+            # (arena reuse preserved; the unflagged recorder is
+            # untouched)
+            global _shared_flagged_recorders
+            recorder = _shared_flagged_recorders.get(flags)
+            if recorder is None:
+                recorder = lib.leptris_sax_recorder_new_flags(flags)
+                if recorder == ffi.NULL:
+                    raise ParseError("could not create SAX recorder")
+                _shared_flagged_recorders[flags] = recorder
+        else:
+            recorder = _shared_recorder
+            if recorder is None:
+                recorder = lib.leptris_sax_recorder_new()
+                if recorder == ffi.NULL:
+                    raise ParseError("could not create SAX recorder")
+                _shared_recorder = recorder
         lib.leptris_sax_recorder_reset(recorder)
         rc = lib.leptris_sax_recorder_feed(recorder, xml, len(xml), 1)
         _drain(handler, recorder, "document")
@@ -275,14 +274,20 @@ class StreamingParser:
             pass
 
 
-def records(source) -> "SaxRecords":
+def records(source, *, skip_dup_detection: bool = False,
+            skip_source_positions: bool = False) -> "SaxRecords":
     """Parse a whole document into a flat record tape in ONE
     crossing (libleptris 1.9.226+, ``leptris_sax_records_parse``):
     no per-event callback dispatch — iterate the records afterward.
 
+    Accepts the ``skip_dup_detection`` / ``skip_source_positions``
+    opt-outs (libleptris 1.9.289+; the bits were rejected before
+    the #1472 fix).
+
     .. versionadded:: 1.9.237.1
     """
-    return SaxRecords(source)
+    return SaxRecords(source, flags=_skip_flags(
+        skip_dup_detection, skip_source_positions))
 
 
 class SaxRecord:
@@ -351,7 +356,7 @@ class SaxRecords:
     __slots__ = ("_handle", "_count", "_data", "_attrs", "_nattrs",
                  "_buffer")
 
-    def __init__(self, source):
+    def __init__(self, source, flags: int = 0):
         from . import _ffi as _binding
 
         ffi = _binding.ffi
@@ -363,7 +368,8 @@ class SaxRecords:
         if not isinstance(source, bytes):
             raise TypeError("expected str or bytes")
         out = ffi.new("LeptrisSaxRecords**")
-        rc = lib.leptris_sax_records_parse(source, len(source), 0, out)
+        rc = lib.leptris_sax_records_parse(
+            source, len(source), flags, out)
         if rc != 0 or out[0] == ffi.NULL:
             raise ParseError(
                 f"SAX records parse failed (status {rc})"

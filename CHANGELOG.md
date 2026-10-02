@@ -1,6 +1,27 @@
 # Changelog
 
 
+## 1.9.289.0 — 2026-10-02
+
+Adopts libleptris 1.9.289 (pin 1.9.284 -> 1.9.289):
+
+- **XSLT apply-time top-level params** (#1478 follow-up):
+  `transform(doc, params={"n": "//v + 1"})` binds `xsl:param` values
+  before the globals run — values are XPath expressions over the
+  source document (pre-quote string literals, the libxslt
+  convention); `string_params={...}` is the serialized-output twin
+- **attribute-level namespace forms in plans** (#1486): attribute
+  rows accept `"ns"` (`exact` binds by (URI, local) with the wire
+  name as the LOCAL name; `any`; default `none`) — root-level scope;
+  nested plans reject it until the engine fix
+  (leptris/leptris#1490: any non-zero attr ns_form in a child plan
+  drops the child)
+- the #1472 fixes ride the pin: Door A skip flags survive recorder
+  reset (flagged `sax.parse` regains shared-recorder reuse) and
+  `sax_records_parse` accepts the bits — `records()` grows the
+  kwargs (the one-shot face still fails the walk on a redefined
+  attribute; flagged `sax.parse` remains the working skip path)
+
 ## 1.9.284.0 — 2026-10-01
 
 Adopts libleptris 1.9.284 (pin 1.9.280 -> 1.9.284):
