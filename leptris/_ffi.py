@@ -524,6 +524,10 @@ ffi.cdef(
     void leptris_sax_records_free(LeptrisSaxRecords* recs);
     /* programmatic construction (engine creation surface, 1.9.216) */
     LeptrisDocument leptris_document_create(void);
+    /* #1495 (1.9.298+): foreign roots adopt by copy; out_installed
+     * receives the installed (possibly new) handle */
+    LeptrisStatus leptris_document_set_root_ex(
+        LeptrisDocument doc, LeptrisElement root, LeptrisElement* out_installed);
     LeptrisStatus leptris_document_set_root(LeptrisDocument doc, LeptrisElement elem);
     LeptrisElement leptris_element_create(LeptrisDocument doc, const char* name);
     /* single-crossing element construction (1.9.237+): one call
