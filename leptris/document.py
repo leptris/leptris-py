@@ -141,23 +141,34 @@ class Document:
             self,
         )
 
-    def set_root(self, element) -> "Document":
-        """Attach ``element`` as this document's root.
+    def set_root(self, element):
+        """Attach ``element`` as this document's root; returns the
+        INSTALLED element.
 
-        .. versionadded:: 1.9.216.0
+        A same-document element installs as itself. A foreign
+        element (owned by another document) is ADOPTED BY COPY
+        (libleptris 1.9.298+, leptris-ruby#371): the subtree is
+        deep-copied into this document's pool, the source document
+        loses the element (a source root leaves it rootless), and
+        the returned wrapper is the NEW installed handle — keep
+        working with the return value, not the passed element.
+
+        .. versionchanged:: 1.9.298.0 returns the installed Element
+           (was the Document); foreign roots adopt by copy
         """
         if self._freed:
             raise LeptrisError("operation on a closed document")
-        from .element import Element
+        from .element import Element, _make
 
         if not isinstance(element, Element):
             raise TypeError("expected an Element")
-        rc = _ffi.lib.leptris_document_set_root(
-            self._cd(), element._cd()
+        installed = _ffi.ffi.new("LeptrisElement*")
+        rc = _ffi.lib.leptris_document_set_root_ex(
+            self._cd(), element._cd(), installed
         )
         if rc != 0:
             raise LeptrisError(f"set_root failed (status {rc})")
-        return self
+        return _make(installed[0], self)
 
     @classmethod
     def _from_parts(cls, address, registry, buffer=None):

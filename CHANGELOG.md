@@ -1,6 +1,23 @@
 # Changelog
 
 
+## 1.9.298.0 — 2026-10-03
+
+Adopts libleptris 1.9.298 (pin 1.9.291 -> 1.9.298):
+
+- **`set_root` foreign-root adoption** (leptris-ruby#371): a
+  parentless element owned by another document is deep-copied into
+  the target's pool; the source loses the element. `set_root` now
+  RETURNS the installed Element (was the Document) — with adoption
+  the passed handle is not the installed one, so callers keep
+  working with the return value
+- the UCA collation wave rides the pin (fn:compare,
+  collation-key, index-of, distinct-values, sort, and the six
+  string functions honor collation URIs; vendored DUCET) — zero
+  binding change, all existing pins hold
+- XPath `prefix:*` scoping, per-thread mutation-block recycling
+  (19.4 -> 15.1 ns/child), CLI xslt command
+
 ## 1.9.291.0 — 2026-10-03
 
 Adopts libleptris 1.9.291 (pin 1.9.290 -> 1.9.291):
