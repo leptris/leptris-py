@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 1.9.300.0 — 2026-10-03
+
+Adopts libleptris 1.9.300 (pin 1.9.298 -> 1.9.300; no public-header
+changes): the XQuery numeric-aggregate + higher-order-function
+families (QT3 #1182, 1078 cases) and typed-atom channels through
+the numeric functions — all through the existing `leptris.XQuery`
+face.
+
 ## 1.9.298.0 — 2026-10-03
 
 Adopts libleptris 1.9.298 (pin 1.9.291 -> 1.9.298):
