@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 1.9.304.0 — 2026-10-05
+
+Adopts libleptris 1.9.304 (pin 1.9.303 -> 1.9.304; no public-header
+changes): cross-document nodes adopt by copy at the splice seams
+(leptris/leptris#1528 — the #1495 adoption face extended to
+`append_child`-class moves).
+
 ## 1.9.303.0 — 2026-10-05
 
 Adopts libleptris 1.9.303 (pin 1.9.302 -> 1.9.303; no public-header
