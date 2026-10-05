@@ -1,6 +1,17 @@
 # Changelog
 
 
+## 1.9.308.0 — 2026-10-05
+
+Adopts libleptris 1.9.308 (pin 1.9.307 -> 1.9.308; no public-header
+changes): the QT3 #1182 tail — `fn:avg`'s numeric-promotion ladder
+with int64-exact decimal division, typeswitch `case $v as TYPE`
+binding arms, `fn:apply` (zero-arity, atomization, sequence
+members), and `fn:sum`'s per-type canonical duration zero (QT3
+61/61, ctest 1843/1843) — all through the existing `leptris.XQuery`
+face, with the MSVC/LSan fixes riding. The Rust descriptor-ABI
+crate step is engine-internal.
+
 ## 1.9.307.0 — 2026-10-05
 
 Adopts libleptris 1.9.307 (pin 1.9.304 -> 1.9.307; no public-header
