@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 1.9.307.0 — 2026-10-05
+
+Adopts libleptris 1.9.307 (pin 1.9.304 -> 1.9.307; no public-header
+changes): foreign leaf splices adopt by copy and `remove_child`
+gains a type-safe variant engine-side (the binding's mutation face
+is unchanged — `remove_child` remains unexposed).
+
 ## 1.9.304.0 — 2026-10-05
 
 Adopts libleptris 1.9.304 (pin 1.9.303 -> 1.9.304; no public-header
