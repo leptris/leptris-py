@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 1.9.302.0 — 2026-10-05
+
+Adopts libleptris 1.9.302 (pin 1.9.300 -> 1.9.302; no public-header
+changes): XQuery boolean carriers keep falsiness through bindings,
+array atomization in aggregates + `instance-of` integrality, min/max
+NaN coercion and duration comparisons — all through the existing
+`leptris.XQuery` face, with the leak fixes riding along.
+
 ## 1.9.300.0 — 2026-10-03
 
 Adopts libleptris 1.9.300 (pin 1.9.298 -> 1.9.300; no public-header
