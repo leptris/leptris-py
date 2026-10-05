@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 1.9.303.0 — 2026-10-05
+
+Adopts libleptris 1.9.303 (pin 1.9.302 -> 1.9.303; no public-header
+changes): XQuery min/max NaN coercion, duration comparisons and
+boolean results, `fn:sum` zero semantics (+24 QT3) and the duration
+prescan leak fix.
+
 ## 1.9.302.0 — 2026-10-05
 
 Adopts libleptris 1.9.302 (pin 1.9.300 -> 1.9.302; no public-header
