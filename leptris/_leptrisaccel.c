@@ -2160,6 +2160,9 @@ accel_document_root(PyObject *module, PyObject *args)
 #define PK_RAW 4
 #define PK_CONTENT 5
 #define PK_CALLBACK 6
+#define PK_WILDCARD 7 /* #1552 catch-all: engine names the emitted
+                         collection after the row; members are the
+                         unbound remainder (RAW or walked ELEMENTs) */
 
 #define PV_ELEMENT 0
 #define PV_SCALAR 1
@@ -2473,7 +2476,8 @@ plan_convert_element(const void *value, const PlanShapeC *shape,
         const PlanRowC *row = &plan->rows[r];
         if (vi >= (Py_ssize_t)vcount) {
             PyObject *absent =
-                (row->kind == PK_COLLECTION || row->kind == PK_CONTENT)
+                (row->kind == PK_COLLECTION || row->kind == PK_CONTENT
+                 || row->kind == PK_WILDCARD)
                     ? (PyObject *)PyList_New(0) : Py_None;
             if (absent == Py_None) Py_INCREF(absent);
             int rc = plan_row_emit(children, row, absent);
@@ -2498,7 +2502,8 @@ plan_convert_element(const void *value, const PlanShapeC *shape,
             PyObject *item;
             if (run == 0) {
                 item =
-                    (row->kind == PK_COLLECTION || row->kind == PK_CONTENT)
+                    (row->kind == PK_COLLECTION || row->kind == PK_CONTENT
+                 || row->kind == PK_WILDCARD)
                         ? (PyObject *)PyList_New(0) : Py_None;
                 if (item == Py_None) Py_INCREF(item);
             } else {
@@ -2570,6 +2575,10 @@ plan_convert_element(const void *value, const PlanShapeC *shape,
                     matches = (first != NULL)
                         && (int)strlen(first) == row_len
                         && memcmp(first, row_name, (size_t)row_len) == 0;
+                else if (row->kind == PK_WILDCARD)
+                    /* the collection itself carries the row's name;
+                     * its items carry MEMBER names */
+                    matches = name_equal;
                 else
                     matches = (first == NULL);
             }
@@ -2577,7 +2586,8 @@ plan_convert_element(const void *value, const PlanShapeC *shape,
 
         if (!matches) {
             PyObject *absent =
-                (row->kind == PK_COLLECTION || row->kind == PK_CONTENT)
+                (row->kind == PK_COLLECTION || row->kind == PK_CONTENT
+                 || row->kind == PK_WILDCARD)
                     ? (PyObject *)PyList_New(0) : Py_None;
             if (absent == Py_None) Py_INCREF(absent);
             int rc = plan_row_emit(children, row, absent);
@@ -2640,7 +2650,30 @@ plan_convert_element(const void *value, const PlanShapeC *shape,
         /* first consumer of the matched value */
         vi++;
         PyObject *converted;
-        if (vkind == PV_COLLECTION)
+        if (row->kind == PK_WILDCARD) {
+            /* members: ELEMENT members walk the row's own plan
+             * (child_index >= 0); others stay leaves */
+            size_t mcount = Fns.plan_value_count(candidate);
+            converted = PyList_New((Py_ssize_t)mcount);
+            for (size_t m = 0; converted != NULL && m < mcount; m++) {
+                const void *item =
+                    Fns.plan_value_at(candidate, m);
+                PyObject *one;
+                if (row->child_index >= 0
+                    && Fns.plan_value_kind(item) == PV_ELEMENT) {
+                    one = plan_convert_element(
+                        item, shape, row->child_index);
+                } else {
+                    one = plan_leaf(
+                        item, shape->callback_type, row->tag);
+                }
+                if (one == NULL) {
+                    Py_CLEAR(converted);
+                    break;
+                }
+                PyList_SetItem(converted, (Py_ssize_t)m, one);
+            }
+        } else if (vkind == PV_COLLECTION)
             converted = plan_collection_items(
                 candidate, shape->callback_type, row->tag);
         else

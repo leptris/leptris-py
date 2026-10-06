@@ -1,6 +1,31 @@
 # Changelog
 
 
+## 1.9.312.0 — 2026-10-07
+
+Adopts libleptris 1.9.312 (pin 1.9.308 -> 1.9.312) and exposes its
+plan surface:
+
+- **wildcard (catch-all) child rows** (#1552): `{"name": "rest",
+  "kind": "wildcard"}` binds every element child no named sibling
+  row bound — named rows win regardless of position; the row emits
+  a list of RAW serialized subtrees, or walks members through a
+  nested `"plan"` when given. `ns` set explicitly (`"none"`)
+  restricts to the no-namespace remainder; unset is the catch-all
+- **`Plan.serialize(document_or_element)`** (#1551,
+  `leptris_plan_serialize`): serialize a walk back to XML guided by
+  the plan — rows supply wrappers, children emit in document order,
+  and rows/attributes with `"ns_prefix"` emit prefixed names with
+  every distinct `(prefix, uri)` declared exactly once on the root
+- **the #1490 size discipline paid off**: the 1.9.312 struct growth
+  (`ns_prefix` on all three plan structs) was REFUSED loudly at
+  load by the row-size gate until the cdef grew — no silent
+  corruption. Sizes verified 64/56/48 against the engine accessors
+- also rides: `leptris_document_absorb` (NOT bound yet —
+  leptris/leptris#1557: absorbed sources double-free at their own
+  release; binding waits for the engine fix), root-level
+  leaf-splice adoption, and the QT3 closure-carrier finalizations
+
 ## 1.9.308.0 — 2026-10-05
 
 Adopts libleptris 1.9.308 (pin 1.9.307 -> 1.9.308; no public-header

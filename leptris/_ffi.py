@@ -377,6 +377,8 @@ ffi.cdef(
         uint8_t ns_form;
         uint8_t pad_ns;
         const char* ns_uri;
+        /* #1551 (1.9.312+): serialized-output wire prefix */
+        const char* ns_prefix;
     } leptris_attr_plan;
     typedef struct {
         const char* wire_name;
@@ -392,6 +394,8 @@ ffi.cdef(
         uint16_t predicate_count;
         uint16_t pad_pred;
         const leptris_attr_predicate* predicates;
+        /* #1551 (1.9.312+): serialized-output wire prefix */
+        const char* ns_prefix;
     } leptris_child_plan;
     typedef struct {
         const char* element_name;
@@ -404,6 +408,8 @@ ffi.cdef(
         const leptris_child_plan* child_plans;
         uint16_t flags;
         uint16_t pad1;
+        /* #1551 (1.9.312+): the root plan's wire prefix */
+        const char* ns_prefix;
     } leptris_element_plan;
     typedef struct {
         uint32_t abi_version;
@@ -424,6 +430,14 @@ ffi.cdef(
         LEPTRIS_PLAN_VALUE_RAW = 3,
         LEPTRIS_PLAN_VALUE_CALLBACK = 4
     } LeptrisPlanValueKind;
+    /* #1552 (1.9.312+): catch-all child row — named rows win; the
+     * emitted COLLECTION echoes the row's wire_name/type_tag */
+    #define LEPTRIS_PLAN_KIND_WILDCARD 7
+    /* #1551: serialize a walk result back to XML, guided by its
+     * plan (rows supply wrappers + ns_prefix declarations). */
+    char* leptris_plan_serialize(LeptrisPlan plan,
+                                 const LeptrisPlanResult result,
+                                 LeptrisStatus* status);
     void leptris_element_expanded_name(LeptrisElement e, const char** local, const char** prefix, const char** uri);
     /* node-surface parity (lib 1.9.176, #1094) */
     /* RNG validation errors accumulate (#878, libleptris >= 1.9.179):
