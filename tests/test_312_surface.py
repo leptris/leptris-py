@@ -111,6 +111,10 @@ class TestSerialize:
         assert "w:item" in out
         assert 'w:id="7"' in out
         assert "text" in out
+        # leptris/leptris#1565: content-row text currently emits
+        # wrapped in an empty-named element (<>text</>) — flip this
+        # pin to inline text when the engine fix rides a release
+        assert "<>text</>" in out
 
     def test_walk_still_dict(self):
         # plain (no-ns) rows bind no-namespace elements only — the
