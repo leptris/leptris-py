@@ -58,6 +58,7 @@ _KINDS = {
     "raw": _ffi.lib.LEPTRIS_PLAN_KIND_RAW,
     "content": _ffi.lib.LEPTRIS_PLAN_KIND_CONTENT,
     "callback": _ffi.lib.LEPTRIS_PLAN_KIND_CALLBACK,
+    "wildcard": _ffi.lib.LEPTRIS_PLAN_KIND_WILDCARD,
 }
 _NS_FORMS = {"none": 0, "exact": 1, "any": 2}
 _FLAG_BITS = {
@@ -221,12 +222,16 @@ def _flatten(spec):
                 isinstance(attr_uri, str) and attr_uri
             ):
                 raise ValueError(f"{where}: ns form 'exact' needs a uri")
+            attr_prefix = row.get("ns_prefix")
+            if attr_prefix is not None and not isinstance(attr_prefix, str):
+                raise TypeError(f"{where}: ns_prefix must be a str")
             attrs[wire_name] = (
                 kind,
                 row.get("type_tag", 0),
                 _predicates(row.get("predicates"), where),
                 attr_form,
                 attr_uri,
+                attr_prefix,
             )
 
         raw_children = subtree.get("children") or []
@@ -256,6 +261,13 @@ def _flatten(spec):
                         f"nested rows need a 'plan'"
                     )
                 child_index = emit(row["plan"], nested=True)
+            if kind == _ffi.lib.LEPTRIS_PLAN_KIND_WILDCARD and "plan" in row:
+                # a wildcard with a plan walks each remainder member
+                # through it; without one members emit RAW
+                child_index = emit(row["plan"], nested=True)
+            ns_explicit = kind == _ffi.lib.LEPTRIS_PLAN_KIND_WILDCARD and (
+                "ns" in row
+            )
             row_ns = row.get("ns", {"form": "none"})
             if isinstance(row_ns, str):
                 row_ns = {"form": row_ns}
@@ -276,6 +288,12 @@ def _flatten(spec):
                 row.get("predicates"),
                 f"plan #{index} ({name}) row {wire_name!r}",
             )
+            row_prefix = row.get("ns_prefix")
+            if row_prefix is not None and not isinstance(row_prefix, str):
+                raise TypeError(
+                    f"plan #{index} ({name}) row {wire_name!r}: "
+                    f"ns_prefix must be a str"
+                )
             rows.append((wire_name, (kind, row.get("type_tag", 0), child_index)))
             kids.append(
                 (
@@ -286,6 +304,8 @@ def _flatten(spec):
                     row_form,
                     row_ns.get("uri"),
                     row_predicates,
+                    ns_explicit,
+                    row_prefix,
                 )
             )
         # Same-name groups: values echo the producing row's type_tag
@@ -310,6 +330,11 @@ def _flatten(spec):
             kids = _kids2
             rows = [(k[0], (k[1], k[2], k[3])) for k in kids]
 
+        root_prefix = subtree.get("ns_prefix")
+        if root_prefix is not None and not isinstance(root_prefix, str):
+            raise TypeError(
+                f"plan #{index} ({name}): ns_prefix must be a str"
+            )
         elements[index] = {
             "name": name,
             "ns_form": form,
@@ -317,6 +342,7 @@ def _flatten(spec):
             "flags": flags,
             "attrs": attrs,
             "rows": rows,
+            "ns_prefix": root_prefix,
             "kids": kids,
         }
         return index
@@ -349,6 +375,12 @@ class Plan:
             struct.element_name = name_c
             struct.ns_form = element["ns_form"]
             struct.pad0 = 0
+            if element.get("ns_prefix"):
+                prefix_c = ffi.new(
+                    "char[]", element["ns_prefix"].encode("utf-8")
+                )
+                keepalive.append(prefix_c)
+                struct.ns_prefix = prefix_c
             if element["ns_form"] == 1 and element["ns_uri"]:
                 uri_c = ffi.new("char[]", element["ns_uri"].encode("utf-8"))
                 keepalive.append(uri_c)
@@ -361,7 +393,8 @@ class Plan:
                 arr = ffi.new("leptris_attr_plan[]", len(attr_rows))
                 keepalive.append(arr)
                 for slot, (
-                    wire_name, (kind, type_tag, predicates, ns_form, ns_uri)
+                    wire_name,
+                    (kind, type_tag, predicates, ns_form, ns_uri, ns_prefix),
                 ) in zip(arr, attr_rows):
                     wire_c = ffi.new("char[]", wire_name.encode("utf-8"))
                     keepalive.append(wire_c)
@@ -375,6 +408,12 @@ class Plan:
                         slot.ns_uri = uri_c
                     else:
                         slot.ns_uri = ffi.NULL
+                    if ns_prefix:
+                        prefix_c = ffi.new(
+                            "char[]", ns_prefix.encode("utf-8")
+                        )
+                        keepalive.append(prefix_c)
+                        slot.ns_prefix = prefix_c
                     if predicates:
                         pred_arr = ffi.new(
                             "leptris_attr_predicate[]", len(predicates)
@@ -412,6 +451,8 @@ class Plan:
                         row_ns_form,
                         row_ns_uri,
                         predicates,
+                        ns_explicit,
+                        ns_prefix,
                     ) = kid
                     wire_c = ffi.new("char[]", wire_name.encode("utf-8"))
                     keepalive.append(wire_c)
@@ -420,7 +461,10 @@ class Plan:
                     slot.type_tag = type_tag
                     slot.child_plan_index = child_index
                     slot.ns_form = row_ns_form
-                    slot.pad0 = 0
+                    # WILDCARD rows: pad0 marks an EXPLICIT ns_form
+                    # (ns_form 0 then binds no-namespace remainder
+                    # alone; unset pad0 is the catch-all ANY)
+                    slot.pad0 = 1 if ns_explicit else 0
                     if row_ns_form == 1 and row_ns_uri:
                         row_uri_c = ffi.new(
                             "char[]", row_ns_uri.encode("utf-8")
@@ -449,6 +493,12 @@ class Plan:
                             pred_slot.expected_value = p_value_c
                         slot.predicate_count = len(predicates)
                         slot.predicates = pred_arr
+                    if ns_prefix:
+                        prefix_c = ffi.new(
+                            "char[]", ns_prefix.encode("utf-8")
+                        )
+                        keepalive.append(prefix_c)
+                        slot.ns_prefix = prefix_c
                 struct.child_plans = arr
             else:
                 struct.child_plans = ffi.NULL
@@ -483,6 +533,45 @@ class Plan:
                 for element in elements
             ]
             self._shape = _accel.plan_shape_build(blob, PlanCallback)
+
+    def serialize(self, element_or_document) -> str:
+        """Serialize a walk of this plan back to XML, guided by the
+        plan (``leptris_plan_serialize``, libleptris 1.9.312+):
+        rows supply element wrappers (``wire_name`` + ``ns_prefix``),
+        children emit in document order, and every distinct
+        ``(prefix, uri)`` used anywhere is declared exactly once on
+        the output root. Rows without ``ns_prefix`` keep their
+        matching-only shape.
+        """
+        from .document import Document
+        from .element import Element
+
+        if isinstance(element_or_document, Element):
+            element = element_or_document
+            document = element._document
+        elif isinstance(element_or_document, Document):
+            document = element_or_document
+            element = document.getroot()
+        else:
+            raise TypeError("expected an Element or Document")
+        ffi = _ffi.ffi
+        status = ffi.new("LeptrisStatus*")
+        result = _ffi.lib.leptris_plan_walk(
+            document._cd(), element._cd(), self._handle, status
+        )
+        if result == ffi.NULL:
+            raise LeptrisError(f"plan walk failed: status {int(status[0])}")
+        text = _ffi.lib.leptris_plan_serialize(
+            self._handle, result, status
+        )
+        _ffi.lib.leptris_plan_result_free(result)
+        if text == ffi.NULL:
+            raise LeptrisError(
+                f"plan serialization failed: status {int(status[0])}"
+            )
+        out = ffi.string(text).decode("utf-8")
+        _ffi.lib.leptris_free_string(text)
+        return out
 
     def __call__(self, element_or_document) -> Optional[dict]:
         from .document import Document
@@ -614,6 +703,23 @@ def _convert(result, elements, plan_index):
             for i in range(lib.leptris_plan_value_count(value))
         ]
 
+    def wildcard_items(value, row):
+        """A WILDCARD row's COLLECTION members: ELEMENT members walk
+        the row's own plan (when it has one); others stay leaves."""
+        child_index = row[2]
+        out = []
+        for i in range(lib.leptris_plan_value_count(value)):
+            item = lib.leptris_plan_value_at(value, i)
+            if (
+                child_index >= 0
+                and lib.leptris_plan_value_kind(item)
+                == lib.LEPTRIS_PLAN_VALUE_ELEMENT
+            ):
+                out.append(element(item, child_index))
+            else:
+                out.append(leaf(item, row[1]))
+        return out
+
     def value_name(value):
         char = lib.leptris_plan_value_name(value)
         return (
@@ -683,13 +789,20 @@ def _convert(result, elements, plan_index):
         # collection's items carry the row name, content runs none.
         if value_kind != lib.LEPTRIS_PLAN_VALUE_COLLECTION:
             return False
+        if row_kind == lib.LEPTRIS_PLAN_KIND_WILDCARD:
+            # the engine names the emitted collection after the row;
+            # its items carry MEMBER names (b/c/d), not the row's
+            return value_name(value) == wire_name
         count = lib.leptris_plan_value_count(value)
         if count == 0:
             return True  # [] either way — order decides
         item = lib.leptris_plan_value_name(
             lib.leptris_plan_value_at(value, 0)
         )
-        if row_kind == lib.LEPTRIS_PLAN_KIND_COLLECTION:
+        if row_kind in (
+            lib.LEPTRIS_PLAN_KIND_COLLECTION,
+            lib.LEPTRIS_PLAN_KIND_WILDCARD,
+        ):
             return (
                 item != ffi.NULL
                 and ffi.string(item).decode("utf-8", "replace")
@@ -738,6 +851,7 @@ def _convert(result, elements, plan_index):
                 children[wire_name] = [] if row[0] in (
                     lib.LEPTRIS_PLAN_KIND_COLLECTION,
                     lib.LEPTRIS_PLAN_KIND_CONTENT,
+                    lib.LEPTRIS_PLAN_KIND_WILDCARD,
                 ) else None
             if wire_name in multi_names and row[1]:
                 # group rows attribute by the row's type_tag echo
@@ -754,6 +868,7 @@ def _convert(result, elements, plan_index):
                         in (
                             lib.LEPTRIS_PLAN_KIND_COLLECTION,
                             lib.LEPTRIS_PLAN_KIND_CONTENT,
+                            lib.LEPTRIS_PLAN_KIND_WILDCARD,
                         )
                         else None,
                     )
@@ -766,7 +881,10 @@ def _convert(result, elements, plan_index):
                         converted[0] if len(converted) == 1 else converted,
                     )
                 elif kind == lib.LEPTRIS_PLAN_VALUE_COLLECTION:
-                    emit(wire_name, list_items(first, row[1]))
+                    if row[0] == lib.LEPTRIS_PLAN_KIND_WILDCARD:
+                        emit(wire_name, wildcard_items(first, row))
+                    else:
+                        emit(wire_name, list_items(first, row[1]))
                 else:
                     emit(wire_name, leaf(first, row[1]))
                 continue
@@ -793,7 +911,10 @@ def _convert(result, elements, plan_index):
                         converted[0] if len(converted) == 1 else converted,
                     )
                 elif kind == lib.LEPTRIS_PLAN_VALUE_COLLECTION:
-                    emit(wire_name, list_items(child, row[1]))
+                    if row[0] == lib.LEPTRIS_PLAN_KIND_WILDCARD:
+                        emit(wire_name, wildcard_items(child, row))
+                    else:
+                        emit(wire_name, list_items(child, row[1]))
                 else:
                     emit(wire_name, leaf(child, row[1]))
         attrs = {}

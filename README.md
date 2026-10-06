@@ -306,6 +306,7 @@ default.
 | bulk attribute read | — | `elem.attribute_pairs()` — all attributes as `(name, value)` pairs in one C pass (1.9.216+) |
 | typed attribute read | — | `elem.get_int/get_float/get_bool(name, default)` — conversion engine-side, one crossing (1.9.280.1+); strict: unparseable or missing -> `default` |
 | subtree walk | `elem.iter()` | `elem.visit_entering(fn)` — one callback per node entered, document order, no re-visit after the subtree (1.9.232+) |
+| catch-all child rows | — | plan child rows take `{"kind": "wildcard"}` — the unbound remainder as RAW subtrees (or walked via a nested `"plan"`); `Plan.serialize(doc)` serializes a walk back to XML with `ns_prefix` declarations (1.9.312+) |
 | content digest | — | `elem.digest([drop_whitespace][, attr_order])` — Merkle hash of the subtree; stable across processes (`attr_order`: 1.9.208+) |
 
 ## Layout
