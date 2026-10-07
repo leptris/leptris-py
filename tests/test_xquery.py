@@ -2,7 +2,7 @@
 
 import pytest
 
-from leptris import Document, XQuery
+from leptris import Document, XQuery, tostring
 from leptris.error import LeptrisError
 
 SRC = "<r><item v='1'>alpha</item><item v='5'>beta</item></r>"
@@ -45,10 +45,13 @@ class TestXQuery:
             assert XQuery("let $x := 2 return $x * 21")(d) == 42.0
 
     def test_prolog_variable_and_constructor(self):
+        # 1.9.314: element constructors yield REAL NODES (Element
+        # wrappers anchored to the evaluation result), not strings
         with Document.parse(SRC) as d:
-            assert XQuery(
-                "declare variable $n := 3; <out>{$n * 2}</out>"
-            )(d) == "<out>6</out>"
+            out = XQuery("declare variable $n := 3; <out>{$n * 2}</out>")(d)
+            assert isinstance(out, list) and len(out) == 1
+            assert out[0].tag == "out" and out[0].text == "6"
+            assert tostring(out[0]) == b"<out>6</out>"
 
     def test_prolog_namespace(self):
         with Document.parse(SRC) as d:
@@ -122,9 +125,12 @@ class TestXQuery3x:
 
     def test_constructor_as_return(self):
         with Document.parse(SRC) as d:
-            assert XQuery(
-                "for $i in //item return <e v='{$i/@v}'/>"
-            )(d) == ['<e v="1"/>', '<e v="5"/>']
+            res = XQuery("for $i in //item return <e v='{$i/@v}'/>")(d)
+            assert [e.tag for e in res] == ["e", "e"]
+            assert [e.get("v") for e in res] == ["1", "5"]
+            assert [tostring(e) for e in res] == [
+                b'<e v="1"/>', b'<e v="5"/>'
+            ]
 
     def test_cast_error_caught(self):
         with Document.parse(SRC) as d:
@@ -169,11 +175,13 @@ class TestXQueryConformanceTail:
 
     def test_version_declaration(self):
         with Document.parse(SRC) as d:
-            assert XQuery("xquery version '1.0'; <a/>")(d) == "<a/>"
+            assert XQuery("xquery version '1.0'; <a/>")(d)[0].tag == "a"
 
     def test_top_level_empty_constructor(self):
         with Document.parse(SRC) as d:
-            assert XQuery("<e/>")(d) == "<e/>"
+            e = XQuery("<e/>")(d)[0]
+            assert e.tag == "e"
+            assert tostring(e) == b"<e/>"
 
 
 class TestXQueryErrorTaxonomy:
