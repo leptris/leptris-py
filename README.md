@@ -147,7 +147,7 @@ from leptris import Document, XQuery
 
 with Document.parse("<r><item v='1'>alpha</item><item v='5'>beta</item></r>") as doc:
     XQuery("for $i in //item where $i/@v > 1 return string($i)")(doc)  # ['beta']
-    XQuery("declare variable $n := 3; <out>{$n * 2}</out>")(doc)       # '<out>6</out>'
+    XQuery("declare variable $n := 3; <out>{$n * 2}</out>")(doc)       # [<Element 'out'>] — real nodes (1.9.314+); tostring() for markup
     XQuery("declare function local:dbl($x) { $x * 2 }; local:dbl(4)")(doc)  # 8.0
 ```
 

@@ -1,6 +1,20 @@
 # Changelog
 
 
+## 1.9.314.0 — 2026-10-07
+
+Adopts libleptris 1.9.314 (pin 1.9.313 -> 1.9.314; no public-header
+changes). **BEHAVIOR CHANGE, binding-visible**: XQuery element
+constructors now yield REAL NODES — `XQuery("<out>{$n *
+2}</out>")(doc)` returns `[<Element 'out'>]` (anchored to the
+evaluation result, stable across evaluations, mutable) where it
+returned serialized strings before; `tostring()` on the node
+reproduces the old markup exactly. The source-doc anchoring also
+fixed the order-dependent use-after-free in constructor evaluation,
+and the (ast, content)-keyed memo bounds the fold bomb at 83MB peak
+(was 200GB). Binding pins updated; the README XQuery examples now
+show the node results.
+
 ## 1.9.313.0 — 2026-10-07
 
 Adopts libleptris 1.9.313 (pin 1.9.312 -> 1.9.313; no public-header
