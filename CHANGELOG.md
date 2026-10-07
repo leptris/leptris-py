@@ -1,6 +1,22 @@
 # Changelog
 
 
+## 1.9.317.0 — 2026-10-08
+
+Adopts libleptris 1.9.317 (pin 1.9.314 -> 1.9.317):
+
+- **the `unqualified` ns form for element rows** (#1560):
+  `{"ns": {"form": "unqualified"}}` binds the UNPREFIXED spelling
+  regardless of the effective namespace URI — the same row binds
+  under a namespace-less document and a default-xmlns document;
+  prefixed spellings never bind. Element rows only (attribute rows
+  reject it: unprefixed attributes have no namespace by XML rules)
+- **CONTENT rows serialize inline** (#1565, fixed 1.9.316): the
+  #1565 pin flips — text no longer wraps in `<>…</>`
+- the #1564 HTML-ish parse fix, the #1559 whitespace DOM contract
+  (pinned engine-side on every architecture leg), and the XQuery
+  carrier-by-pointer node-identity wave (QT3 fold-left) ride the pin
+
 ## 1.9.314.0 — 2026-10-07
 
 Adopts libleptris 1.9.314 (pin 1.9.313 -> 1.9.314; no public-header

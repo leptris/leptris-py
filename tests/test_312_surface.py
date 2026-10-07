@@ -111,10 +111,10 @@ class TestSerialize:
         assert "w:item" in out
         assert 'w:id="7"' in out
         assert "text" in out
-        # leptris/leptris#1565: content-row text currently emits
-        # wrapped in an empty-named element (<>text</>) — flip this
-        # pin to inline text when the engine fix rides a release
-        assert "<>text</>" in out
+        # leptris/leptris#1565 fixed (1.9.316): content-row text
+        # emits inline at every nesting level
+        assert "<>text</>" not in out
+        assert '<w:item w:id="7">text</w:item>' in out
 
     def test_walk_still_dict(self):
         # plain (no-ns) rows bind no-namespace elements only — the
@@ -133,3 +133,56 @@ class TestSerialize:
         plan = Plan({"element_name": "r"})
         with pytest.raises(TypeError):
             plan.serialize(42)
+
+
+class TestUnqualifiedNs:
+    # leptris/leptris#1560 (1.9.317+): binds the UNPREFIXED spelling
+    # regardless of the effective namespace URI; element rows only
+
+    def _plan(self, ns, root_ns=None):
+        spec = {
+            "element_name": "m",
+            "children": [
+                {"name": "x", "kind": "collection",
+                 "ns": {"form": "exact", "uri": "urn:n"}},
+                # row wire_name = the LOCAL name the form matches
+                {"name": "y", "kind": "collection", "ns": ns},
+            ],
+        }
+        if root_ns:
+            spec["ns"] = root_ns
+        return Plan(spec)
+
+    def test_unprefixed_binds_under_default_xmlns(self):
+        # the default xmlns puts m ITSELF in urn:def — the root row
+        # binds it (exact); the unprefixed <y/> hits the unqualified
+        # row by local name; the prefixed <n:x/> goes to the exact row
+        XML = '<m xmlns="urn:def"><n:x/><y/></m>'
+        root = {"form": "exact", "uri": "urn:def"}
+        with Document.parse(XML) as doc:
+            data = self._plan({"form": "unqualified"}, root)(doc)
+        assert data["children"]["x"] == []
+        # the unprefixed <y/> binds; the empty element's string
+        # value is the collection member
+        assert data["children"]["y"] == [""]
+
+    def test_prefixed_spellings_never_bind(self):
+        XML = '<m xmlns:n="urn:n"><n:y/></m>'
+        with Document.parse(XML) as doc:
+            data = self._plan({"form": "unqualified"})(doc)
+        assert data["children"]["y"] == []
+
+    def test_binds_namespace_less_documents_too(self):
+        with Document.parse('<m><y>hi</y></m>') as doc:
+            data = self._plan({"form": "unqualified"})(doc)
+        assert data["children"]["y"] == ["hi"]
+
+    def test_attr_rows_reject_unqualified(self):
+        with pytest.raises(ValueError, match="element rows only"):
+            Plan({
+                "element_name": "r",
+                "attributes": {"a": {
+                    "kind": "scalar",
+                    "ns": {"form": "unqualified"},
+                }},
+            })

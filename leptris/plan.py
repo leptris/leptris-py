@@ -22,7 +22,9 @@ directly, with no per-element Python calls:
         data = catalog(doc)
 
 Rows may also set ``"ns"`` (``{"form": "exact", "uri": ...}``,
-``"any"``, or the default ``"none"``) to select which same-local-name
+``"any"``, ``"unqualified"`` (1.9.317+: binds the UNPREFIXED
+spelling regardless of the effective namespace URI; element rows
+only), or the default ``"none"``) to select which same-local-name
 children they bind — e.g. one row per namespace. Attribute rows
 (``attributes`` values) accept the same ``"ns"`` (libleptris
 1.9.289+): with ``exact``, the attribute's wire name is the LOCAL
@@ -60,7 +62,7 @@ _KINDS = {
     "callback": _ffi.lib.LEPTRIS_PLAN_KIND_CALLBACK,
     "wildcard": _ffi.lib.LEPTRIS_PLAN_KIND_WILDCARD,
 }
-_NS_FORMS = {"none": 0, "exact": 1, "any": 2}
+_NS_FORMS = {"none": 0, "exact": 1, "any": 2, "unqualified": 3}
 _FLAG_BITS = {
     "mixed_content": 0x1,
     "ordered": 0x2,
@@ -216,6 +218,14 @@ def _flatten(spec):
                 valid = ", ".join(sorted(_NS_FORMS))
                 raise ValueError(
                     f"{where}: ns form must be one of: {valid}"
+                )
+            if attr_form == 3:
+                # LEPTRIS_PLAN_NS_UNQUALIFIED is element-row only:
+                # unprefixed ATTRIBUTES have no namespace by XML
+                # rules, so the form has no attribute-side meaning
+                raise ValueError(
+                    f"{where}: ns form 'unqualified' applies to "
+                    f"element rows only"
                 )
             attr_uri = attr_ns.get("uri")
             if attr_form == _ffi.lib.LEPTRIS_PLAN_NS_EXACT and not (
