@@ -1,6 +1,15 @@
 # Changelog
 
 
+## 1.9.313.0 — 2026-10-07
+
+Adopts libleptris 1.9.313 (pin 1.9.312 -> 1.9.313; no public-header
+changes): absorbed sources defer their release to outstanding
+handles (leptris/leptris#1557). `leptris_document_absorb` remains
+unbound — the binding has no splice/move surface for it yet
+(`set_root` adopts foreign elements by copy), so the API would have
+no visible effect; it binds when cross-document moves land.
+
 ## 1.9.312.0 — 2026-10-07
 
 Adopts libleptris 1.9.312 (pin 1.9.308 -> 1.9.312) and exposes its
