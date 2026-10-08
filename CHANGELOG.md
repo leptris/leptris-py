@@ -8,6 +8,12 @@ changes): the #1585/#1586 descriptor fixes — child-row `ns_uri` is
 retained by the engine's plan build (and its copy freed), and plain
 attribute rows bind leniently. All binding pins hold unchanged.
 
+## 1.9.322.0 — 2026-10-08
+
+Adopts libleptris 1.9.322 (pin 1.9.321 -> 1.9.322; no public-header
+changes): the CLI `validate --xsd` command rides the compiled XSD
+surface (#1075) — the binding face is unchanged.
+
 ## 1.9.321.0 — 2026-10-08
 
 Adopts libleptris 1.9.321 (pin 1.9.319 -> 1.9.321; slices 3+4,
