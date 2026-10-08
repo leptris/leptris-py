@@ -20,6 +20,7 @@ from .document import Document
 from .element import Element
 from .error import (
     DTDError,
+    XSDError,
     LeptrisError,
     ParseError,
     XQueryError,
@@ -30,6 +31,7 @@ from .xpath import XPath
 from . import html
 from .dtd import DTD, DTDErrorEntry
 from .relaxng import RelaxNG
+from .xsd import XSD
 from .xmldiff import Diff, DiffOp, diff
 from .plan import Plan, PlanCallback
 from .schematron import Schematron, SchematronError
@@ -48,6 +50,7 @@ __all__ = [
     "XQueryError",
     "RelaxNGError",
     "RelaxNG",
+    "XSD",
     "diff",
     "Diff",
     "DiffOp",

@@ -59,6 +59,20 @@ class CompiledSource:
             raise self._error("operation on a closed document")
         return target
 
+    def close(self) -> None:
+        """Release the compiled engine object now (idempotent; GC
+        releases it otherwise). Further evaluation raises."""
+        handle = getattr(self, "_handle", None)
+        if handle is not None and handle != _ffi.ffi.NULL:
+            self._free(handle)
+        self._handle = _ffi.ffi.NULL
+
+    def __enter__(self) -> "CompiledSource":
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
     def __del__(self):
         # Guarded: interpreter shutdown may tear the cffi binding
         # down before compiled objects are collected.
