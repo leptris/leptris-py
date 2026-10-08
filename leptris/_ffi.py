@@ -66,6 +66,13 @@ ffi.cdef(
     const char* leptris_xsd_error(LeptrisXsdSchema schema);
     int leptris_xsd_builtin_valid(const char* builtin, const char* lexical);
     int leptris_xsd_simple_valid(LeptrisXsdSchema schema, const char* type_name, const char* lexical);
+    /* slices 3+4 (1.9.321+): content models via NFA + instance
+     * validation with enumerated errors (schema-owned; the next
+     * validate run replaces them) */
+    int leptris_xsd_content_valid(LeptrisXsdSchema schema, const char* element_name, const char* const* child_names, const char* const* child_ns, size_t child_count);
+    int leptris_xsd_validate(LeptrisXsdSchema schema, LeptrisDocument doc);
+    size_t leptris_xsd_error_count(LeptrisXsdSchema schema);
+    const char* leptris_xsd_error_at(LeptrisXsdSchema schema, size_t i);
     LeptrisDocument leptris_xslt_apply(LeptrisXslt xslt, LeptrisDocument doc);
     /* top-level params at apply time (#1478 follow-up, 1.9.287+):
      * values in `pairs` are XPATH EXPRESSIONS; string_params values

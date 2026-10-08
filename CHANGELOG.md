@@ -8,6 +8,24 @@ changes): the #1585/#1586 descriptor fixes — child-row `ns_uri` is
 retained by the engine's plan build (and its copy freed), and plain
 attribute rows bind leniently. All binding pins hold unchanged.
 
+## 1.9.321.0 — 2026-10-08
+
+Adopts libleptris 1.9.321 (pin 1.9.319 -> 1.9.321; slices 3+4,
+#1075) and completes the XSD face:
+
+- **instance validation** — `XSD.validate(document_or_element)`
+  walks element declarations by name, attribute rows (required
+  use + typed values, lenient qualified spellings), text lexical
+  checks for simple-typed elements, and content models (Thompson
+  NFA); failures accumulate and enumerate through the new
+  `error_log` (the next `validate` replaces them)
+- slice-4 boundary documented on leptris/leptris#1075 and in the
+  spec: the root element's own typed attributes are
+  lexical-checked; nested element attributes are checked for
+  required-use and structure but not lexically yet
+- rides the #1585/#1586-shape fixes' follow-through and the
+  whitespace-shape pins
+
 ## 1.9.319.0 — 2026-10-08
 
 Adopts libleptris 1.9.319 (pin 1.9.317 -> 1.9.319) and exposes the
