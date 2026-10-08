@@ -8,6 +8,15 @@ changes): the #1585/#1586 descriptor fixes — child-row `ns_uri` is
 retained by the engine's plan build (and its copy freed), and plain
 attribute rows bind leniently. All binding pins hold unchanged.
 
+## 1.9.323.0 — 2026-10-09
+
+Adopts libleptris 1.9.323 (pin 1.9.322 -> 1.9.323; no public-header
+changes): inline anonymous complex/simpleTypes wire into the XSD
+walk (#1592) — content-model violations on inline types enumerate
+where the whole shape did not participate before. Attribute rows on
+inline anonymous types remain a boundary (required-use and lexical
+checks skip), pinned by spec.
+
 ## 1.9.322.0 — 2026-10-08
 
 Adopts libleptris 1.9.322 (pin 1.9.321 -> 1.9.322; no public-header

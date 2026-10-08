@@ -134,6 +134,51 @@ class TestInstanceValidation:
             assert xsd.validate(doc) is False
         assert any("ref" in e for e in xsd.error_log)
 
+    def test_inline_anonymous_content_models_participate(self):
+        # leptris/leptris#1592 fixed (1.9.323): inline anonymous
+        # complexTypes wire into the instance walk — CONTENT MODEL
+        # violations enumerate (they did not participate before)
+        INLINE = """\
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="book">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="title" type="xs:token"/>
+        <xs:element name="author" type="xs:token"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>
+"""
+        xsd = XSD(INLINE)
+        with Document.parse(
+            '<book><title>t</title><author>a</author></book>'
+        ) as doc:
+            assert xsd.validate(doc) is True
+        for bad in ('<book><author>a</author></book>',
+                    '<book><title>t</title><author>a</author><isbn/></book>'):
+            with Document.parse(bad) as doc:
+                assert xsd.validate(doc) is False
+        assert any(
+            "content model" in e for e in xsd.error_log
+        )
+
+    def test_inline_anonymous_attr_boundary(self):
+        # remaining #1592-adjacent boundary: ATTRIBUTE rows on inline
+        # anonymous types do not participate yet (required-use and
+        # lexical checks both skip) — pinned current behavior
+        INLINE = """\
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="order"><xs:complexType>
+    <xs:attribute name="ref" type="xs:integer" use="required"/>
+  </xs:complexType></xs:element>
+</xs:schema>
+"""
+        xsd = XSD(INLINE)
+        with Document.parse('<order/>') as doc:
+            assert xsd.validate(doc) is True
+            assert xsd.error_log == []
+
     def test_nested_attr_lexical_boundary(self):
         # slice-4 boundary (noted on leptris/leptris#1075): nested
         # element attributes are NOT lexical-checked yet — pinned
