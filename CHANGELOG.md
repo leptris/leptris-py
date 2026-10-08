@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 1.9.320.0 — 2026-10-08
+
+Adopts libleptris 1.9.320 (pin 1.9.319 -> 1.9.320; no public-header
+changes): the #1585/#1586 descriptor fixes — child-row `ns_uri` is
+retained by the engine's plan build (and its copy freed), and plain
+attribute rows bind leniently. All binding pins hold unchanged.
+
 ## 1.9.319.0 — 2026-10-08
 
 Adopts libleptris 1.9.319 (pin 1.9.317 -> 1.9.319) and exposes the
