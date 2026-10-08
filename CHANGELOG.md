@@ -1,6 +1,27 @@
 # Changelog
 
 
+## 1.9.319.0 — 2026-10-08
+
+Adopts libleptris 1.9.319 (pin 1.9.317 -> 1.9.319) and exposes the
+XSD tier-1 surface as `leptris.XSD` (#1075):
+
+- **schema compilation** — `XSD(text)` parses the top-level
+  declaration model; an invalid schema raises `XSDError` with the
+  engine's detail (the error-carrying compile handle is freed)
+- **lexical validation** — `valid_builtin("xs:integer", "42")`
+  against the tier-1 built-in table and `valid(type_name, lexical)`
+  against user simpleTypes (restriction chains validate every
+  hop's facets); both return `None` for an unknown name
+- `declaration_count` and `error()` round out the introspection
+- **compiled objects gained `close()` + context-manager support**
+  (`CompiledSource` base — XSLT, XQuery, RelaxNG, Schematron and
+  XSD all release explicitly now; GC remains the fallback)
+- tier-1 scope is lexical validation only: content models, identity
+  constraints, and instance validation are later slices
+- rides: the arena small-span recycle (−15% tiny-doc row) and the
+  RNG `{n}`-quantifier correctness fix
+
 ## 1.9.317.0 — 2026-10-08
 
 Adopts libleptris 1.9.317 (pin 1.9.314 -> 1.9.317):

@@ -56,6 +56,16 @@ ffi.cdef(
     typedef struct leptris_xslt* LeptrisXslt;
     LeptrisXslt leptris_xslt_parse(const char* stylesheet_xml, size_t len);
     LeptrisXslt leptris_xslt_parse_file(const char* path);
+    /* XSD tier 1 (#1075, 1.9.319+): compilation + lexical
+     * validation. xsd_compile returns an ERROR-CARRYING handle on
+     * failure (xsd_error says why) — free it the same way. */
+    typedef struct leptris_xsd_schema* LeptrisXsdSchema;
+    LeptrisXsdSchema leptris_xsd_compile(const char* xsd_text, size_t len, LeptrisStatus* status);
+    void leptris_xsd_free(LeptrisXsdSchema schema);
+    size_t leptris_xsd_declaration_count(LeptrisXsdSchema schema);
+    const char* leptris_xsd_error(LeptrisXsdSchema schema);
+    int leptris_xsd_builtin_valid(const char* builtin, const char* lexical);
+    int leptris_xsd_simple_valid(LeptrisXsdSchema schema, const char* type_name, const char* lexical);
     LeptrisDocument leptris_xslt_apply(LeptrisXslt xslt, LeptrisDocument doc);
     /* top-level params at apply time (#1478 follow-up, 1.9.287+):
      * values in `pairs` are XPATH EXPRESSIONS; string_params values

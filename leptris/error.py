@@ -30,6 +30,10 @@ class DTDError(LeptrisError):
     """DTD parsing or validation failure."""
 
 
+class XSDError(LeptrisError):
+    """XSD schema compilation or lexical-validation failure."""
+
+
 class RelaxNGError(LeptrisError):
     """RELAX NG schema compilation or validation failed
     (lxml's etree.RelaxNGError equivalent)."""
