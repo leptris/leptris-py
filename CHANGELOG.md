@@ -8,6 +8,21 @@ changes): the #1585/#1586 descriptor fixes — child-row `ns_uri` is
 retained by the engine's plan build (and its copy freed), and plain
 attribute rows bind leniently. All binding pins hold unchanged.
 
+## 1.9.331.0 — 2026-10-10
+
+Adopts libleptris 1.9.331 (pin 1.9.324 -> 1.9.331; seven engine
+releases) and adds `XSD.from_file(path)`
+(`leptris_xsd_compile_file`): relative `xs:include` / `xs:import` /
+`xs:redefine` schemaLocations resolve against the schema's own
+directory; a malformed schema raises `XSDError` with the engine's
+detail, an unreadable path raises "could not be read".
+
+**Both slice-4 boundaries CLOSED engine-side (1.9.331)** — nested
+element attributes and inline-anonymous attribute rows now
+lexical-check and enforce required-use; the boundary pins flipped
+to assert participation. Riding the pin: the second-DOCTYPE and
+parse-diag leak/bounds fixes.
+
 ## 1.9.324.0 — 2026-10-09
 
 Adopts libleptris 1.9.324 (pin 1.9.323 -> 1.9.324; no public-header

@@ -72,6 +72,32 @@ class XSD(_engine.CompiledSource):
         )
         return None if rc == -1 else bool(rc)
 
+    @classmethod
+    def from_file(cls, path) -> "XSD":
+        """Compile a schema from a file path: relative
+        ``xs:include`` / ``xs:import`` / ``xs:redefine``
+        schemaLocations resolve against the schema's own directory
+        (``leptris_xsd_compile_file``, libleptris 1.9.331+).
+
+        .. versionadded:: 1.9.331.0
+        """
+        encoded = str(path).encode("utf-8")
+        handle = _ffi.lib.leptris_xsd_compile_file(
+            encoded, _ffi.ffi.NULL
+        )
+        if handle == _ffi.ffi.NULL:
+            raise XSDError(
+                f"XSD schema file could not be read: {path}"
+            )
+        obj = cls.__new__(cls)
+        obj._source = encoded
+        obj._handle = handle
+        if obj.error() is not None:
+            detail = obj.error()
+            obj.close()
+            raise XSDError(f"XSD schema invalid: {detail}")
+        return obj
+
     def validate(self, document_or_element) -> bool:
         """Validate a Document (or an Element via its document)
         against the schema: element declarations by name, attribute
@@ -82,10 +108,8 @@ class XSD(_engine.CompiledSource):
         Failures accumulate on the schema and enumerate through
         :attr:`error_log` (the next :meth:`validate` replaces them).
 
-        Slice-4 boundary (leptris/leptris#1075): the root element's
-        own typed attributes are lexical-checked; nested element
-        attributes are checked for required-use and structure but
-        not lexically yet.
+        Nested element attributes are lexical-checked (the slice-4
+        boundary closed in libleptris 1.9.331).
 
         .. versionadded:: 1.9.321.0
         """

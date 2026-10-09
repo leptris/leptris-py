@@ -66,6 +66,11 @@ ffi.cdef(
     const char* leptris_xsd_error(LeptrisXsdSchema schema);
     int leptris_xsd_builtin_valid(const char* builtin, const char* lexical);
     int leptris_xsd_simple_valid(LeptrisXsdSchema schema, const char* type_name, const char* lexical);
+    /* 1.9.331+: file compile — relative xs:include/xs:import/
+     * xs:redefine schemaLocations resolve against the schema's own
+     * directory. NULL only when the file cannot be read; malformed
+     * schemas yield an error-carrying handle like xsd_compile. */
+    LeptrisXsdSchema leptris_xsd_compile_file(const char* path, LeptrisStatus* status);
     /* slices 3+4 (1.9.321+): content models via NFA + instance
      * validation with enumerated errors (schema-owned; the next
      * validate run replaces them) */

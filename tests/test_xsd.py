@@ -163,10 +163,10 @@ class TestInstanceValidation:
             "content model" in e for e in xsd.error_log
         )
 
-    def test_inline_anonymous_attr_boundary(self):
-        # remaining #1592-adjacent boundary: ATTRIBUTE rows on inline
-        # anonymous types do not participate yet (required-use and
-        # lexical checks both skip) — pinned current behavior
+    def test_inline_anonymous_attr_participates(self):
+        # the #1592-adjacent boundary CLOSED (1.9.331): attribute
+        # rows on inline anonymous types participate — required-use
+        # and lexical checks both fire
         INLINE = """\
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
   <xs:element name="order"><xs:complexType>
@@ -175,18 +175,22 @@ class TestInstanceValidation:
 </xs:schema>
 """
         xsd = XSD(INLINE)
-        with Document.parse('<order/>') as doc:
+        with Document.parse('<order ref="1"/>') as doc:
             assert xsd.validate(doc) is True
-            assert xsd.error_log == []
+        with Document.parse('<order/>') as doc:
+            assert xsd.validate(doc) is False
+            assert any("required" in e for e in xsd.error_log)
+        with Document.parse('<order ref="oops"/>') as doc:
+            assert xsd.validate(doc) is False
+            assert any("lexical" in e for e in xsd.error_log)
 
-    def test_nested_attr_lexical_boundary(self):
-        # slice-4 boundary (noted on leptris/leptris#1075): nested
-        # element attributes are NOT lexical-checked yet — pinned
-        # current behavior; flips when a later slice closes it
+    def test_nested_attr_lexical_checked(self):
+        # the slice-4 boundary CLOSED (1.9.331, leptris/leptris
+        # #1075): nested element attributes lexical-check now
         xsd = XSD(SCHEMA2)
         with Document.parse('<order ref="3"><item id="oops"/></order>') as doc:
-            assert xsd.validate(doc) is True
-            assert xsd.error_log == []
+            assert xsd.validate(doc) is False
+            assert any("lexical" in e for e in xsd.error_log)
 
     def test_error_log_resets_between_runs(self):
         xsd = XSD(SCHEMA2)
@@ -282,3 +286,38 @@ class TestIdentityConstraints:
         ) as doc:
             assert xsd.validate(doc) is False
             assert xsd.error_log
+
+
+class TestFromFile:
+    # leptris_xsd_compile_file (1.9.331+): relative
+    # xs:include/xs:import/xs:redefine schemaLocations resolve
+    # against the schema's own directory
+
+    def test_compile_file_with_include(self, tmp_path):
+        included = tmp_path / "types.xsd"
+        included.write_text(
+            '<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">'
+            '<xs:complexType name="t">'
+            '<xs:attribute name="n" type="xs:integer" use="required"/>'
+            "</xs:complexType></xs:schema>"
+        )
+        main = tmp_path / "main.xsd"
+        main.write_text(
+            '<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">'
+            '<xs:include schemaLocation="types.xsd"/>'
+            '<xs:element name="r" type="t"/>'
+            "</xs:schema>"
+        )
+        xsd = XSD.from_file(str(main))
+        with Document.parse("<r n=\"5\"/>") as doc:
+            assert xsd.validate(doc) is True
+        with Document.parse("<r/>") as doc:
+            assert xsd.validate(doc) is False
+        with Document.parse("<r n=\"oops\"/>") as doc:
+            assert xsd.validate(doc) is False
+
+    def test_missing_file_raises(self):
+        from leptris.error import XSDError
+
+        with pytest.raises(XSDError, match="could not be read"):
+            XSD.from_file("/nonexistent/schema.xsd")
