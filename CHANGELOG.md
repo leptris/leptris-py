@@ -8,6 +8,18 @@ changes): the #1585/#1586 descriptor fixes — child-row `ns_uri` is
 retained by the engine's plan build (and its copy freed), and plain
 attribute rows bind leniently. All binding pins hold unchanged.
 
+## 1.9.324.0 — 2026-10-09
+
+Adopts libleptris 1.9.324 (pin 1.9.323 -> 1.9.324; no public-header
+changes): **XSD tier-1 slice 6 — identity constraints** (#1075):
+`xs:key` / `xs:keyref` / `xs:unique` flow through `XSD.validate`
+with enumerated errors — duplicate keys and unresolved keyrefs fail
+with messages ("key 'productId': duplicate key tuple", "keyref
+'productId': reference does not resolve to any key"). Constraints
+bind within inline anonymous complexTypes (the engine fixture
+shape); named-type wiring is a boundary. Tier-1's last engine
+slice.
+
 ## 1.9.323.0 — 2026-10-09
 
 Adopts libleptris 1.9.323 (pin 1.9.322 -> 1.9.323; no public-header

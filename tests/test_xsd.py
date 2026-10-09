@@ -215,3 +215,70 @@ class TestInstanceValidation:
         doc.close()
         with pytest.raises(XSDError, match="closed"):
             xsd.validate(doc)
+
+
+IC_SCHEMA = """\
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="catalog">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="product" maxOccurs="unbounded">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="partNum" type="xs:string"/>
+            </xs:sequence>
+            <xs:attribute name="id" type="xs:string"/>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+      <xs:key name="productId">
+        <xs:selector xpath="product"/>
+        <xs:field xpath="@id"/>
+      </xs:key>
+      <xs:keyref name="productRef" refer="productId">
+        <xs:selector xpath="product"/>
+        <xs:field xpath="partNum"/>
+      </xs:keyref>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>
+"""
+
+
+class TestIdentityConstraints:
+    # tier-1 slice 6 (1.9.324+): xs:key / xs:keyref flow through
+    # XSD.validate with enumerated errors — no API change. The
+    # constraints bind within inline anonymous complexTypes (the
+    # engine's own fixture shape); named-type wiring is a boundary.
+
+    def test_unique_keys_and_keyref_valid(self):
+        xsd = XSD(IC_SCHEMA)
+        with Document.parse(
+            '<catalog>'
+            '<product id="A1"><partNum>A1</partNum></product>'
+            '<product id="B2"><partNum>B2</partNum></product>'
+            '</catalog>'
+        ) as doc:
+            assert xsd.validate(doc) is True
+            assert xsd.error_log == []
+
+    def test_duplicate_key_fails(self):
+        xsd = XSD(IC_SCHEMA)
+        with Document.parse(
+            '<catalog>'
+            '<product id="A1"><partNum>A1</partNum></product>'
+            '<product id="A1"><partNum>A1</partNum></product>'
+            '</catalog>'
+        ) as doc:
+            assert xsd.validate(doc) is False
+            assert any("duplicate key" in e for e in xsd.error_log)
+
+    def test_keyref_mismatch_fails(self):
+        xsd = XSD(IC_SCHEMA)
+        with Document.parse(
+            '<catalog>'
+            '<product id="A1"><partNum>ZZ</partNum></product>'
+            '</catalog>'
+        ) as doc:
+            assert xsd.validate(doc) is False
+            assert xsd.error_log
