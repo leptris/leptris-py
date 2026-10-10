@@ -210,13 +210,9 @@ class TestSerializeOps:
             ("scalar", "beta"),
             ("end",),
         ])
-        # leptris/leptris#1625: members emit in REVERSED op order on
-        # Windows — order-insensitive pending the engine fix; flip
-        # to a strict string compare when a release carries it
-        assert out.startswith('<r lang="en">')
-        assert "<item>alpha</item>" in out
-        assert "<item>beta</item>" in out
-        assert out.endswith("</r>") and out.count("<item>") == 2
+        # leptris/leptris#1625 fixed (1.9.336): builder members
+        # emit in op order on every platform — strict again
+        assert out == '<r lang="en"><item>alpha</item><item>beta</item></r>'
 
     def test_prefixed_row(self):
         plan = Plan({

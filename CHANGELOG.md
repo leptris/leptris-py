@@ -8,6 +8,18 @@ changes): the #1585/#1586 descriptor fixes — child-row `ns_uri` is
 retained by the engine's plan build (and its copy freed), and plain
 attribute rows bind leniently. All binding pins hold unchanged.
 
+## 1.9.336.0 — 2026-10-10
+
+Adopts libleptris 1.9.336 (pin 1.9.334 -> 1.9.336; no public-header
+changes):
+
+- **the #1625 fix**: plan-result builder members emit in op order
+  on every platform — the serialize_ops round-trip pin is strict
+  again
+- riding the pin: the #1626 XSD trio (cross-namespace imports,
+  prefixed type refs, named content errors), the #1577 depth-stack
+  sizing fixes, and the qsort total-order law's fallout
+
 ## 1.9.334.0 — 2026-10-10
 
 Adopts libleptris 1.9.334 (pin 1.9.331 -> 1.9.334; three engine
