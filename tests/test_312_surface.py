@@ -186,3 +186,64 @@ class TestUnqualifiedNs:
                     "ns": {"form": "unqualified"},
                 }},
             })
+
+
+class TestSerializeOps:
+    # leptris_plan_result_build (#408, 1.9.334+): host-assembled
+    # results serialize with the plan — no DOM on the host side
+
+    def _plan(self):
+        return Plan({
+            "element_name": "r",
+            "children": [
+                {"name": "item", "kind": "collection"},
+            ],
+        })
+
+    def test_round_trip(self):
+        # child ELEMENT ops reference the producing row; the
+        # serializer wraps rows with their own wire names, so a
+        # ("scalar", v) alone materializes the row's element — an
+        # explicit ELEMENT op for the SAME row would double-wrap
+        out = self._plan().serialize_ops([
+            ("element", 0, None),
+            ("attr", "lang", "en"),
+            ("scalar", "alpha"),
+            ("scalar", "beta"),
+            ("end",),
+        ])
+        assert out == '<r lang="en"><item>alpha</item><item>beta</item></r>'
+
+    def test_prefixed_row(self):
+        plan = Plan({
+            "element_name": "r",
+            "ns": {"form": "exact", "uri": "urn:w"},
+            "ns_prefix": "w",
+            "children": [
+                {"name": "item", "ns": {"form": "exact", "uri": "urn:w"},
+                 "ns_prefix": "w", "kind": "collection"},
+            ],
+        })
+        out = plan.serialize_ops([
+            ("element", 0, None),
+            ("element", 0, 0),
+            ("end",),
+            ("end",),
+        ])
+        assert 'xmlns:w="urn:w"' in out and "<w:item" in out
+
+    def test_unbalanced_program_raises(self):
+        import pytest
+        from leptris.error import LeptrisError
+
+        with pytest.raises(LeptrisError):
+            self._plan().serialize_ops([
+                ("element", 0, None),
+                ("scalar", "dangling"),
+            ])
+
+    def test_unknown_op_rejected(self):
+        import pytest
+
+        with pytest.raises(ValueError, match="unknown plan op"):
+            self._plan().serialize_ops([("bogus",)])

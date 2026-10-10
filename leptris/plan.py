@@ -544,6 +544,94 @@ class Plan:
             ]
             self._shape = _accel.plan_shape_build(blob, PlanCallback)
 
+    def serialize_ops(self, ops) -> str:
+        """Serialize a HOST-ASSEMBLED result guided by this plan
+        (``leptris_plan_result_build`` + serialize, libleptris
+        1.9.334+, #408): build the same tree a walk produces from a
+        flat op program — no DOM needed on the host side.
+
+        ``ops`` is a sequence of tuples:
+
+        - ``("element", plan_index, row_index)`` — open an element
+          produced by that plan row; the ROOT op uses
+          ``row_index=None``
+        - ``("attr", name, value)`` — attribute on the open element
+        - ``("scalar", value)`` — text content (attributed to the
+          open element's row; root content to the plan's content
+          row 0)
+        - ``("end",)`` — close the open element
+
+        The program must balance (every element closed, opening
+        with the root element op).
+
+        .. versionadded:: 1.9.334.0
+        """
+        lib = _ffi.lib
+        ffi = _ffi.ffi
+        keepalive = []
+        arr = ffi.new("leptris_plan_row_op[]", len(ops))
+        # the row whose content the pending SCALAR/ATTR ops belong
+        # to: the row index of the open ELEMENT (root content uses
+        # the plan's own content row, 0)
+        current_row = 0
+        for slot, op in zip(arr, ops):
+            kind = op[0]
+            if kind == "element":
+                slot.kind = 1
+                slot.plan_index = op[1]
+                # row_index None = the ROOT element (UINT32_MAX);
+                # child element ops carry their producing row
+                slot.row_index = (
+                    0xFFFFFFFF if op[2] is None else op[2]
+                )
+                current_row = 0 if op[2] is None else op[2]
+            elif kind == "attr":
+                # attributes hang off the OPEN element: the engine
+                # expects row_index = UINT32_MAX for them
+                slot.kind = 2
+                slot.plan_index = 0
+                slot.row_index = 0xFFFFFFFF
+                name_c = ffi.new(
+                    "char[]", str(op[1]).encode("utf-8")
+                )
+                keepalive.append(name_c)
+                slot.name = name_c
+                value = "" if op[2] is None else str(op[2])
+                value_c = ffi.new("char[]", value.encode("utf-8"))
+                keepalive.append(value_c)
+                slot.value = value_c
+                slot.value_len = len(value.encode("utf-8"))
+            elif kind == "scalar":
+                slot.kind = 0
+                slot.plan_index = 0
+                slot.row_index = current_row
+                value = "" if op[1] is None else str(op[1])
+                value_c = ffi.new("char[]", value.encode("utf-8"))
+                keepalive.append(value_c)
+                slot.value = value_c
+                slot.value_len = len(value.encode("utf-8"))
+            elif kind == "end":
+                slot.kind = 3
+            else:
+                raise ValueError(f"unknown plan op {kind!r}")
+        status = ffi.new("LeptrisStatus*")
+        result = lib.leptris_plan_result_build(
+            self._handle, arr, len(ops), status
+        )
+        if result == ffi.NULL:
+            raise LeptrisError(
+                f"plan result build failed: status {int(status[0])}"
+            )
+        text = lib.leptris_plan_serialize(self._handle, result, status)
+        lib.leptris_plan_result_free(result)
+        if text == ffi.NULL:
+            raise LeptrisError(
+                f"plan serialization failed: status {int(status[0])}"
+            )
+        out = ffi.string(text).decode("utf-8")
+        lib.leptris_free_string(text)
+        return out
+
     def serialize(self, element_or_document) -> str:
         """Serialize a walk of this plan back to XML, guided by the
         plan (``leptris_plan_serialize``, libleptris 1.9.312+):
