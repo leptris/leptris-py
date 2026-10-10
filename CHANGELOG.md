@@ -23,6 +23,11 @@ releases) and exposes the #408 surface:
   plan's content row), and child ELEMENT ops reference their
   producing row — the serializer emits each row's wire name, so a
   bare scalar materializes its row. Programs must balance
+- leptris/leptris#1625 filed from this round's CI:
+  `leptris_plan_result_build` emits collection members in REVERSED
+  op order on Windows (both CI legs agree with each other, disagree
+  with macOS/linux) — the round-trip spec is order-insensitive
+  pending the engine fix
 - riding the pin: the XSD completion wave (order-free `xs:all`,
   strict validation, typed `$value`), the `xs:union` over-accept
   pin (#1615), and parse leak fixes
