@@ -460,6 +460,28 @@ ffi.cdef(
     char* leptris_plan_serialize(LeptrisPlan plan,
                                  const LeptrisPlanResult result,
                                  LeptrisStatus* status);
+    /* #408 (1.9.334+): build a standalone result natively from a
+     * flat op program — the same tree a walk produces, so
+     * plan_serialize serves host-assembled documents with no DOM
+     * mint. Programs must balance (every ELEMENT closed by END,
+     * opening with the root element op; the root's row_index is
+     * UINT32_MAX). Strings are copied. */
+    typedef enum {
+        LEPTRIS_PLAN_OP_SCALAR = 0,
+        LEPTRIS_PLAN_OP_ELEMENT = 1,
+        LEPTRIS_PLAN_OP_ATTR = 2,
+        LEPTRIS_PLAN_OP_END = 3
+    } LeptrisPlanRowOpKind;
+    typedef struct {
+        int kind;
+        uint32_t plan_index;
+        uint32_t row_index;
+        const char* name;
+        const char* value;
+        size_t value_len;
+    } leptris_plan_row_op;
+    LeptrisPlanResult leptris_plan_result_build(LeptrisPlan plan, const leptris_plan_row_op* ops, size_t count, LeptrisStatus* status);
+    LeptrisStatus leptris_element_add_child_addr(uintptr_t parent_addr, uintptr_t child_addr);
     void leptris_element_expanded_name(LeptrisElement e, const char** local, const char** prefix, const char** uri);
     /* node-surface parity (lib 1.9.176, #1094) */
     /* RNG validation errors accumulate (#878, libleptris >= 1.9.179):

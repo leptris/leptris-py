@@ -8,6 +8,25 @@ changes): the #1585/#1586 descriptor fixes — child-row `ns_uri` is
 retained by the engine's plan build (and its copy freed), and plain
 attribute rows bind leniently. All binding pins hold unchanged.
 
+## 1.9.334.0 — 2026-10-10
+
+Adopts libleptris 1.9.334 (pin 1.9.331 -> 1.9.334; three engine
+releases) and exposes the #408 surface:
+
+- **`Plan.serialize_ops(ops)`** — serialize a HOST-ASSEMBLED
+  result guided by the plan (`leptris_plan_result_build` + serialize):
+  a flat op program of `("element", plan_index, row_index)` /
+  `("attr", name, value)` / `("scalar", value)` / `("end",)` tuples
+  builds the same tree a walk produces, with no DOM on the host
+  side. ATTRs attach to the open element (row `UINT32_MAX`), text
+  scalars attribute to the open element's row (root content to the
+  plan's content row), and child ELEMENT ops reference their
+  producing row — the serializer emits each row's wire name, so a
+  bare scalar materializes its row. Programs must balance
+- riding the pin: the XSD completion wave (order-free `xs:all`,
+  strict validation, typed `$value`), the `xs:union` over-accept
+  pin (#1615), and parse leak fixes
+
 ## 1.9.331.0 — 2026-10-10
 
 Adopts libleptris 1.9.331 (pin 1.9.324 -> 1.9.331; seven engine
