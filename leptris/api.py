@@ -47,6 +47,7 @@ def tostring(
     pretty_print: bool = False,
     xml_declaration: Optional[bool] = None,
     method: Optional[str] = None,
+    indent_html: bool = False,
 ) -> Union[bytes, str]:
     """Serialize an Element subtree or a whole Document.
 
@@ -77,20 +78,28 @@ def tostring(
     if method == "html":
         # #1309: force the §16.2 HTML method. Documents take the
         # one-call entry; elements ride the size-aware ext entry
-        # (html_method = 1).
+        # (html_method = 1). indent_html (#1635, 1.9.340+) nests
+        # the layout — everything then rides the ext entry.
         options, _keepalive = serialize_options(
             c_encoding, pretty_print, xml_declaration
         )
-        if elem is None:
+        if elem is None and not indent_html:
             ptr = _ffi.lib.leptris_document_serialize_html(
                 doc._cd(), options
             )
         else:
             ext = ffi.new("LeptrisSerializeExtOptions*")
             ext.html_method = 1
-            ptr = _ffi.lib.leptris_element_serialize_ext_sized(
-                elem._cd(), options, ext, ffi.sizeof("LeptrisSerializeExtOptions")
-            )
+            ext.indent_html = 1 if indent_html else 0
+            if elem is None:
+                ptr = _ffi.lib.leptris_document_serialize_ext_sized(
+                    doc._cd(), options, ext,
+                    ffi.sizeof("LeptrisSerializeExtOptions"),
+                )
+            else:
+                ptr = _ffi.lib.leptris_element_serialize_ext_sized(
+                    elem._cd(), options, ext, ffi.sizeof("LeptrisSerializeExtOptions")
+                )
         if ptr == ffi.NULL:
             raise LeptrisError("serialization failed")
         data = ffi.string(ptr)

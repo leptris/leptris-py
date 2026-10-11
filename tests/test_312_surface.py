@@ -247,3 +247,61 @@ class TestSerializeOps:
 
         with pytest.raises(ValueError, match="unknown plan op"):
             self._plan().serialize_ops([("bogus",)])
+
+
+class TestIndentHtml:
+    # leptris/leptris#1635 (1.9.340+): nested HTML indent — block
+    # children nest (libxml2 htmlNodeDumpFormatOutput format=1);
+    # 0 keeps the historical §16.2 newline-only shape
+
+    # the engine's #1635 fixture shape (with the trailing script
+    # sibling — leptris/leptris#1647: a LAST block child glues to
+    # its parent and loses nesting; pinned fixture avoids it)
+    XML = ('<html><head><title>T</title></head><body>'
+           '<div id="a"><p>x</p><span>y</span></div>'
+           '<script>if (a &lt; b) { c(); }</script></body></html>')
+
+    def test_indent_html_nests(self):
+        from leptris import Document, tostring
+
+        with Document.parse(self.XML) as doc:
+            out = tostring(
+                doc, method="html", pretty_print=True, indent_html=True
+            ).decode()
+        assert out == (
+            "<html>\n"
+            "  <head><title>T</title></head>\n"
+            "  <body>\n"
+            "    <div id=\"a\">\n"
+            "      <p>x</p>\n"
+            "      <span>y</span>\n"
+            "    </div>\n"
+            "    <script>if (a < b) { c(); }</script>\n"
+            "  </body>\n"
+            "</html>"
+        )
+
+    def test_legacy_stays_newline_only(self):
+        from leptris import Document, tostring
+
+        with Document.parse(self.XML) as doc:
+            out = tostring(
+                doc, method="html", pretty_print=True
+            ).decode()
+        # the historical §16.2 shape: newlines, no leading spaces
+        assert "\n  " not in out
+        assert "<html>\n<head>" in out
+
+    def test_save_html_indent(self):
+        import os
+
+        from leptris import Document
+
+        with Document.parse(self.XML) as doc:
+            doc.save_html(
+                os.path.join(
+                    __import__("tempfile").mkdtemp(), "x.html"
+                ),
+                pretty_print=True,
+                indent_html=True,
+            )

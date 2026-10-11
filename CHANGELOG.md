@@ -8,6 +8,26 @@ changes): the #1585/#1586 descriptor fixes — child-row `ns_uri` is
 retained by the engine's plan build (and its copy freed), and plain
 attribute rows bind leniently. All binding pins hold unchanged.
 
+## 1.9.340.0 — 2026-10-11
+
+Adopts libleptris 1.9.340 (pin 1.9.337 -> 1.9.340; three engine
+releases) and exposes the #1635 surface:
+
+- **nested HTML indent** — `tostring(..., method="html",
+  pretty_print=True, indent_html=True)` and
+  `Document.save_html(..., indent_html=True)`: block children nest
+  (libxml2 `htmlNodeDumpFormatOutput format=1`); 0 keeps the
+  historical §16.2 newline-only shape. leptris/leptris#1647 filed
+  (found during exposure): a LAST block child glues to its parent
+  and loses nesting — spec'd against the engine fixture shape that
+  avoids it
+- riding the pin: cycle-creating reparents rejected on all four
+  mutators (#1636 — `append` of an ancestor raises), the
+  `add_child_addr_installed` twin (unbound; the C accelerator's
+  attach sites stay on the argument-address entries — same-document
+  attaches install the argument), and the #1634 HTML in-body
+  table-structure fix
+
 ## 1.9.337.0 — 2026-10-10
 
 Adopts libleptris 1.9.337 (pin 1.9.336 -> 1.9.337; no public-header
