@@ -254,9 +254,9 @@ class TestIndentHtml:
     # children nest (libxml2 htmlNodeDumpFormatOutput format=1);
     # 0 keeps the historical §16.2 newline-only shape
 
-    # the engine's #1635 fixture shape (with the trailing script
-    # sibling — leptris/leptris#1647: a LAST block child glues to
-    # its parent and loses nesting; pinned fixture avoids it)
+    # the engine's #1635 fixture shape; the trailing script
+    # sibling was a #1647 workaround (last block child lost
+    # nesting) until the fix — kept as the historical shape
     XML = ('<html><head><title>T</title></head><body>'
            '<div id="a"><p>x</p><span>y</span></div>'
            '<script>if (a &lt; b) { c(); }</script></body></html>')
@@ -305,3 +305,29 @@ class TestIndentHtml:
                 pretty_print=True,
                 indent_html=True,
             )
+
+    def test_last_block_child_nests(self):
+        # leptris/leptris#1647 (fixed 1.9.341): a LAST block child
+        # used to glue to its parent and lose nesting (the pending
+        # indent flush at close-parent didn't fire for trailing
+        # blocks); the div is now the only body child on purpose
+        from leptris import Document, tostring
+
+        xml = ('<html><head><title>T</title></head><body>'
+               '<div id="a"><p>x</p><span>y</span></div>'
+               '</body></html>')
+        with Document.parse(xml) as doc:
+            out = tostring(
+                doc, method="html", pretty_print=True, indent_html=True
+            ).decode()
+        assert out == (
+            "<html>\n"
+            "  <head><title>T</title></head>\n"
+            "  <body>\n"
+            "    <div id=\"a\">\n"
+            "      <p>x</p>\n"
+            "      <span>y</span>\n"
+            "    </div>\n"
+            "  </body>\n"
+            "</html>"
+        )

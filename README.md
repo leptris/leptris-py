@@ -183,6 +183,23 @@ may be `""`), `callback` (`PlanCallback(value, position, type_tag)`
 `ns={"form": "none"|"exact"|"any", "uri": ...}`, flags via
 `{"mixed_content", "ordered", "cdata", "ns_lenient"}`.
 
+Serialize a walk (`serialize`) or a host-assembled flat op program
+(`serialize_ops`) back to XML; `indent`/`indent_unit` pretty-print
+element boundaries (1.9.341+, #425). `document_ops(ops)` and
+`to_document(element_or_document)` materialize the same results as
+native `Document` trees — attributes verbatim, root namespace
+declarations riding as `xmlns` attributes — with no string round
+trip (1.9.341+, #426):
+
+```python
+doc = catalog.document_ops([
+    ("element", 0, None), ("attr", "id", "c1"),
+    ("element", 0, 0), ("attr", "id", "i1"),
+    ("scalar", "first"), ("end",), ("end",),
+])
+doc.getroot()[0].tag   # "item"
+```
+
 The default surface is the full XPath 3.1 grammar. To pin the
 strict XPath 1.0 surface (3.x-only syntax raises `XPathError`),
 pass `version="1.0"` — on `Document.xpath`, `Element.xpath`, and
@@ -308,7 +325,8 @@ default.
 | bulk attribute read | — | `elem.attribute_pairs()` — all attributes as `(name, value)` pairs in one C pass (1.9.216+) |
 | typed attribute read | — | `elem.get_int/get_float/get_bool(name, default)` — conversion engine-side, one crossing (1.9.280.1+); strict: unparseable or missing -> `default` |
 | subtree walk | `elem.iter()` | `elem.visit_entering(fn)` — one callback per node entered, document order, no re-visit after the subtree (1.9.232+) |
-| host-assembled results | — | `Plan.serialize_ops(ops)` — serialize a flat op program (element/attr/scalar/end tuples) guided by the plan, no DOM needed (1.9.334+) |
+| host-assembled results | — | `Plan.serialize_ops(ops)` — serialize a flat op program (element/attr/scalar/end tuples) guided by the plan, no DOM needed (1.9.334+); `indent`/`indent_unit` pretty-print (1.9.341+) |
+| result -> native tree | — | `Plan.document_ops(ops)` / `Plan.to_document(doc)` — build a `Document` from an op program or a walk, attributes verbatim, `xmlns` declarations on the root, no string round trip (1.9.341+) |
 | catch-all child rows | — | plan child rows take `{"kind": "wildcard"}` — the unbound remainder as RAW subtrees (or walked via a nested `"plan"`); `Plan.serialize(doc)` serializes a walk back to XML with `ns_prefix` declarations (1.9.312+) |
 | content digest | — | `elem.digest([drop_whitespace][, attr_order])` — Merkle hash of the subtree; stable across processes (`attr_order`: 1.9.208+) |
 

@@ -486,6 +486,29 @@ ffi.cdef(
         size_t value_len;
     } leptris_plan_row_op;
     LeptrisPlanResult leptris_plan_result_build(LeptrisPlan plan, const leptris_plan_row_op* ops, size_t count, LeptrisStatus* status);
+    /* #425 (1.9.341+): formatting-bearing serialization.
+     * Zero-initialize; every field defaults to the compact
+     * historical form. indent > 0 pretty-prints element boundaries
+     * (one newline + indent per level; RAW/CONTENT runs stay
+     * verbatim inline); indent_unit replaces the two-space default
+     * per level. options NULL = the compact form. opts_size must
+     * cover the struct as compiled by the caller (growable, #129
+     * pattern). */
+    typedef struct {
+        int indent;
+        const char* indent_unit;
+    } leptris_plan_serialize_options;
+    char* leptris_plan_serialize_ext(LeptrisPlan plan,
+                                     const LeptrisPlanResult result,
+                                     const leptris_plan_serialize_options* options, size_t options_size,
+                                     LeptrisStatus* status);
+    /* #426 (1.9.341+): materialize a built result as a native
+     * document tree — build_result -> this -> the document writer,
+     * with no string round trip. Attributes carry verbatim (wire
+     * spellings); root namespace declarations ride as xmlns
+     * attributes. Only an ELEMENT root is accepted. Caller frees
+     * with leptris_document_free. */
+    LeptrisDocument leptris_document_from_plan_result(LeptrisPlan plan, const LeptrisPlanResult result, LeptrisStatus* status);
     LeptrisStatus leptris_element_add_child_addr(uintptr_t parent_addr, uintptr_t child_addr);
     void leptris_element_expanded_name(LeptrisElement e, const char** local, const char** prefix, const char** uri);
     /* node-surface parity (lib 1.9.176, #1094) */

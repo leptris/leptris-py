@@ -544,29 +544,11 @@ class Plan:
             ]
             self._shape = _accel.plan_shape_build(blob, PlanCallback)
 
-    def serialize_ops(self, ops) -> str:
-        """Serialize a HOST-ASSEMBLED result guided by this plan
-        (``leptris_plan_result_build`` + serialize, libleptris
-        1.9.334+, #408): build the same tree a walk produces from a
-        flat op program — no DOM needed on the host side.
-
-        ``ops`` is a sequence of tuples:
-
-        - ``("element", plan_index, row_index)`` — open an element
-          produced by that plan row; the ROOT op uses
-          ``row_index=None``
-        - ``("attr", name, value)`` — attribute on the open element
-        - ``("scalar", value)`` — text content (attributed to the
-          open element's row; root content to the plan's content
-          row 0)
-        - ``("end",)`` — close the open element
-
-        The program must balance (every element closed, opening
-        with the root element op).
-
-        .. versionadded:: 1.9.334.0
-        """
-        lib = _ffi.lib
+    def _encode_ops(self, ops):
+        """Encode a host op program into the engine's row-op array
+        (returns the array, its length, and the cdata keepalive for
+        the name/value buffers — alive until result_build copies
+        them)."""
         ffi = _ffi.ffi
         keepalive = []
         arr = ffi.new("leptris_plan_row_op[]", len(ops))
@@ -603,8 +585,26 @@ class Plan:
                 slot.value_len = len(value.encode("utf-8"))
             elif kind == "scalar":
                 slot.kind = 0
-                slot.plan_index = 0
-                slot.row_index = current_row
+                # plan_index defaults to the root plan; nested rows
+                # pass the owning child plan's pool index. row_index
+                # defaults to the open element's row; a row that
+                # carries a wire name MATERIALIZES that row's element
+                slot.plan_index = plan_index = (
+                    op[2] if len(op) > 2 and op[2] is not None else 0
+                )
+                # the engine's ELEMENT ops validate plan_index but
+                # SCALAR ops do not — an out-of-pool index reads
+                # garbage (and can crash); reject at the boundary
+                if plan_index >= len(self._elements):
+                    raise ValueError(
+                        f"scalar op plan_index {plan_index} >= "
+                        f"plan pool ({len(self._elements)})"
+                    )
+                slot.row_index = (
+                    op[3]
+                    if len(op) > 3 and op[3] is not None
+                    else current_row
+                )
                 value = "" if op[1] is None else str(op[1])
                 value_c = ffi.new("char[]", value.encode("utf-8"))
                 keepalive.append(value_c)
@@ -614,33 +614,22 @@ class Plan:
                 slot.kind = 3
             else:
                 raise ValueError(f"unknown plan op {kind!r}")
-        status = ffi.new("LeptrisStatus*")
-        result = lib.leptris_plan_result_build(
-            self._handle, arr, len(ops), status
+        return arr, len(ops), keepalive
+
+    def _build_result(self, ops):
+        """Build a standalone result from a host op program."""
+        arr, count, keepalive = self._encode_ops(ops)
+        status = _ffi.ffi.new("LeptrisStatus*")
+        result = _ffi.lib.leptris_plan_result_build(
+            self._handle, arr, count, status
         )
-        if result == ffi.NULL:
+        if result == _ffi.ffi.NULL:
             raise LeptrisError(
                 f"plan result build failed: status {int(status[0])}"
             )
-        text = lib.leptris_plan_serialize(self._handle, result, status)
-        lib.leptris_plan_result_free(result)
-        if text == ffi.NULL:
-            raise LeptrisError(
-                f"plan serialization failed: status {int(status[0])}"
-            )
-        out = ffi.string(text).decode("utf-8")
-        lib.leptris_free_string(text)
-        return out
+        return result
 
-    def serialize(self, element_or_document) -> str:
-        """Serialize a walk of this plan back to XML, guided by the
-        plan (``leptris_plan_serialize``, libleptris 1.9.312+):
-        rows supply element wrappers (``wire_name`` + ``ns_prefix``),
-        children emit in document order, and every distinct
-        ``(prefix, uri)`` used anywhere is declared exactly once on
-        the output root. Rows without ``ns_prefix`` keep their
-        matching-only shape.
-        """
+    def _walk_result(self, element_or_document):
         from .document import Document
         from .element import Element
 
@@ -652,24 +641,176 @@ class Plan:
             element = document.getroot()
         else:
             raise TypeError("expected an Element or Document")
-        ffi = _ffi.ffi
-        status = ffi.new("LeptrisStatus*")
+        status = _ffi.ffi.new("LeptrisStatus*")
         result = _ffi.lib.leptris_plan_walk(
             document._cd(), element._cd(), self._handle, status
         )
-        if result == ffi.NULL:
-            raise LeptrisError(f"plan walk failed: status {int(status[0])}")
-        text = _ffi.lib.leptris_plan_serialize(
-            self._handle, result, status
-        )
-        _ffi.lib.leptris_plan_result_free(result)
+        if result == _ffi.ffi.NULL:
+            raise LeptrisError(
+                f"plan walk failed: status {int(status[0])}"
+            )
+        return result
+
+    def _serialize_result(self, result, indent=0, indent_unit=None):
+        """Serialize a built/walked result; indent > 0 routes to
+        leptris_plan_serialize_ext (#425), else the compact
+        historical form."""
+        lib = _ffi.lib
+        ffi = _ffi.ffi
+        status = ffi.new("LeptrisStatus*")
+        if indent or indent_unit is not None:
+            opts = ffi.new("leptris_plan_serialize_options*")
+            opts.indent = int(indent)
+            unit_c = ffi.NULL
+            if indent_unit is not None:
+                if not isinstance(indent_unit, str):
+                    raise TypeError("indent_unit must be a str")
+                unit_c = ffi.new(
+                    "char[]", indent_unit.encode("utf-8")
+                )
+                opts.indent_unit = unit_c
+            text = lib.leptris_plan_serialize_ext(
+                self._handle, result, opts,
+                ffi.sizeof("leptris_plan_serialize_options"),
+                status,
+            )
+        else:
+            text = lib.leptris_plan_serialize(
+                self._handle, result, status
+            )
         if text == ffi.NULL:
             raise LeptrisError(
                 f"plan serialization failed: status {int(status[0])}"
             )
         out = ffi.string(text).decode("utf-8")
-        _ffi.lib.leptris_free_string(text)
+        lib.leptris_free_string(text)
         return out
+
+    def _document_from_result(self, result):
+        """Materialize a result as a native Document (#426)."""
+        from .document import Document
+        from .element import _accel
+
+        lib = _ffi.lib
+        ffi = _ffi.ffi
+        status = ffi.new("LeptrisStatus*")
+        address = lib.leptris_document_from_plan_result(
+            self._handle, result, status
+        )
+        if address == ffi.NULL:
+            raise LeptrisError(
+                "plan result materialization failed: "
+                f"status {int(status[0])}"
+            )
+        registry = _accel.new_registry()
+        return Document._from_parts(
+            int(ffi.cast("uintptr_t", address)), registry
+        )
+
+    def serialize_ops(
+        self, ops, *, indent: int = 0,
+        indent_unit: Optional[str] = None,
+    ) -> str:
+        """Serialize a HOST-ASSEMBLED result guided by this plan
+        (``leptris_plan_result_build`` + serialize, libleptris
+        1.9.334+, #408): build the same tree a walk produces from a
+        flat op program — no DOM needed on the host side.
+
+        ``ops`` is a sequence of tuples:
+
+        - ``("element", plan_index, row_index)`` — open an element
+          produced by that plan row; the ROOT op uses
+          ``row_index=None``
+        - ``("attr", name, value)`` — attribute on the open element
+        - ``("scalar", value[, plan_index[, row_index]])`` —
+          content attributed to the open element's row (root
+          content to the plan's content row 0). ``plan_index``
+          names the owning plan's pool index for nested rows
+          (default: the root plan, 0); ``row_index`` the row within
+          that plan (default: the open element's row) — a scalar
+          whose row carries a wire name MATERIALIZES that row's
+          element
+        - ``("end",)`` — close the open element
+
+        The program must balance (every element closed, opening
+        with the root element op).
+
+        With ``indent`` > 0 (libleptris 1.9.341+, #425) the output
+        pretty-prints element boundaries (one newline + ``indent``
+        spaces per level; ``indent_unit`` replaces the space unit);
+        RAW/CONTENT runs stay verbatim inline.
+
+        .. versionadded:: 1.9.334.0
+        .. versionchanged:: 1.9.341.0
+           added ``indent``/``indent_unit``.
+        """
+        result = self._build_result(ops)
+        try:
+            return self._serialize_result(
+                result, indent=indent, indent_unit=indent_unit
+            )
+        finally:
+            _ffi.lib.leptris_plan_result_free(result)
+
+    def document_ops(self, ops) -> "Document":
+        """Materialize a HOST-ASSEMBLED result as a native
+        Document (``leptris_document_from_plan_result``, libleptris
+        1.9.341+, #426): the tree ``serialize_ops`` writes, with no
+        string round trip — attributes carry verbatim (wire
+        spellings), root namespace declarations ride as xmlns
+        attributes. Only an ELEMENT root is accepted (the root op
+        is an element op).
+
+        .. versionadded:: 1.9.341.0
+        """
+        result = self._build_result(ops)
+        try:
+            return self._document_from_result(result)
+        finally:
+            _ffi.lib.leptris_plan_result_free(result)
+
+    def serialize(
+        self, element_or_document, *, indent: int = 0,
+        indent_unit: Optional[str] = None,
+    ) -> str:
+        """Serialize a walk of this plan back to XML, guided by the
+        plan (``leptris_plan_serialize``, libleptris 1.9.312+):
+        rows supply element wrappers (``wire_name`` + ``ns_prefix``),
+        children emit in document order, and every distinct
+        ``(prefix, uri)`` used anywhere is declared exactly once on
+        the output root. Rows without ``ns_prefix`` keep their
+        matching-only shape.
+
+        With ``indent`` > 0 (libleptris 1.9.341+, #425) the output
+        pretty-prints element boundaries (one newline + ``indent``
+        spaces per level; ``indent_unit`` replaces the space unit);
+        RAW/CONTENT runs stay verbatim inline.
+
+        .. versionchanged:: 1.9.341.0
+           added ``indent``/``indent_unit``.
+        """
+        result = self._walk_result(element_or_document)
+        try:
+            return self._serialize_result(
+                result, indent=indent, indent_unit=indent_unit
+            )
+        finally:
+            _ffi.lib.leptris_plan_result_free(result)
+
+    def to_document(self, element_or_document) -> "Document":
+        """Materialize a walk of this plan as a native Document
+        (``leptris_document_from_plan_result``, libleptris
+        1.9.341+, #426): plan-supplied wrappers, attributes
+        verbatim, root namespace declarations as xmlns attributes —
+        no string round trip. The Document twin of ``serialize``.
+
+        .. versionadded:: 1.9.341.0
+        """
+        result = self._walk_result(element_or_document)
+        try:
+            return self._document_from_result(result)
+        finally:
+            _ffi.lib.leptris_plan_result_free(result)
 
     def __call__(self, element_or_document) -> Optional[dict]:
         from .document import Document

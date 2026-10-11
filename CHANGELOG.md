@@ -1,6 +1,36 @@
 # Changelog
 
 
+## 1.9.341.0 — 2026-10-12
+
+Adopts libleptris 1.9.341 (pin 1.9.340 -> 1.9.341) and exposes the
+#425/#426 faces:
+
+- **formatting-bearing plan serialization (#425)** —
+  `Plan.serialize`/`Plan.serialize_ops` take `indent` /
+  `indent_unit`: element boundaries pretty-print (one newline +
+  indent per level, custom unit via `indent_unit`; content runs
+  block-indent with verbatim run content); the default keeps the
+  compact historical form
+- **result -> native-document materialization (#426)** —
+  `Plan.document_ops(ops)` builds a `Document` from a host op
+  program and `Plan.to_document(doc)` from a walk: attributes carry
+  verbatim (wire spellings), root namespace declarations ride as
+  `xmlns` attributes (no ns table on minted elements — prefixed
+  `Element.get` lookups need the literal spelling; lxml parity),
+  no string round trip
+- scalar op programs may name the owning plan:
+  `("scalar", value[, plan_index[, row_index]])` — nested rows
+  materialize through their child plan; out-of-pool indices are
+  rejected at the boundary (the engine's SCALAR ops skip
+  plan_index validation — leptris/leptris#1654 filed)
+- leptris/leptris#1647 fixed (engine #1652): a LAST block child
+  nests under `indent_html=True` — regression-pinned
+- riding the pin: the #1644 XSD import-DAG dedup (dml-main
+  >300s/3.5GB -> 0.0s/8MB plateau) and the #1646 absorb/copy
+  ASAN-clean verdicts
+
+
 ## 1.9.320.0 — 2026-10-08
 
 Adopts libleptris 1.9.320 (pin 1.9.319 -> 1.9.320; no public-header
