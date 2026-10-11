@@ -8,6 +8,15 @@ changes): the #1585/#1586 descriptor fixes — child-row `ns_uri` is
 retained by the engine's plan build (and its copy freed), and plain
 attribute rows bind leniently. All binding pins hold unchanged.
 
+## 1.9.337.0 — 2026-10-10
+
+Adopts libleptris 1.9.337 (pin 1.9.336 -> 1.9.337; no public-header
+changes): XSD instance errors carry the owning element and position
+(leptris-ruby#419) — `error_log` entries now read
+``"element 'r' @1:13: attribute 'n': lexical value does not match
+its type"``, surfacing in the binding's strings verbatim. Spec
+pinned.
+
 ## 1.9.336.0 — 2026-10-10
 
 Adopts libleptris 1.9.336 (pin 1.9.334 -> 1.9.336; no public-header
