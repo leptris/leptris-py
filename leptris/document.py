@@ -452,12 +452,30 @@ class Document:
         *,
         encoding: Optional[str] = None,
         pretty_print: bool = False,
+        indent_html: bool = False,
     ) -> None:
         """Save as HTML (libleptris 1.9.225+): void-element shapes
         and block layout regardless of the document's flavor.
 
+        ``indent_html`` (libleptris 1.9.340+) nests the layout —
+        content following mixed text stays indented instead of the
+        historical newline-only shape; meaningful with
+        ``pretty_print``.
+
         .. versionadded:: 1.9.226.0
         """
+        if indent_html:
+            from .api import tostring
+
+            text = tostring(self.getroot(), method="html",
+                            pretty_print=True, indent_html=True)
+            data = (
+                text.encode("utf-8")
+                if isinstance(text, str) else text
+            )
+            with open(os.fspath(path), "wb") as handle:
+                handle.write(data)
+            return
         self.write(
             path,
             encoding=encoding,

@@ -185,6 +185,11 @@ ffi.cdef(
         const char* indent_unit;
         int expand_empty;
         int html_method;
+        /* #1635 (1.9.340+): nested HTML indent — content after
+         * mixed text stays indented, raw text verbatim; 0 = the
+         * historical newline-only shape. Meaningful only with
+         * html_method=1 and indent > 0. */
+        int indent_html;
     } LeptrisSerializeExtOptions;
     char* leptris_document_serialize_ext_sized(
         LeptrisDocument doc, const LeptrisSerializeOptions* options,

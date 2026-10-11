@@ -304,6 +304,7 @@ default.
 | ATTLIST default attributes | applied by lxml's default parser | excluded by default (ElementTree-like; XML 1.0 §5 permits either) — `Document.parse(xml, attribute_defaults=True)` opts in |
 | declared non-UTF-8 bytes (UTF-16, latin-1, …) | auto-detected | auto-detected — declared encodings route through the converter, others retry on failure (libleptris 1.9.15+) |
 | parser options (`remove_blank_text`, …) | `etree.XMLParser(remove_blank_text=True)` | `Document.parse(xml, remove_blank_text=True)` — ~35% faster on pretty-printed input; also `attribute_defaults=True`, `recover=True`, and the perf opt-outs `skip_dup_detection=True` / `skip_source_positions=True` (1.9.273+, ~13% faster on diagnostics-free workloads); the streaming twins on `iterparse`/`sax.parse`/`StreamingParser` (1.9.284+, ~48% on streams) |
+| nested HTML indent | — | `tostring(..., method="html", pretty_print=True, indent_html=True)` / `save_html(..., indent_html=True)` — block children nest; default stays §16.2 newline-only (1.9.340+) |
 | bulk attribute read | — | `elem.attribute_pairs()` — all attributes as `(name, value)` pairs in one C pass (1.9.216+) |
 | typed attribute read | — | `elem.get_int/get_float/get_bool(name, default)` — conversion engine-side, one crossing (1.9.280.1+); strict: unparseable or missing -> `default` |
 | subtree walk | `elem.iter()` | `elem.visit_entering(fn)` — one callback per node entered, document order, no re-visit after the subtree (1.9.232+) |
