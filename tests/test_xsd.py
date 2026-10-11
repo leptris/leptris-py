@@ -132,7 +132,9 @@ class TestInstanceValidation:
         xsd = XSD(SCHEMA2)
         with Document.parse('<order ref="oops"><item id="1"/></order>') as doc:
             assert xsd.validate(doc) is False
-        assert any("ref" in e for e in xsd.error_log)
+        # 1.9.337 (leptris-ruby#419): errors carry the owning
+        # element and position
+        assert any("ref" in e and "@1:" in e for e in xsd.error_log)
 
     def test_inline_anonymous_content_models_participate(self):
         # leptris/leptris#1592 fixed (1.9.323): inline anonymous
