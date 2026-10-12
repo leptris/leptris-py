@@ -200,8 +200,8 @@ class TestDocumentOps:
             ])
 
     def test_bad_plan_index_raises_not_crashes(self):
-        # the engine's SCALAR ops skip plan_index validation — the
-        # binding rejects out-of-pool indices at the boundary
+        # out-of-pool indices reject at the boundary (defense in
+        # depth — the engine also validates since 1.9.343, #1654)
         plan = Plan({"element_name": "r"})
         with pytest.raises(ValueError, match="plan pool"):
             plan.serialize_ops([

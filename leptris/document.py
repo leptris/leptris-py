@@ -30,6 +30,8 @@ _DIAG_KIND_NAMES = {
     7: "ATTR_VALUE_INVALID",
     8: "CHAR_CONTENT_INVALID",
     9: "RECOVER",
+    10: "MISMATCHED_TAG",
+    11: "UNCLOSED_ELEMENT",
 }
 from .error import LeptrisError, ParseError, status_message
 
@@ -194,10 +196,15 @@ class Document:
         skip_dup_detection: bool = False,
         skip_source_positions: bool = False,
     ) -> "Document":
-        """Parse XML. With recover=True a malformed document yields an
-        empty (rootless) Document instead of raising ParseError
-        (libleptris 1.9.0 recover mode — partial-tree recovery is not
-        yet implemented upstream). With attribute_defaults=True,
+        """Parse XML. With recover=True structural errors keep the
+        best-effort tree (XML_PARSE_RECOVER parity, libleptris
+        1.9.344+): a close tag naming an open ancestor closes the
+        intermediates implicitly, a stray close is dropped, and an
+        element still open at EOF closes — each recovery records a
+        parse diagnostic (see ``parse_diagnostics``); still-
+        unrecoverable failures (e.g. encoding) yield an empty
+        (rootless) Document instead of raising ParseError. With
+        attribute_defaults=True,
         DTD ATTLIST default (and #FIXED) values materialize on
         matching elements (lxml applies them by default; the XML 1.0
         spec permits either — libleptris 1.9.8 defaults to excluding

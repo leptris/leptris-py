@@ -106,14 +106,72 @@ class TestRecover:
         with pytest.raises(ParseError):
             Document.parse("<broken")
 
-    def test_recover_yields_rootless_document(self):
+    def test_recover_keeps_best_effort_tree(self):
+        # libleptris 1.9.344/#1660 (was: rootless empty document —
+        # partial-tree recovery upstream now matches
+        # XML_PARSE_RECOVER)
+        doc = Document.parse("<broken></wrong>", recover=True)
+        assert doc.getroot().tag == "broken"
+        assert [d.kind for d in doc.parse_diagnostics] == [
+            "MISMATCHED_TAG", "UNCLOSED_ELEMENT"
+        ]
+        doc.close()
+
+    def test_unclosed_bare_root_still_rootless(self):
+        # EOF recovery commits only once the root has content — a
+        # bare unclosed root stays on the #547 empty fallback
         doc = Document.parse("<broken", recover=True)
         assert doc.getroot() is None
+        assert doc.parse_diagnostics == []
         doc.close()
 
     def test_recover_accepts_valid_document(self):
         with Document.parse("<r><a/></r>", recover=True) as doc:
             assert doc.xpath("count(//a)") == 1.0
+            assert doc.parse_diagnostics == []
+
+    def test_mismatched_close_closes_intermediates(self):
+        # a close naming an open ANCESTOR closes the intermediates
+        # implicitly (libxml2 semantics), one diagnostic each
+        with Document.parse("<r><a><b></r>", recover=True) as doc:
+            root = doc.getroot()
+            assert root.tag == "r"
+            assert [c.tag for c in root] == ["a"]
+            assert [c.tag for c in root[0]] == ["b"]
+            kinds = [d.kind for d in doc.parse_diagnostics]
+            assert kinds == ["UNCLOSED_ELEMENT", "UNCLOSED_ELEMENT"]
+            assert "closed implicitly by </r>" in (
+                doc.parse_diagnostics[0].message
+            )
+
+    def test_stray_close_dropped(self):
+        with Document.parse(
+            "<r><a></a></b><c/></r>", recover=True
+        ) as doc:
+            root = doc.getroot()
+            assert [c.tag for c in root] == ["a", "c"]
+            (diag,) = doc.parse_diagnostics
+            assert diag.kind == "MISMATCHED_TAG"
+            assert "Stray close tag </b> dropped" in diag.message
+
+    def test_unclosed_at_eof_innermost_first(self):
+        with Document.parse("<r><a><b>text", recover=True) as doc:
+            assert doc.getroot().tag == "r"
+            assert [d.kind for d in doc.parse_diagnostics] == [
+                "UNCLOSED_ELEMENT"
+            ] * 3
+            assert [
+                d.message.split()[1] for d in doc.parse_diagnostics
+            ] == ["b", "a", "r"]
+
+    def test_unrecoverable_failure_still_rootless(self):
+        # the #547 empty-document fallback now only covers
+        # still-unrecoverable failures (content after the root
+        # closed); no recovery diagnostics for it
+        doc = Document.parse("<r/></x>", recover=True)
+        assert doc.getroot() is None
+        assert doc.parse_diagnostics == []
+        doc.close()
 
 
 class TestFreshDocumentRegression:

@@ -149,6 +149,11 @@ ffi.cdef(
         LEPTRIS_DIAG_ATTR_VALUE_INVALID,
         LEPTRIS_DIAG_CHAR_CONTENT_INVALID,
         LEPTRIS_DIAG_RECOVER,
+        /* #1660 (1.9.344+): structural recoveries — a close tag did
+         * not match the open element (dropped, or closed ancestors
+         * implicitly), and an element still open at EOF. */
+        LEPTRIS_DIAG_MISMATCHED_TAG,
+        LEPTRIS_DIAG_UNCLOSED_ELEMENT,
         LEPTRIS_DIAG_COUNT_
     } LeptrisDiagKind;
     /* parse recover channel (#1200, 1.9.206+) */
