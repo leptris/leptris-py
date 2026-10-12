@@ -1,6 +1,21 @@
 # Changelog
 
 
+## 1.9.346.0 — 2026-10-13
+
+Adopts libleptris 1.9.346 (pin 1.9.344 -> 1.9.346; two engine
+releases, no public-header changes — pin-only ride):
+
+- leptris/leptris#1664 — reserved prefixes (`xml:`) resolve by
+  definition on declaration-free (HTML-parsed) trees in the
+  attribute-records namespace face
+  (`leptris_attribute_namespace_uri`; mirrored in the cdef, no
+  binding-level API change)
+- XSD namespace-keyed lookups in the merged-import schema
+  (leptris-ruby#439/#440) — covered by the binding's cross-ns
+  import specs, all green
+
+
 ## 1.9.344.0 — 2026-10-12
 
 Adopts libleptris 1.9.344 (pin 1.9.341 -> 1.9.344; three engine
