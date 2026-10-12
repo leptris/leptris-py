@@ -1,6 +1,29 @@
 # Changelog
 
 
+## 1.9.344.0 — 2026-10-12
+
+Adopts libleptris 1.9.344 (pin 1.9.341 -> 1.9.344; three engine
+releases) and rides the #1660 recover parity:
+
+- **`recover=True` now matches `XML_PARSE_RECOVER`** — structural
+  errors keep the best-effort tree: a close tag naming an open
+  ancestor closes the intermediates implicitly, a stray close is
+  dropped, and an element still open at EOF closes. Each recovery
+  records a parse diagnostic — the new kinds surface as
+  `MISMATCHED_TAG` and `UNCLOSED_ELEMENT` on
+  `Document.parse_diagnostics`. Still-unrecoverable failures
+  (encoding, content after the root closed, a bare unclosed root)
+  keep the rootless-empty-document fallback without diagnostics
+- riding the pin: the #1656 GCC compile fix (the `char**` ->
+  `const char**` cast in the #426 mint path that blocked the
+  1.9.341 release — verified by this CI), the #1654 SCALAR
+  op `plan_index` bounds validation plus partial-tree leak fixes
+  (the binding's boundary check stays as defense in depth), and
+  XSD lexical-family work (octet lengths, pattern property
+  classes)
+
+
 ## 1.9.341.0 — 2026-10-12
 
 Adopts libleptris 1.9.341 (pin 1.9.340 -> 1.9.341) and exposes the

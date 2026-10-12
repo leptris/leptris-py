@@ -592,9 +592,9 @@ class Plan:
                 slot.plan_index = plan_index = (
                     op[2] if len(op) > 2 and op[2] is not None else 0
                 )
-                # the engine's ELEMENT ops validate plan_index but
-                # SCALAR ops do not — an out-of-pool index reads
-                # garbage (and can crash); reject at the boundary
+                # the engine validates pool bounds (1.9.343+,
+                # #1654) but a rejection crossing is wasted work —
+                # reject at the boundary first
                 if plan_index >= len(self._elements):
                     raise ValueError(
                         f"scalar op plan_index {plan_index} >= "
