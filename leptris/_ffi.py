@@ -655,6 +655,16 @@ ffi.cdef(
     size_t leptris_plan_value_count(const LeptrisPlanResult v);
     LeptrisPlanResult leptris_plan_value_at(const LeptrisPlanResult v, size_t i);
     const char* leptris_plan_value_attribute(const LeptrisPlanResult v, const char* wire_name);
+    /* #1670 (1.9.347+): ALL attribute names + values in ONE
+     * crossing (the per-name walk mints one round trip per
+     * attribute per node). ParallelArrays contract mirrors
+     * children_snapshot: NULL blobs / caps 0 sizes (returns the
+     * required per-blob byte capacity; both blobs need the same
+     * capacity); 0 on success, (size_t)-1 when a buffer is too
+     * small. Entries are NUL-terminated, byte-offset addressed,
+     * in the plan's attribute-row order (bound attributes only). */
+    size_t leptris_plan_value_attribute_count(const LeptrisPlanResult v);
+    size_t leptris_plan_value_attributes_snapshot(const LeptrisPlanResult v, char* names_blob, size_t names_cap, size_t* name_offsets, char* values_blob, size_t values_cap, size_t* value_offsets);
     """
 )
 

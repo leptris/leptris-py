@@ -151,13 +151,17 @@ static struct {
     int (*plan_value_float)(const void *, double *);
     int (*plan_value_bool)(const void *, int *);
     const char *(*plan_value_attribute)(const void *, const char *);
+    size_t (*plan_value_attribute_count)(const void *);
+    size_t (*plan_value_attributes_snapshot)(
+        const void *, char *, size_t, size_t *,
+        char *, size_t, size_t *);
     void *(*xpath_eval_vars_ctx)(void *, void *, const char *, void *);
     const void *(*sax_records)(void *, size_t *);
     const char *(*sax_arena)(void *, size_t *);
     void *(*xquery_eval)(void *, void *, void *);
 } Fns;
 
-#define FN_COUNT 77
+#define FN_COUNT 79
 
 static int bound = 0;
 static PyObject *LeptrisErrorType = NULL;
@@ -1225,6 +1229,8 @@ accel_bind(PyObject *module, PyObject *args)
     (void **)&Fns.sax_records,
     (void **)&Fns.sax_arena,
     (void **)&Fns.xquery_eval,
+    (void **)&Fns.plan_value_attribute_count,
+    (void **)&Fns.plan_value_attributes_snapshot,
     };
     for (Py_ssize_t i = 0; i < FN_COUNT; i++) {
         PyObject *item = PyList_Check(fast)
@@ -2693,20 +2699,70 @@ plan_convert_element(const void *value, const PlanShapeC *shape,
         Py_DECREF(children);
         return NULL;
     }
-    for (Py_ssize_t a = 0; a < plan->attr_count; a++) {
-        const char *val = Fns.plan_value_attribute(
-            value, plan->attr_names[a]);
-        PyObject *item = (val != NULL)
-            ? PyUnicode_DecodeUTF8(val, (Py_ssize_t)strlen(val), "replace")
-            : Py_None;
-        if (item == NULL
-            || PyDict_SetItem(attrs, plan->attr_keys[a], item) < 0) {
-            Py_XDECREF(item);
-            Py_DECREF(attrs);
-            Py_DECREF(children);
-            return NULL;
+    if (plan->attr_count > 0) {
+        /* #1670: all attributes in ONE snapshot crossing (the
+         * per-name walk minted one FFI round trip per attribute).
+         * Entries carry the row's wire name, in attribute-row
+         * order, bound rows only — walk rows and entries together;
+         * a row whose name doesn't match the next entry is
+         * unbound and yields None. */
+        size_t acount = Fns.plan_value_attribute_count(value);
+        char *nb = NULL, *vb = NULL;
+        size_t *no = NULL, *vo = NULL;
+        if (acount > 0) {
+            size_t need = Fns.plan_value_attributes_snapshot(
+                value, NULL, 0, NULL, NULL, 0, NULL);
+            nb = (char *)PyMem_Malloc(need);
+            vb = (char *)PyMem_Malloc(need);
+            no = (size_t *)PyMem_Malloc(
+                (acount + 1) * sizeof(size_t));
+            vo = (size_t *)PyMem_Malloc(
+                (acount + 1) * sizeof(size_t));
+            if (nb == NULL || vb == NULL || no == NULL
+                || vo == NULL
+                || Fns.plan_value_attributes_snapshot(
+                       value, nb, need, no, vb, need, vo)
+                       == (size_t)-1) {
+                PyMem_Free(nb); PyMem_Free(vb);
+                PyMem_Free(no); PyMem_Free(vo);
+                Py_DECREF(attrs);
+                Py_DECREF(children);
+                return PyErr_NoMemory();
+            }
         }
-        Py_DECREF(item);
+        size_t ei = 0;
+        for (Py_ssize_t a = 0; a < plan->attr_count; a++) {
+            const char *rname = plan->attr_names[a];
+            PyObject *item;
+            if (ei < acount
+                && strcmp(nb + no[ei], rname) == 0) {
+                const char *val = vb + vo[ei];
+                ei++;
+                item = PyUnicode_DecodeUTF8(
+                    val, (Py_ssize_t)strlen(val), "replace");
+                if (item == NULL) {
+                    PyMem_Free(nb); PyMem_Free(vb);
+                    PyMem_Free(no); PyMem_Free(vo);
+                    Py_DECREF(attrs);
+                    Py_DECREF(children);
+                    return NULL;
+                }
+            } else {
+                item = Py_None;
+                Py_INCREF(Py_None);
+            }
+            if (PyDict_SetItem(attrs, plan->attr_keys[a], item) < 0) {
+                Py_DECREF(item);
+                PyMem_Free(nb); PyMem_Free(vb);
+                PyMem_Free(no); PyMem_Free(vo);
+                Py_DECREF(attrs);
+                Py_DECREF(children);
+                return NULL;
+            }
+            Py_DECREF(item);
+        }
+        PyMem_Free(nb); PyMem_Free(vb);
+        PyMem_Free(no); PyMem_Free(vo);
     }
 
     PyObject *out = PyDict_New();

@@ -459,6 +459,8 @@ _BIND_NAMES = (
     "leptris_sax_recorder_records",
     "leptris_sax_recorder_arena",
     "leptris_xquery_eval",
+    "leptris_plan_value_attribute_count",
+    "leptris_plan_value_attributes_snapshot",
 )
 _accel.bind(
     [
