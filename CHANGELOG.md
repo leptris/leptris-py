@@ -1,6 +1,28 @@
 # Changelog
 
 
+## 1.9.351.0 — 2026-10-14
+
+Adopts libleptris 1.9.351 (pin 1.9.346 -> 1.9.351; five engine
+releases, no public-header changes beyond the #1670 faces) and
+wires the #1670 batch attribute face into the plan converter:
+
+- **one-crossing attribute read** — the accelerator's plan
+  converter now reads every element's attributes through
+  `leptris_plan_value_attributes_snapshot` (sizing call, then one
+  fill; entries NUL-terminated, row-order, bound rows only) —
+  replacing one FFI crossing per attribute per node. Unbound rows
+  still yield `None` (the shape-stable contract), matched by a
+  two-pointer walk over rows and entries
+- riding the pin: the #1677 arena-window fix (the intermittent
+  serialize-path crash this binding's suite caught in 1.9.347 —
+  the window is now owned by a wrapper; repro x10 clean, full
+  suite x5 stable), the #1673 arena hardening (zeroed attribute
+  arrays, nested-capture serialize_ext pin), the #1681 GCC LTO
+  carrier fixes with the engine-wide block-scope-extern sweep,
+  and the #1679 XSD chain-compile family
+
+
 ## 1.9.346.0 — 2026-10-13
 
 Adopts libleptris 1.9.346 (pin 1.9.344 -> 1.9.346; two engine
