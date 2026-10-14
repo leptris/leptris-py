@@ -1,6 +1,23 @@
 # Changelog
 
 
+## 1.9.353.0 — 2026-10-14
+
+Adopts libleptris 1.9.353 (pin 1.9.352 -> 1.9.353) and exposes the
+#1689 element attributes snapshot:
+
+- **`Element.attribute_pairs(ns=True)`** — `(name, value, prefix,
+  uri)` 4-tuples in ONE crossing (the element-face sibling of the
+  #1670 plan-value snapshot): the prefix as spelled, the URI
+  resolved through the element's in-scope declarations, the
+  reserved `xml:` binding included (#1664 semantics); no-namespace
+  attributes carry `(None, None)`. `ns=False` (default) keeps the
+  1.9.216 `(name, value)` fast path unchanged
+- riding the pin: the XSD conformance lane (differential manifest
+  + measured floor), the shared reference-resolution ladder for
+  every XSD table, and the schema-structure conformance slice
+
+
 ## 1.9.352.0 — 2026-10-14
 
 Adopts libleptris 1.9.352 (pin 1.9.351 -> 1.9.352; no public-header

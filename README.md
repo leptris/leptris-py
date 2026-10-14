@@ -324,6 +324,7 @@ default.
 | nested HTML indent | — | `tostring(..., method="html", pretty_print=True, indent_html=True)` / `save_html(..., indent_html=True)` — block children nest; default stays §16.2 newline-only (1.9.340+) |
 | bulk attribute read | — | `elem.attribute_pairs()` — all attributes as `(name, value)` pairs in one C pass (1.9.216+) |
 | typed attribute read | — | `elem.get_int/get_float/get_bool(name, default)` — conversion engine-side, one crossing (1.9.280.1+); strict: unparseable or missing -> `default` |
+| bulk attribute read (ns) | — | `elem.attribute_pairs(ns=True)` — `(name, value, prefix, uri)` 4-tuples in one crossing; URI resolved through in-scope declarations, reserved `xml:` binding included (1.9.353+) |
 | subtree walk | `elem.iter()` | `elem.visit_entering(fn)` — one callback per node entered, document order, no re-visit after the subtree (1.9.232+) |
 | host-assembled results | — | `Plan.serialize_ops(ops)` — serialize a flat op program (element/attr/scalar/end tuples) guided by the plan, no DOM needed (1.9.334+); `indent`/`indent_unit` pretty-print (1.9.341+) |
 | result -> native tree | — | `Plan.document_ops(ops)` / `Plan.to_document(doc)` — build a `Document` from an op program or a walk, attributes verbatim, `xmlns` declarations on the root, no string round trip (1.9.341+) |

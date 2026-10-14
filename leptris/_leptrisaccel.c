@@ -94,6 +94,9 @@ static struct {
     size_t (*attribute_count)(void *);
     size_t (*element_attribute_pairs)(void *, const char**, const char**,
                                       void**, size_t);
+    size_t (*element_attributes_snapshot)(
+        void *, char *, size_t, size_t *, char *, size_t, size_t *,
+        char *, size_t, size_t *, char *, size_t, size_t *);
     int (*element_attribute_int)(void *, const char *, int);
     double (*element_attribute_double)(void *, const char *, double);
     int (*element_attribute_bool)(void *, const char *, int);
@@ -161,7 +164,7 @@ static struct {
     void *(*xquery_eval)(void *, void *, void *);
 } Fns;
 
-#define FN_COUNT 79
+#define FN_COUNT 80
 
 static int bound = 0;
 static PyObject *LeptrisErrorType = NULL;
@@ -1231,6 +1234,7 @@ accel_bind(PyObject *module, PyObject *args)
     (void **)&Fns.xquery_eval,
     (void **)&Fns.plan_value_attribute_count,
     (void **)&Fns.plan_value_attributes_snapshot,
+    (void **)&Fns.element_attributes_snapshot,
     };
     for (Py_ssize_t i = 0; i < FN_COUNT; i++) {
         PyObject *item = PyList_Check(fast)
@@ -3194,12 +3198,21 @@ accel_xquery_eval(PyObject *module, PyObject *args)
     return finish_result(result, document);
 }
 
-/* attribute_pairs(element) -> [(name, value), ...] in one C pass
- * (#1254): replaces the N-call first_attribute/next walk on the
- * binding hot path. Names/values are engine-owned; decoded here. */
+/* attribute_pairs(element, ns) -> [(name, value), ...] in one C
+ * pass (#1254): replaces the N-call first_attribute/next walk on
+ * the binding hot path. Names/values are engine-owned; decoded
+ * here. With ns=True the #1689 attributes_snapshot serves
+ * (name, value, prefix, uri) 4-tuples in ONE crossing — the
+ * prefix as spelled, the URI resolved through in-scope
+ * declarations (#1664); no-namespace attributes carry
+ * (None, None). */
 static PyObject *
-accel_attribute_pairs(PyObject *module, PyObject *arg)
+accel_attribute_pairs(PyObject *module, PyObject *args)
 {
+    PyObject *arg;
+    int ns = 0;
+    if (!PyArg_ParseTuple(args, "Op", &arg, &ns))
+        return NULL;
     AccelElement *self = (AccelElement *)arg;
     if (!PyObject_TypeCheck(arg, ElementType)) {
         PyErr_SetString(PyExc_TypeError, "expected an Element");
@@ -3210,44 +3223,157 @@ accel_attribute_pairs(PyObject *module, PyObject *arg)
     size_t n = Fns.attribute_count(self->raw);
     if (n == 0)
         return PyList_New(0);
-    const char **names = PyMem_Malloc(n * sizeof(char *));
-    const char **values = PyMem_Malloc(n * sizeof(char *));
-    if (names == NULL || values == NULL) {
+    if (!ns) {
+        const char **names = PyMem_Malloc(n * sizeof(char *));
+        const char **values = PyMem_Malloc(n * sizeof(char *));
+        if (names == NULL || values == NULL) {
+            PyMem_Free(names);
+            PyMem_Free(values);
+            return PyErr_NoMemory();
+        }
+        size_t got = Fns.element_attribute_pairs(
+            self->raw, names, values, NULL, n);
+        PyObject *list = PyList_New((Py_ssize_t)got);
+        for (size_t i = 0; list != NULL && i < got; i++) {
+            PyObject *name = PyUnicode_DecodeUTF8(
+                names[i], strlen(names[i]), "strict");
+            PyObject *value = name != NULL
+                ? PyUnicode_DecodeUTF8(
+                      values[i], strlen(values[i]), "strict")
+                : NULL;
+            PyObject *pair = name != NULL && value != NULL
+                ? PyTuple_Pack(2, name, value)
+                : NULL;
+            if (pair != NULL &&
+                PyList_SetItem(list, (Py_ssize_t)i, pair) == 0) {
+                /* SetItem steals pair on success */
+            } else {
+                Py_XDECREF(pair);
+                Py_DECREF(list);
+                list = NULL;
+            }
+            Py_XDECREF(name);
+            Py_XDECREF(value);
+        }
         PyMem_Free(names);
         PyMem_Free(values);
-        return PyErr_NoMemory();
+        return list;
     }
-    size_t got = Fns.element_attribute_pairs(
-        self->raw, names, values, NULL, n);
-    PyObject *list = PyList_New((Py_ssize_t)got);
-    for (size_t i = 0; list != NULL && i < got; i++) {
+    /* ns=True: two-phase snapshot, all four lanes */
+    char *names = NULL, *values = NULL, *prefixes = NULL, *uris = NULL;
+    size_t *noff = NULL, *voff = NULL, *poff = NULL, *uoff = NULL;
+    PyObject *list = NULL;
+    size_t cap = Fns.element_attributes_snapshot(
+        self->raw, NULL, 0, NULL, NULL, 0, NULL,
+        NULL, 0, NULL, NULL, 0, NULL);
+    if (cap == (size_t)-1)
+        cap = 0;
+    names = (char *)PyMem_Malloc(cap ? cap : 1);
+    values = (char *)PyMem_Malloc(cap ? cap : 1);
+    prefixes = (char *)PyMem_Malloc(cap ? cap : 1);
+    uris = (char *)PyMem_Malloc(cap ? cap : 1);
+    noff = (size_t *)PyMem_Malloc((n + 1) * sizeof(size_t));
+    voff = (size_t *)PyMem_Malloc((n + 1) * sizeof(size_t));
+    poff = (size_t *)PyMem_Malloc((n + 1) * sizeof(size_t));
+    uoff = (size_t *)PyMem_Malloc((n + 1) * sizeof(size_t));
+    if (names == NULL || values == NULL || prefixes == NULL
+        || uris == NULL || noff == NULL || voff == NULL
+        || poff == NULL || uoff == NULL)
+        goto oom;
+    for (int attempt = 0; attempt < 4; attempt++) {
+        size_t rc = Fns.element_attributes_snapshot(
+            self->raw, names, cap, noff, values, cap, voff,
+            prefixes, cap, poff, uris, cap, uoff);
+        if (rc == 0)
+            break;
+        if (rc != (size_t)-1 || attempt == 3) {
+            PyErr_SetString(
+                LeptrisErrorType,
+                "attribute snapshot failed");
+            goto fail;
+        }
+        /* attributes mutated between calls: re-size and retry */
+        cap = Fns.element_attributes_snapshot(
+            self->raw, NULL, 0, NULL, NULL, 0, NULL,
+            NULL, 0, NULL, NULL, 0, NULL);
+        if (cap == (size_t)-1)
+            cap = 0;
+        char *nb = (char *)PyMem_Realloc(names, cap ? cap : 1);
+        char *vb = (char *)PyMem_Realloc(values, cap ? cap : 1);
+        char *pb = (char *)PyMem_Realloc(prefixes, cap ? cap : 1);
+        char *ub = (char *)PyMem_Realloc(uris, cap ? cap : 1);
+        if (nb == NULL || vb == NULL || pb == NULL || ub == NULL) {
+            names = nb; values = vb; prefixes = pb; uris = ub;
+            goto oom;
+        }
+        names = nb; values = vb; prefixes = pb; uris = ub;
+    }
+    list = PyList_New((Py_ssize_t)n);
+    if (list == NULL)
+        goto fail;
+    for (size_t i = 0; i < n; i++) {
         PyObject *name = PyUnicode_DecodeUTF8(
-            names[i], strlen(names[i]), "strict");
+            names + noff[i], strlen(names + noff[i]), "strict");
         PyObject *value = name != NULL
-            ? PyUnicode_DecodeUTF8(values[i], strlen(values[i]), "strict")
+            ? PyUnicode_DecodeUTF8(
+                  values + voff[i], strlen(values + voff[i]), "strict")
             : NULL;
-        PyObject *pair = name != NULL && value != NULL
-            ? PyTuple_Pack(2, name, value)
+        PyObject *prefix = NULL, *uri = NULL;
+        if (name != NULL && value != NULL) {
+            prefix = poff[i] == (size_t)-1
+                ? Py_NewRef(Py_None)
+                : PyUnicode_DecodeUTF8(
+                      prefixes + poff[i],
+                      strlen(prefixes + poff[i]), "strict");
+            uri = prefix != NULL && uoff[i] == (size_t)-1
+                ? Py_NewRef(Py_None)
+                : (prefix != NULL
+                       ? PyUnicode_DecodeUTF8(
+                             uris + uoff[i],
+                             strlen(uris + uoff[i]), "strict")
+                       : NULL);
+        }
+        PyObject *quad = name != NULL && value != NULL
+                             && prefix != NULL && uri != NULL
+            ? PyTuple_Pack(4, name, value, prefix, uri)
             : NULL;
-        if (pair != NULL &&
-            PyList_SetItem(list, (Py_ssize_t)i, pair) == 0) {
-            /* SetItem steals pair on success */
-        } else {
-            Py_XDECREF(pair);
+        if (quad == NULL
+            || PyList_SetItem(list, (Py_ssize_t)i, quad) != 0) {
+            Py_XDECREF(quad);
+            Py_XDECREF(name);
+            Py_XDECREF(value);
+            Py_XDECREF(prefix);
+            Py_XDECREF(uri);
             Py_DECREF(list);
             list = NULL;
+            goto fail;
         }
         Py_XDECREF(name);
         Py_XDECREF(value);
+        Py_XDECREF(prefix);
+        Py_XDECREF(uri);
     }
+    goto done;
+oom:
+    PyErr_NoMemory();
+fail:
+    Py_XDECREF(list);
+    list = NULL;
+done:
     PyMem_Free(names);
     PyMem_Free(values);
+    PyMem_Free(prefixes);
+    PyMem_Free(uris);
+    PyMem_Free(noff);
+    PyMem_Free(voff);
+    PyMem_Free(poff);
+    PyMem_Free(uoff);
     return list;
 }
 
 static PyMethodDef accel_methods[] = {
-    {"attribute_pairs", accel_attribute_pairs, METH_O,
-     "attribute_pairs(element) -> [(name, value), ...]"},
+    {"attribute_pairs", accel_attribute_pairs, METH_VARARGS,
+     "attribute_pairs(element, ns) -> [(name, value[, prefix, uri]), ...]"},
     {"create", accel_create, METH_VARARGS,
      "create(address, ptr, document) -> Element"},
     {"materialize", accel_materialize, METH_VARARGS,

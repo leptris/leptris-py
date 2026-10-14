@@ -180,15 +180,24 @@ class _ElementMethods:
             ffi.cast("LeptrisNodeRef", self._cd()), cb, ffi.NULL
         )
 
-    def attribute_pairs(self) -> list:
-        """All attributes as ``(name, value)`` pairs in one C pass
-        (libleptris 1.9.216+): replaces the per-attribute walk on
-        hot paths that touch every attribute.
+    def attribute_pairs(self, *, ns: bool = False) -> list:
+        """All attributes in one C pass (libleptris 1.9.216+):
+        ``(name, value)`` pairs, replacing the per-attribute walk
+        on hot paths that touch every attribute.
+
+        With ``ns=True`` (libleptris 1.9.353+, #1689): ``(name,
+        value, prefix, uri)`` 4-tuples read through the
+        attributes-snapshot face — the prefix as spelled, the URI
+        resolved through the element's in-scope declarations
+        (#1664 semantics); no-namespace attributes carry
+        ``(None, None)``.
 
         .. versionadded:: 1.9.216.0
+        .. versionchanged:: 1.9.353.0
+           added ``ns``.
         """
         self._check_alive()
-        return _accel.attribute_pairs(self)
+        return _accel.attribute_pairs(self, ns)
 
     def iter(self, tag: Optional[str] = None) -> Iterator["Element"]:
         # The C cursor walks first_child/next_sibling/parent directly —
@@ -461,6 +470,7 @@ _BIND_NAMES = (
     "leptris_xquery_eval",
     "leptris_plan_value_attribute_count",
     "leptris_plan_value_attributes_snapshot",
+    "leptris_element_attributes_snapshot",
 )
 _accel.bind(
     [
