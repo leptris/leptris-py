@@ -3320,18 +3320,22 @@ accel_attribute_pairs(PyObject *module, PyObject *args)
             : NULL;
         PyObject *prefix = NULL, *uri = NULL;
         if (name != NULL && value != NULL) {
-            prefix = poff[i] == (size_t)-1
-                ? Py_NewRef(Py_None)
-                : PyUnicode_DecodeUTF8(
-                      prefixes + poff[i],
-                      strlen(prefixes + poff[i]), "strict");
-            uri = prefix != NULL && uoff[i] == (size_t)-1
-                ? Py_NewRef(Py_None)
-                : (prefix != NULL
-                       ? PyUnicode_DecodeUTF8(
-                             uris + uoff[i],
-                             strlen(uris + uoff[i]), "strict")
-                       : NULL);
+            if (poff[i] == (size_t)-1) {
+                prefix = Py_None;
+                Py_INCREF(Py_None);
+            } else {
+                prefix = PyUnicode_DecodeUTF8(
+                    prefixes + poff[i],
+                    strlen(prefixes + poff[i]), "strict");
+            }
+            if (prefix != NULL && uoff[i] == (size_t)-1) {
+                uri = Py_None;
+                Py_INCREF(Py_None);
+            } else if (prefix != NULL) {
+                uri = PyUnicode_DecodeUTF8(
+                    uris + uoff[i],
+                    strlen(uris + uoff[i]), "strict");
+            }
         }
         PyObject *quad = name != NULL && value != NULL
                              && prefix != NULL && uri != NULL
