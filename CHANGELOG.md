@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 1.9.354.0 — 2026-10-14
+
+Adopts libleptris 1.9.354 (pin 1.9.353 -> 1.9.354; no public-header
+changes — pin-only ride): wasm32/ILP32 portability — 64-bit hash
+accumulators and enum discipline, zero-warning emcc build. The
+binding surface is unchanged.
+
+
 ## 1.9.353.0 — 2026-10-14
 
 Adopts libleptris 1.9.353 (pin 1.9.352 -> 1.9.353) and exposes the
