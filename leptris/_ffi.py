@@ -515,6 +515,25 @@ ffi.cdef(
      * with leptris_document_free. */
     LeptrisDocument leptris_document_from_plan_result(LeptrisPlan plan, const LeptrisPlanResult result, LeptrisStatus* status);
     LeptrisStatus leptris_element_add_child_addr(uintptr_t parent_addr, uintptr_t child_addr);
+    /* #1689 (1.9.353+): ALL attribute names, values, and ns data
+     * in ONE crossing — the element-face sibling of the #1670
+     * plan-value snapshot; two-phase capacity/retry contract.
+     * Phase 1 (sizing): NULL names/values blobs -> the required
+     * per-lane byte capacity (every lane sized to it is always
+     * sufficient). Phase 2: 0 on success, (size_t)-1 when a
+     * PROVIDED buffer is too small. Each lane is a NUL-terminated
+     * blob with an offset array of attribute_count+1 entries
+     * (entry [count] = the lane's byte length). A lane is written
+     * only when its blob is non-NULL (ns lanes optional). A
+     * no-namespace attribute records SIZE_MAX in its ns offset
+     * slots; prefixed attributes carry the spelled prefix and the
+     * URI resolved through in-scope declarations (#1664). */
+    size_t leptris_element_attributes_snapshot(
+        LeptrisElement elem,
+        char* names, size_t names_cap, size_t* name_offsets,
+        char* values, size_t values_cap, size_t* value_offsets,
+        char* ns_prefixes, size_t prefixes_cap, size_t* prefix_offsets,
+        char* ns_uris, size_t uris_cap, size_t* uri_offsets);
     void leptris_element_expanded_name(LeptrisElement e, const char** local, const char** prefix, const char** uri);
     /* node-surface parity (lib 1.9.176, #1094) */
     /* RNG validation errors accumulate (#878, libleptris >= 1.9.179):
