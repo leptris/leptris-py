@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 1.9.352.0 — 2026-10-14
+
+Adopts libleptris 1.9.352 (pin 1.9.351 -> 1.9.352; no public-header
+changes — pin-only ride): XSD instance `xsi:type` references resolve
+across namespaces (the reference ladder) — covered by the binding's
+cross-namespace import specs, all green.
+
+
 ## 1.9.351.0 — 2026-10-14
 
 Adopts libleptris 1.9.351 (pin 1.9.346 -> 1.9.351; five engine
