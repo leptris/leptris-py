@@ -1,3 +1,14 @@
+## [1.9.360.0] - 2026-10-15
+
+### Changed — engine sync (libleptris 1.9.360)
+
+- **XSD: the xml prefix is predeclared and its built-in attribute
+  refs (xml:lang/space/base/id) resolve without a loaded
+  declaration** (leptris/leptris#1736, leptris-ruby#478) — OOXML
+  schema graphs (dc/dcterms/wml/shared-math) no longer poison the
+  compiled schema into "root not declared" and content-model
+  mismatches.
+
 ## [1.9.359.0] - 2026-10-15
 
 ### Changed — engine sync (libleptris 1.9.359)
