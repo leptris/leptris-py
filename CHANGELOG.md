@@ -1,3 +1,17 @@
+## [1.9.359.0] - 2026-10-15
+
+### Changed — engine sync (libleptris 1.9.359)
+
+- **Document-level XPath evaluates against the document node**
+  (libxml2/Nokogiri semantics): `r/a/@id`, `//*[...]/@id` and `.//a`
+  resolve (leptris/leptris#1726/#1728).
+- **The reserved `xmlns:` prefix resolves to the in-scope default
+  namespace** — the Nokogiri idiom for default-namespaced documents
+  (leptris/leptris#1729).
+- Ridden since 1.9.355: DTD Phase 8 closeout (#1724), XSD
+  conformance 898/1056 (#1691), XInclude xml:base chain + resolver
+  policy (#1694), RNG interleave + diagnostics fixes, CLI fixes.
+
 ## [1.9.355.0] - 2026-10-14
 
 ### Fixed — engine sync (libleptris 1.9.355)
