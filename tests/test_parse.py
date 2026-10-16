@@ -139,7 +139,10 @@ class TestRecover:
             assert [c.tag for c in root] == ["a"]
             assert [c.tag for c in root[0]] == ["b"]
             kinds = [d.kind for d in doc.parse_diagnostics]
-            assert kinds == ["UNCLOSED_ELEMENT", "UNCLOSED_ELEMENT"]
+            # engine 1.9.364 (#1749): the implicit close is the
+            # MISMATCH recovery — UNCLOSED_ELEMENT stays reserved for
+            # the still-open-at-EOF class
+            assert kinds == ["MISMATCHED_TAG", "MISMATCHED_TAG"]
             assert "closed implicitly by </r>" in (
                 doc.parse_diagnostics[0].message
             )
