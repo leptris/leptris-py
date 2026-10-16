@@ -1,3 +1,12 @@
+## [1.9.361.0] - 2026-10-15
+
+### Changed — engine sync (libleptris 1.9.361)
+
+- **XInclude: element fallbacks splice on resource errors**
+  (leptris/leptris#1740, #1734) — a no_network refusal or missing
+  file now replaces the xi:include with the fallback's children
+  (XInclude §4.5) instead of dropping both.
+
 ## [1.9.360.0] - 2026-10-15
 
 ### Changed — engine sync (libleptris 1.9.360)
