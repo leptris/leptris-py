@@ -1,3 +1,12 @@
+## [1.9.365.0] - 2026-10-16
+
+### Fixed — engine sync (libleptris 1.9.365)
+
+- **html4 drops the XML-declaration construct in HTML input**
+  (leptris/leptris#1754, #1748) — the prolog no longer serializes as
+  `<?xml ...??>` and never doubles with the serializer's own
+  declaration.
+
 ## [1.9.364.0] - 2026-10-16
 
 ### Added — engine sync (libleptris 1.9.364)
