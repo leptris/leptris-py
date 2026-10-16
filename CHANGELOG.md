@@ -1,3 +1,13 @@
+## [1.9.364.0] - 2026-10-16
+
+### Added — engine sync (libleptris 1.9.364)
+
+- **Parse diagnostics carry severity classification**
+  (leptris/leptris#1752, #1749) — append-only diag kinds
+  (`LEPTRIS_DIAG_UNESCAPED_LT`, implicit-close as
+  `LEPTRIS_DIAG_MISMATCHED_TAG`) so embedders can raise-on-fatal /
+  recover-on-recoverable without string matching.
+
 ## [1.9.363.0] - 2026-10-16
 
 ### Fixed — engine sync (libleptris 1.9.363)
