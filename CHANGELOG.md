@@ -1,3 +1,13 @@
+## [1.9.363.0] - 2026-10-16
+
+### Fixed — engine sync (libleptris 1.9.363)
+
+- **XML recover keeps the tree on unescaped `<` in text**
+  (leptris/leptris#1748, PR #1750) — `<script>if (a < b)</script>`
+  previously recovered to an EMPTY tree with zero diagnostics; the
+  byte now folds into the text run with a recorded recovery and
+  strict parsing still fails.
+
 ## [1.9.362.0] - 2026-10-16
 
 ### Changed — engine sync (libleptris 1.9.362)
