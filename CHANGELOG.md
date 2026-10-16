@@ -1,3 +1,12 @@
+## [1.9.362.0] - 2026-10-16
+
+### Changed — engine sync (libleptris 1.9.362)
+
+- **XSD: per-unit wildcard provenance for `##other` / `##targetNamespace`
+  across imports** (leptris/leptris#1735, PR #1744) — the two
+  unit-relative tokens now resolve against the target namespace of the
+  schema unit declaring the wildcard, not the merged schema's main tns.
+
 ## [1.9.361.0] - 2026-10-15
 
 ### Changed — engine sync (libleptris 1.9.361)
