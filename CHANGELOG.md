@@ -1,3 +1,12 @@
+## [1.9.367.0] - 2026-10-17
+
+### Fixed — engine sync (libleptris 1.9.367)
+
+- **namespace-cache zero initialization** (leptris/leptris#1742) —
+  all cache allocation sites zero the whole struct; the partial
+  inits left walk pointers and child-cache generations on arena
+  garbage.
+
 ## [1.9.366.0] - 2026-10-17
 
 ### Fixed — engine sync (libleptris 1.9.366)
