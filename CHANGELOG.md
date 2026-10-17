@@ -1,3 +1,12 @@
+## [1.9.366.0] - 2026-10-17
+
+### Fixed — engine sync (libleptris 1.9.366)
+
+- **foreign leaf adopt copies exactly the argument**
+  (leptris/leptris#1757, #1755) — mixed-content fragment appends no
+  longer fail with a fake "Memory allocation failed"; the deterministic
+  face of the Ruby 4.0 render crash.
+
 ## [1.9.365.0] - 2026-10-16
 
 ### Fixed — engine sync (libleptris 1.9.365)
