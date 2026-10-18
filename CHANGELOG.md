@@ -1,3 +1,11 @@
+## [1.9.369.0] - 2026-10-18
+
+### Fixed — engine sync (libleptris 1.9.369)
+
+- **oversized-text kind-safety pin** (leptris/leptris#1765) — the
+  heap-backed text variant of the #487 class is pinned red-first;
+  no behavior change in this engine.
+
 ## [1.9.368.0] - 2026-10-18
 
 ### Fixed — engine sync (libleptris 1.9.368)
