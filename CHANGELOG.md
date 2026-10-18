@@ -1,3 +1,11 @@
+## [1.9.368.0] - 2026-10-18
+
+### Fixed — engine sync (libleptris 1.9.368)
+
+- **get_document is kind-safe** (leptris/leptris#1763, leptris-ruby#487)
+  — non-element children no longer hit element-form field reads during
+  hydration; the Ruby 4.0 darwin Bus error class is gone.
+
 ## [1.9.367.0] - 2026-10-17
 
 ### Fixed — engine sync (libleptris 1.9.367)
