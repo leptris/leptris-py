@@ -1,3 +1,11 @@
+## [1.9.370.0] - 2026-10-18
+
+### Fixed — engine sync (libleptris 1.9.370)
+
+- **in-body comments after ignored structural start tags stay in body**
+  (leptris/leptris#1769, moxml#389) — WHATWG 13.2.6.4.4 gating; Canon's
+  strict-comments HTML comparisons ride this.
+
 ## [1.9.369.0] - 2026-10-18
 
 ### Fixed — engine sync (libleptris 1.9.369)
