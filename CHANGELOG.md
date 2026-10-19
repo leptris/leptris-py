@@ -1,3 +1,11 @@
+## [1.9.372.0] - 2026-10-19
+
+### Changed — engine sync (libleptris 1.9.372)
+
+- **document-context XPath parity pin** (leptris/leptris#502,
+  test-only engine release) — the wheel rides the engine that
+  pins the NULL-context `document()` resolution contract.
+
 ## [1.9.371.0] - 2026-10-19
 
 ### Added — engine sync (libleptris 1.9.371)
