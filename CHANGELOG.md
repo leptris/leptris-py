@@ -1,3 +1,11 @@
+## [1.9.373.0] - 2026-10-20
+
+### Added — engine sync (libleptris 1.9.373)
+
+- **the HTML5 verdict-parity gate** (leptris/leptris#1778-1783) —
+  the wheel rides the engine that gates the WHATWG corpus on its
+  parse-error stream; verdict parity 190 to 1394 of 1555.
+
 ## [1.9.372.0] - 2026-10-19
 
 ### Changed — engine sync (libleptris 1.9.372)
