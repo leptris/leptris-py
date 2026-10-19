@@ -1,3 +1,12 @@
+## [1.9.371.0] - 2026-10-19
+
+### Added — engine sync (libleptris 1.9.371)
+
+- **the §13.2.5 parse-error lint surface** (leptris/leptris#1772,
+  #1771) — `collect_errors=True` on the WHATWG HTML parse records
+  the parse-error token stream; the wheel rides the engine that
+  ships it.
+
 ## [1.9.370.0] - 2026-10-18
 
 ### Fixed — engine sync (libleptris 1.9.370)
