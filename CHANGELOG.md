@@ -1,3 +1,11 @@
+## [1.9.374.0] - 2026-10-20
+
+### Fixed — engine sync (libleptris 1.9.374)
+
+- **detached text mutations resolve their document**
+  (moxml#401, leptris/leptris#1785) — `Text#content=` on a
+  detached text node no longer raises `Invalid argument`.
+
 ## [1.9.373.0] - 2026-10-20
 
 ### Added — engine sync (libleptris 1.9.373)
