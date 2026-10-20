@@ -1,3 +1,15 @@
+## [1.9.379.0] - 2026-10-21
+
+### Fixed — engine sync (libleptris 1.9.379)
+
+- **manylinux wheel builds (leptris/leptris#1806)**: the
+  template-foster diagnostic passed a cast node where the accessor
+  takes `LeptrisNodeRef`. GCC 14 treats incompatible pointer types
+  as an error, which broke the vendored engine compile (the
+  1.9.378.0 wheels never published). The cast is gone.
+- Carries the full 1.9.378 engine: the XPath element-index fix for
+  sibling/prepend insertion and WHATWG verdict parity 1555/1555.
+
 ## [1.9.378.0] - 2026-10-21
 
 ### Fixed — engine sync (libleptris 1.9.378)
