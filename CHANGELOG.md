@@ -1,3 +1,14 @@
+## [1.9.377.0] - 2026-10-21
+
+### Added — engine sync (libleptris 1.9.377)
+
+- **HTML5 verdict parity 1508 to 1532 of 1555**
+  (leptris/leptris#1797) — five emission slices (misplaced body
+  tags and stray `</p>` phases, after-html/-body/-frameset
+  character codes, comment EOF tokenizer codes, plaintext-at-EOF
+  and `</` EOF, phase-aware stray end tags). Tree parity stays
+  1555/1555; zero want=clean regressions.
+
 ## [1.9.376.0] - 2026-10-20
 
 ### Fixed — engine sync (libleptris 1.9.376)
