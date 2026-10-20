@@ -1,3 +1,17 @@
+## [1.9.376.0] - 2026-10-20
+
+### Fixed — engine sync (libleptris 1.9.376)
+
+- **strict UTF-8 validation at load** (leptris-ruby#514) — strict
+  parses now validate the input against its effective encoding
+  (RFC 3629: overlongs, surrogates, above U+10FFFF, and truncated
+  sequences are fatal); the RECOVER lane keeps its best-effort
+  contract.
+- **entity-shaped text re-emitted unescaped** (leptris-ruby#515) —
+  every `&` in text is escaped unconditionally in both emitters, so
+  decoded data such as `&#x41;` or `&lt;UK&gt;` can no longer mint
+  markup on reparse; `ENTITY_REF` nodes still serialize as `&name;`.
+
 ## [1.9.375.0] - 2026-10-20
 
 ### Added — engine sync (libleptris 1.9.375)
