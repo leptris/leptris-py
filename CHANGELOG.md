@@ -1,3 +1,23 @@
+## [1.9.376.0] - 2026-10-20
+
+### Fixed — engine sync (libleptris 1.9.376)
+
+- **decoded entity-shaped text is escaped on output**
+  (leptris-ruby#515, leptris/leptris#1793) — `to_string` no longer
+  re-emits text such as `&#x41;` / `&lt;UK&gt;` unescaped; a
+  reparse keeps the same string value.
+- **strict loads validate the effective encoding**
+  (leptris-ruby#514, leptris/leptris#1793) — invalid UTF-8 is a
+  fatal load error when the document is UTF-8 by declaration or
+  default; declared legacy encodings and the recover lane keep
+  their contracts.
+
+### Added — engine sync (libleptris 1.9.376)
+
+- **HTML5 verdict parity 1446 to 1508 of 1555**
+  (leptris/leptris#1794) — seven emission slices, zero want=clean
+  regressions, tree parity 1555/1555.
+
 ## [1.9.375.0] - 2026-10-20
 
 ### Added — engine sync (libleptris 1.9.375)
