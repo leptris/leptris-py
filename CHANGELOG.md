@@ -1,3 +1,11 @@
+## [1.9.375.0] - 2026-10-20
+
+### Added — engine sync (libleptris 1.9.375)
+
+- **the #1771 verdict-parity emission slices** — parity 1423 of
+  1555, zero false positives (EOF allowed-set, in-select codes,
+  foster-by-kind, unknown-doctype).
+
 ## [1.9.374.0] - 2026-10-20
 
 ### Fixed — engine sync (libleptris 1.9.374)
