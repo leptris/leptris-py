@@ -1,3 +1,10 @@
+## [1.9.381.0] - 2026-10-22
+
+Ride: libleptris 1.9.381 (#1839) — the XSLT identity/copy-of quadratic
+fix. Identity transforms went from 13.0 s to 57 ms on the 20k-book
+catalog; every measured CLI row beats xsltproc end-to-end. The
+vendored core pin moves 1.9.380 -> 1.9.381 in the same commit.
+
 ## [1.9.380.0] - 2026-10-22
 
 ### Fixed — engine sync (libleptris 1.9.380)
