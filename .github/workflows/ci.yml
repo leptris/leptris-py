@@ -157,7 +157,10 @@ jobs:
     # win_amd64 leg already runs the full suite green. So the report's
     # premise needs evidence on BOTH remaining Windows paths:
     #  - wheel  — the artifact consumers actually install (PyPI),
-    #             running the four-op repro script from #306;
+    #             running the four-op repro script from #306; plus the
+    #             GATE-ERA wheel 1.9.201.0 (newest published when the
+    #             serialbench gate landed, 2026-09-18) to learn whether
+    #             the report's crash ever existed on a shipped artifact;
     #  - mingw  — a full GCC build (MSYS2 mingw-w64 python + GCC-built
     #             engine DLL + GCC-built accel): the only Windows
     #             toolchain the engine's MSVC-only CI never covered.
@@ -166,7 +169,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [wheel, mingw]
+        suite: [wheel, wheel-gate-era-1.9.201.0, mingw]
     steps:
       - uses: actions/checkout@v4
 
@@ -183,19 +186,23 @@ jobs:
             mingw-w64-x86_64-python-pip
 
       - uses: actions/setup-python@v5
-        if: matrix.suite == 'wheel'
+        if: matrix.suite != 'mingw'
         with:
           python-version: "3.x"
 
-      - name: "Install the newest published wheel and run the #306 repro"
-        if: matrix.suite == 'wheel'
+      - name: "Install the wheel and run the #306 repro"
+        if: matrix.suite != 'mingw'
         shell: bash
         # Run from OUTSIDE the checkout: `import leptris` must resolve
         # to the installed wheel, not the source tree. -X faulthandler
         # prints the native fault site if the process still dies.
+        env:
+          # gate-era leg: the newest wheel published before the
+          # serialbench gate commit (b06a511, 2026-09-18 15:48Z)
+          PIN: ${{ matrix.suite == 'wheel' && 'leptris' || 'leptris==1.9.201.0' }}
         run: |
           set -e
-          python -m pip install --only-binary :all: --upgrade leptris
+          python -m pip install --only-binary :all: --upgrade "$PIN"
           mkdir -p "$RUNNER_TEMP/probe"
           cp tests/repro_windows_native_ops.py "$RUNNER_TEMP/probe/"
           cd "$RUNNER_TEMP/probe"
