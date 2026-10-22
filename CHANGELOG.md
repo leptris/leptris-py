@@ -1,3 +1,15 @@
+## [1.9.380.0] - 2026-10-22
+
+### Fixed — engine sync (libleptris 1.9.380)
+
+- **xsi:type whole-instance validation (leptris/leptris#1838)**:
+  an element carrying `xsi:type` is assessed against the NAMED
+  type, so valid xsi:type-derived instances validate instead of
+  being rejected against the declared type's content model.
+- **Bulk XPath materialization**: node-set results materialize in
+  one native call instead of per-row round-trips.
+- **TSAN-lane data-race fix** in the engine's XPath result path.
+
 ## [1.9.379.0] - 2026-10-21
 
 ### Fixed — engine sync (libleptris 1.9.379)
