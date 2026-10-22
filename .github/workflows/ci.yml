@@ -147,3 +147,102 @@ jobs:
           python setup.py build_ext --inplace
           echo "using lib at: $LEPTRIS_LIB_PATH"
           python -m pytest tests/ -q
+
+  windows-native-ops:
+    # leptris-py#306: serialbench gates xquery/xslt/xslt30/streaming off
+    # on Windows for a reported "segfault inside the mingw wheel". Every
+    # wheel ever shipped on PyPI is MSVC-built (verified back to the
+    # first _vendor wheel, 1.9.278.0 — api-ms-win-crt/VCRUNTIME
+    # signatures, zero GCC artifacts), and the release pipeline's own
+    # win_amd64 leg already runs the full suite green. So the report's
+    # premise needs evidence on BOTH remaining Windows paths:
+    #  - wheel  — the artifact consumers actually install (PyPI),
+    #             running the four-op repro script from #306;
+    #  - mingw  — a full GCC build (MSYS2 mingw-w64 python + GCC-built
+    #             engine DLL + GCC-built accel): the only Windows
+    #             toolchain the engine's MSVC-only CI never covered.
+    name: native-ops probe (windows, ${{ matrix.suite }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [wheel, mingw]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        if: matrix.suite == 'mingw'
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-python-pip
+
+      - uses: actions/setup-python@v5
+        if: matrix.suite == 'wheel'
+        with:
+          python-version: "3.x"
+
+      - name: "Install the newest published wheel and run the #306 repro"
+        if: matrix.suite == 'wheel'
+        shell: bash
+        # Run from OUTSIDE the checkout: `import leptris` must resolve
+        # to the installed wheel, not the source tree. -X faulthandler
+        # prints the native fault site if the process still dies.
+        run: |
+          set -e
+          python -m pip install --only-binary :all: --upgrade leptris
+          mkdir -p "$RUNNER_TEMP/probe"
+          cp tests/repro_windows_native_ops.py "$RUNNER_TEMP/probe/"
+          cd "$RUNNER_TEMP/probe"
+          python -X faulthandler repro_windows_native_ops.py
+
+      - name: Build the pinned engine DLL with mingw GCC
+        if: matrix.suite == 'mingw'
+        shell: msys2 {0}
+        run: |
+          set -e
+          LIBLEPTRIS_VERSION=$(cat libleptris-version.txt)
+          mkdir -p tmp/libleptris && cd tmp/libleptris
+          curl -sL "https://codeload.github.com/leptris/leptris/tar.gz/refs/tags/v${LIBLEPTRIS_VERSION}" | tar xz --strip-components=1
+          # Same config the wheel's vendor script uses, minus the
+          # MSVC-only -A: GCC/Ninja selects the host arch itself.
+          cmake -B build -S . -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLEPTRIS_BUILD_SHARED=ON -DLEPTRIS_BUILD_STATIC=OFF \
+            -DBUILD_TESTING=OFF -DLEPTRIS_BUILD_CLI=OFF \
+            -DLEPTRIS_BUILD_BENCHMARKS=OFF \
+            -DLEPTRIS_ENABLE_UTF8PROC=OFF -DLEPTRIS_ENABLE_ICONV=OFF
+          cmake --build build
+          LIB=$(find build -name '*leptris.dll' | head -1)
+          if [ -z "$LIB" ]; then
+            echo "ERROR: engine DLL not found" >&2
+            exit 1
+          fi
+          echo "LEPTRIS_LIB_PATH=$(cygpath -w "$PWD/$LIB")" >> "$GITHUB_ENV"
+
+      - name: Build the binding with the mingw toolchain (GCC accel)
+        if: matrix.suite == 'mingw'
+        shell: msys2 {0}
+        run: |
+          set -e
+          python -m pip install "setuptools>=77" cffi pytest wheel
+          # build_with_engine would cmake-build the vendored source
+          # again; LEPTRIS_LIB_PATH short-circuits it to the DLL above.
+          python setup.py build_ext --inplace
+          echo "using lib at: $LEPTRIS_LIB_PATH"
+
+      - name: "Run the #306 repro + full suite (mingw)"
+        if: matrix.suite == 'mingw'
+        shell: msys2 {0}
+        # PYTHONPATH=. — the script form puts only tests/ on sys.path,
+        # so the checkout's leptris/ (with the inplace GCC accel)
+        # must come in through the environment, as `python -m` would.
+        run: |
+          set -e
+          PYTHONPATH=. python -X faulthandler tests/repro_windows_native_ops.py
+          python -X faulthandler -m pytest tests/ -q
