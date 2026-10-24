@@ -69,3 +69,20 @@ def document(html: "str | bytes", *, mode: str = "html4") -> Document:
 def fromstring(html: "str | bytes", *, mode: str = "html4"):
     """Parse HTML; returns the first element of the fragment."""
     return document(html, mode=mode).getroot()
+
+
+def generate(element_or_document) -> str:
+    """Serialize as HTML, returning ``str`` (leptris-py#311 — the
+    serialbench adapter contract face).
+
+    Always the HTML output method: void-element shapes and block
+    layout regardless of the document's flavor. Accepts a Document
+    or an Element subtree (same as :func:`leptris.api.tostring`
+    with ``method="html"`` and ``encoding="unicode"``).
+
+    .. versionadded:: 1.9.381.1
+    """
+    from .api import tostring
+
+    return tostring(element_or_document, method="html",
+                    encoding="unicode")

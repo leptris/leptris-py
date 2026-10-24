@@ -230,3 +230,26 @@ class TestHtmlTwoModes:
             "<html><head/><body><svg><foreignObject><div>x</div>"
             "</foreignObject></svg></body></html>"
         )
+
+
+# leptris-py#311: the serialbench adapter contract — generate() -> str
+# on the html namespace (method="html" always; void-element shapes).
+def test_html_generate_returns_html_str():
+    doc = html.document("<p>hi<br></p>")
+    out = html.generate(doc)
+    assert isinstance(out, str)
+    assert "<br>" in out
+    assert "</br>" not in out
+
+
+def test_html_generate_accepts_element():
+    el = html.fromstring("<ul><li>x</li></ul>")
+    out = html.generate(el)
+    assert isinstance(out, str)
+    assert "<li>x</li>" in out
+
+
+def test_html_generate_whatwg_mode_document():
+    doc = html.document("<ul><li>x</li></ul>", mode="whatwg")
+    out = html.generate(doc)
+    assert "<li>x</li>" in out
