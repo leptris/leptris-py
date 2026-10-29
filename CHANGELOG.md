@@ -1,3 +1,13 @@
+## [1.9.388.0] - 2026-10-29
+
+Rides libleptris 1.9.388 (engine pin 1.9.381 -> 1.9.388): the one-pass
+text-run scan (leptris/leptris#1895, #1842 — text shapes 764-804 ->
+1370-1448 MB/s, pugixml gap 2.9x -> 1.70x), the arena retain-pool
+size-class split (leptris/leptris#1893, #1846), and the 1.9.382-387
+wave (XSD structured error rows, schema-set compile_set, negative
+wildcards, namespace snapshot + packed op-blob + children_batch faces,
+html generate() adapter face).
+
 ## [1.9.381.0] - 2026-10-22
 
 Ride: libleptris 1.9.381 (#1839) — the XSLT identity/copy-of quadratic
