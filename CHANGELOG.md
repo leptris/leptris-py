@@ -1,3 +1,10 @@
+## [1.9.389.0] - 2026-10-29
+
+Rides libleptris 1.9.389: the XSD content-model automaton size cap
+(leptris/leptris#1897, #1894) — pathological occurrence products
+reject in microseconds via an analytic product bound with a 1e6
+expansion cap backstop, failing loudly through the structured rows.
+
 ## [1.9.388.0] - 2026-10-29
 
 Rides libleptris 1.9.388 (engine pin 1.9.381 -> 1.9.388): the one-pass
