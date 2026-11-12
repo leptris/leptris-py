@@ -54,6 +54,7 @@ platform as part of the release build.
 | Linux aarch64 (glibc / musl) | abi3 + cp314t | native runners |
 | Linux ppc64le | abi3 | full suite under qemu |
 | Linux s390x | abi3 | big-endian; full suite under qemu |
+| Linux riscv64 | abi3 | full suite under qemu |
 | Linux i686 (glibc + musl) | abi3 | full suite (musl under qemu) |
 | Linux armv7l (musl) | abi3 | full suite under qemu |
 | macOS x86_64 + arm64 | abi3 + cp314t | universal2; x86_64 slice Rosetta-tested |

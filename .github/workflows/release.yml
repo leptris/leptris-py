@@ -142,6 +142,10 @@ jobs:
             cibw: "cp39-manylinux_s390x"
             dist: manylinux-s390x
             archs_linux: "s390x"
+          - os: ubuntu-latest
+            cibw: "cp39-manylinux_riscv64"
+            dist: manylinux-riscv64
+            archs_linux: "riscv64"
           - os: windows-latest
             cibw: "cp39-win32"
             dist: win-x86
@@ -204,7 +208,7 @@ jobs:
           repository: leptris/leptris-py
           ref: main
 
-      # cross-arch Linux legs (i686/armv7l/ppc64le/s390x) build in
+      # cross-arch Linux legs (i686/armv7l/ppc64le/s390x/riscv64) build in
       # emulated containers; native legs are unaffected
       - name: Set up QEMU
         if: matrix.os == 'ubuntu-latest'
