@@ -135,6 +135,10 @@ jobs:
             # engine #1174 landed the 32-bit layout pins — leg green
             # across the 1.9.278 matrix
           - os: ubuntu-latest
+            cibw: "cp39-manylinux_armv7l"
+            dist: manylinux-armv7l
+            archs_linux: "armv7l"
+          - os: ubuntu-latest
             cibw: "cp39-manylinux_ppc64le"
             dist: manylinux-ppc64le
             archs_linux: "ppc64le"
@@ -146,6 +150,16 @@ jobs:
             cibw: "cp39-manylinux_riscv64"
             dist: manylinux-riscv64
             archs_linux: "riscv64"
+            # leptris-py#346's pattern: emulated leg, validated on the
+            # next train
+          - os: ubuntu-latest
+            cibw: "cp39-musllinux_riscv64"
+            dist: musllinux-riscv64
+            archs_linux: "riscv64"
+          - os: ubuntu-latest
+            cibw: "cp39-manylinux_loongarch64"
+            dist: manylinux-loong64
+            archs_linux: "loongarch64"
           - os: windows-latest
             cibw: "cp39-win32"
             dist: win-x86
