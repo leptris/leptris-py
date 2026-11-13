@@ -156,10 +156,6 @@ jobs:
             cibw: "cp39-musllinux_riscv64"
             dist: musllinux-riscv64
             archs_linux: "riscv64"
-          - os: ubuntu-latest
-            cibw: "cp39-manylinux_loongarch64"
-            dist: manylinux-loong64
-            archs_linux: "loongarch64"
           - os: windows-latest
             cibw: "cp39-win32"
             dist: win-x86
