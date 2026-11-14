@@ -222,3 +222,46 @@ class TestSaxProtocolContract:
         assert events == [
             "start", ("r", {"a": "1"}), "t", "/r", "end",
         ]
+
+
+class TestCallbackShadowing:
+    """leptris-py#351: an attribute assignment that collides with a
+    callback name (handler.error = <diagnostic>) must raise a clean
+    LeptrisError naming the trap — not a raw TypeError escaping the
+    accelerator."""
+
+    def test_shadowed_error_callback_raises_clean_error(self):
+        from leptris.error import LeptrisError
+        from leptris.sax import SAXHandler
+
+        class Broken(SAXHandler):
+            def __init__(self):
+                self.error = None  # shadows the error callback
+
+        with pytest.raises(LeptrisError, match="cannot be shadowed"):
+            sax.parse("<root><unclosed></root>", Broken())
+
+    def test_shadowed_start_element_raises_clean_error(self):
+        from leptris.error import LeptrisError
+        from leptris.sax import SAXHandler
+
+        class Broken(SAXHandler):
+            def __init__(self):
+                self.start_element = "not a callback"
+
+        with pytest.raises(LeptrisError, match="start_element"):
+            sax.parse("<root/>", Broken())
+
+    def test_ordinary_handlers_still_work(self):
+        from leptris.sax import SAXHandler
+
+        seen = []
+
+        class Good(SAXHandler):
+            def start_element(self, name, attributes):
+                seen.append(name)
+            def error(self, message, line, column):
+                seen.append(("error", message))
+
+        sax.parse("<root a='1'/>", Good())
+        assert "root" in seen

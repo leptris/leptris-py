@@ -2968,7 +2968,19 @@ sax_methods_clear(SaxMethods *m)
 static PyObject *
 sax_method(PyObject *handler, const char *name)
 {
-    return PyObject_GetAttrString(handler, name);
+    PyObject *fn = PyObject_GetAttrString(handler, name);
+    if (fn != NULL && !PyCallable_Check(fn)) {
+        /* leptris-py#351: an attribute assignment shadowed a callback
+         * name (handler.error = <diagnostic>) — name the trap here,
+         * at invocation time, instead of letting a raw "'NoneType'
+         * object is not callable" escape the accelerator. */
+        PyErr_Format(LeptrisErrorType,
+                     "handler attribute '%s' was overwritten; SAX "
+                     "callbacks cannot be shadowed", name);
+        Py_DECREF(fn);
+        return NULL;
+    }
+    return fn;
 }
 
 static int
