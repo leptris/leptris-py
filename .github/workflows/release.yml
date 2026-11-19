@@ -124,7 +124,7 @@ jobs:
             # The image tag is PINNED explicitly: cibuildwheel's
             # default (2026.03.20-1) was pruned from quay and the leg
             # died on "No such image" (1.9.429 ride, 2026-11-19).
-            image_linux: "manylinux_2_28_i686:2026.11.14-1"
+            image_linux: "quay.io/pypa/manylinux_2_28_i686:2026.11.14-1"
 
           - os: ubuntu-latest
             cibw: "cp39-musllinux_i686"
