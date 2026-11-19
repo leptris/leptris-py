@@ -144,16 +144,23 @@ jobs:
             # across the 1.9.278 matrix
           - os: ubuntu-latest
             cibw: "cp39-musllinux_armv7l"
-            engine_json: "docker"
+            engine_json: "podman"
             dist: musllinux-armv7l
             archs_linux: "armv7l"
             # engine #1174 landed the 32-bit layout pins — leg green
-            # across the 1.9.278 matrix
+            # across the 1.9.278 matrix. PODMAN: the docker probe
+            # fails on the runners for the emulated armv7l pulls too
+            # (leptris-py#370).
+            image_linux: "quay.io/pypa/musllinux_1_2_armv7l:2026.03.20-1"
           - os: ubuntu-latest
             cibw: "cp39-manylinux_armv7l"
-            engine_json: "docker"
+            engine_json: "podman"
             dist: manylinux-armv7l
             archs_linux: "armv7l"
+            # PODMAN: the docker probe fails on the runners for the
+            # emulated armv7l pulls too (leptris-py#370); the tag is
+            # verified single-arch arm/v7 and pulls locally.
+            image_linux: "quay.io/pypa/manylinux_2_31_armv7l:2026.03.20-1"
           - os: ubuntu-latest
             cibw: "cp39-manylinux_ppc64le"
             engine_json: "docker"
