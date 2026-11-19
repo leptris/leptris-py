@@ -228,7 +228,13 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         uses: docker/setup-qemu-action@v3
         with:
-          platforms: all
+          # 386 EXCLUDED: the i686 legs run NATIVELY on the amd64
+          # runner (no emulation), and the unpinned tonistiigi/binfmt
+          # :latest image's fresh 386 handler broke the daemon's
+          # linux/386 platform resolution — every i686 wheel pull
+          # failed "No such image" starting 2026-11-19 (the 1.9.429
+          # ride; 1.9.428 built fine the day before).
+          platforms: arm,arm64,ppc64le,riscv64,s390x
 
       - uses: actions/setup-python@v5
         if: matrix.os != 'ubuntu-latest' || matrix.archs_linux != 'i686'
