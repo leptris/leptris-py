@@ -284,7 +284,7 @@ jobs:
           CIBW_ARCHS_LINUX: ${{ matrix.archs_linux }}
           CIBW_MANYLINUX_I686_IMAGE: ${{ matrix.image_linux }}
           CIBW_PODMAN_MANYLINUX_I686_IMAGE: ${{ matrix.image_linux }}
-          CIBW_CONTAINER_ENGINE: ${{ matrix.engine_json }}
+          CIBW_CONTAINER_ENGINE: "${{ matrix.engine_json || '{\"name\": \"docker\"}' }}"
           CIBW_ENABLE: ${{ matrix.enable }}
           CIBW_BEFORE_ALL_LINUX: "bash scripts/vendor_libleptris.sh"
           CIBW_BEFORE_ALL_MACOS: "bash scripts/vendor_libleptris.sh"
