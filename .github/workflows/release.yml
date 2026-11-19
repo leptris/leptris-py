@@ -321,11 +321,8 @@ jobs:
           CIBW_ARCHS_WINDOWS: ${{ matrix.archs_win }}
           CIBW_ARCHS_LINUX: ${{ matrix.archs_linux }}
           CIBW_MANYLINUX_I686_IMAGE: ${{ matrix.image_linux }}
-<<<<<<< HEAD
           CIBW_PODMAN_MANYLINUX_I686_IMAGE: ${{ matrix.image_linux }}
           CIBW_CONTAINER_ENGINE: "${{ matrix.engine_json || 'docker' }}"
-=======
->>>>>>> 7fdedba (fix(wheels): pin the i686 manylinux image - cibuildwheel's default tag was pruned from quay (the 1.9.429 ride died on 'No such image'))
           CIBW_ENABLE: ${{ matrix.enable }}
           CIBW_BEFORE_ALL_LINUX: "bash scripts/vendor_libleptris.sh"
           CIBW_BEFORE_ALL_MACOS: "bash scripts/vendor_libleptris.sh"
