@@ -125,14 +125,15 @@ jobs:
             archs_linux: "i686"
             # engine #1174 landed the ILP32 layout pins — leg went
             # green (and required) with the 1.9.199 pin
-            # The image tag is PINNED explicitly (C3). The PODMAN
-            # engine: cibuildwheel's docker probe (docker run
-            # --pull=always --platform=linux/386) fails "No such
-            # image" on the runners for every quay tag since
-            # 2026-11-19 (leptris-py#370) while plain host-side pulls
-            # of the same tags succeed — podman bypasses the docker
-            # pull path entirely.
-            image_linux: "quay.io/pypa/manylinux_2_28_i686:2026.03.20-1"
+            # The image tag is PINNED explicitly and FULLY
+            # QUALIFIED: cibuildwheel's default (2026.03.20-1) was
+            # pruned from quay (the 1.9.429 ride died on "No such
+            # image", leptris-py#370) and bare names resolve to
+            # Docker Hub. The PODMAN engine: cibuildwheel's docker
+            # probe fails on the runners for every quay tag while
+            # plain host-side pulls succeed - podman bypasses the
+            # docker pull path entirely.
+            image_linux: "quay.io/pypa/manylinux_2_28_i686:2026.11.14-1"
             engine_json: "podman"
 
           - os: ubuntu-latest
@@ -320,8 +321,11 @@ jobs:
           CIBW_ARCHS_WINDOWS: ${{ matrix.archs_win }}
           CIBW_ARCHS_LINUX: ${{ matrix.archs_linux }}
           CIBW_MANYLINUX_I686_IMAGE: ${{ matrix.image_linux }}
+<<<<<<< HEAD
           CIBW_PODMAN_MANYLINUX_I686_IMAGE: ${{ matrix.image_linux }}
           CIBW_CONTAINER_ENGINE: "${{ matrix.engine_json || 'docker' }}"
+=======
+>>>>>>> 7fdedba (fix(wheels): pin the i686 manylinux image - cibuildwheel's default tag was pruned from quay (the 1.9.429 ride died on 'No such image'))
           CIBW_ENABLE: ${{ matrix.enable }}
           CIBW_BEFORE_ALL_LINUX: "bash scripts/vendor_libleptris.sh"
           CIBW_BEFORE_ALL_MACOS: "bash scripts/vendor_libleptris.sh"
