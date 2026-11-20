@@ -21,15 +21,18 @@ jobs:
     # TODO.native/13: forward-compat canary — the cp39-abi3 wheels
     # must load on future CPython by design; prove it at the
     # earliest available pre-release. Expected red until APIs
-    # settle; never gates the merge.
-    name: pytest (ubuntu, 3.15 canary)
+    # settle; never gates the merge. 3.15 went stable (leptris-py#361:
+    # its alpha.3 pin no longer exists in the actions/python-versions
+    # manifest, and stable-3.15 coverage moved to the main matrix);
+    # the canary now tracks 3.16.
+    name: pytest (ubuntu, 3.16 canary)
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.15.0-alpha.3"
+          python-version: "3.16.0-alpha.2"
       - name: Build libleptris from the pinned release tarball
         shell: bash
         run: |
@@ -70,6 +73,43 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14t"
+      - name: Build libleptris from the pinned release tarball
+        shell: bash
+        run: |
+          set -e
+          LIBLEPTRIS_VERSION=$(cat libleptris-version.txt)
+          mkdir -p tmp/libleptris && cd tmp/libleptris
+          curl -sL "https://codeload.github.com/leptris/leptris/tar.gz/refs/tags/v${LIBLEPTRIS_VERSION}" | tar xz --strip-components=1
+          cmake -B build -S . \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLEPTRIS_BUILD_SHARED=ON -DLEPTRIS_BUILD_STATIC=OFF \
+            -DBUILD_TESTING=OFF -DLEPTRIS_BUILD_CLI=OFF \
+            -DLEPTRIS_BUILD_BENCHMARKS=OFF \
+            -DLEPTRIS_ENABLE_UTF8PROC=OFF -DLEPTRIS_ENABLE_ICONV=OFF
+          cmake --build build --config Release
+          LIB=$(find build -type f -o -type l 2>/dev/null | grep -iE '(lib)?leptris\.(dylib|so|dll)$' | head -1)
+          echo "LEPTRIS_LIB_PATH=$PWD/$LIB" >> "$GITHUB_ENV"
+      - name: Install and test the binding
+        shell: bash
+        run: |
+          python -m pip install pytest cffi setuptools
+          python setup.py build_ext --inplace
+          python -m pytest tests/ -q
+        env:
+          LEPTRIS_LIB_PATH: ${{ env.LEPTRIS_LIB_PATH }}
+
+  stable-315:
+    # leptris-py#361: 3.15 is stable (3.15.2 in the
+    # actions/python-versions manifest) — the pre-release canary that
+    # used to cover it moves to 3.16, and stable 3.15 joins the main
+    # matrix as a gating leg.
+    name: pytest (ubuntu, 3.15 stable)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.15"
       - name: Build libleptris from the pinned release tarball
         shell: bash
         run: |
