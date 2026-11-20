@@ -256,7 +256,14 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y podman
 
       - name: Set up QEMU
-        if: matrix.os == 'ubuntu-latest' && matrix.engine_json == ''
+        # The emulated podman legs need the binfmt_misc handlers
+        # registered on the HOST: podman/crun execs foreign ELF
+        # through binfmt_misc exactly like docker, and without the
+        # arm handler the armv7l container entrypoint dies with
+        # "Exec format error" (leptris-py#370). 386 stays excluded
+        # (the :latest handler broke the daemon's linux/386
+        # resolution once; the i686 legs run natively anyway).
+        if: matrix.os == 'ubuntu-latest' && matrix.archs_linux == 'armv7l'
         uses: docker/setup-qemu-action@v3
         with:
           # 386 EXCLUDED: the i686 legs run NATIVELY on the amd64
@@ -291,7 +298,7 @@ jobs:
           CIBW_ARCHS_LINUX: ${{ matrix.archs_linux }}
           CIBW_MANYLINUX_I686_IMAGE: ${{ matrix.image_linux }}
           CIBW_PODMAN_MANYLINUX_I686_IMAGE: ${{ matrix.image_linux }}
-          CIBW_CONTAINER_ENGINE: "${{ matrix.engine_json || '{\"name\": \"docker\"}' }}"
+          CIBW_CONTAINER_ENGINE: "${{ matrix.engine_json || 'docker' }}"
           CIBW_ENABLE: ${{ matrix.enable }}
           CIBW_BEFORE_ALL_LINUX: "bash scripts/vendor_libleptris.sh"
           CIBW_BEFORE_ALL_MACOS: "bash scripts/vendor_libleptris.sh"
