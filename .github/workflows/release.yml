@@ -163,24 +163,47 @@ jobs:
             image_linux: "quay.io/pypa/manylinux_2_31_armv7l:2026.03.20-1"
           - os: ubuntu-latest
             cibw: "cp39-manylinux_ppc64le"
-            engine_json: "docker"
+            # PODMAN + binfmt: the docker-emulated legs froze twice
+            # at 4h42m/7h20m inside "Build wheels" on the 1.9.430.0
+            # publish (leptris-py#370) - the QEMU-tier docker path
+            # wedges on the current runner images. Podman with the
+            # host binfmt handlers registered (the armv7l fix) is
+            # the proven emulated path: the i686 and armv7l podman
+            # legs sail through the same runner images.
+            engine_json: "podman"
             dist: manylinux-ppc64le
             archs_linux: "ppc64le"
           - os: ubuntu-latest
             cibw: "cp39-manylinux_s390x"
-            engine_json: "docker"
+            # PODMAN + binfmt: the docker-emulated legs froze twice
+            # at 4h42m/7h20m inside "Build wheels" on the 1.9.430.0
+            # publish (leptris-py#370) - the QEMU-tier docker path
+            # wedges on the current runner images. Podman with the
+            # host binfmt handlers registered (the armv7l fix) is
+            # the proven emulated path: the i686 and armv7l podman
+            # legs sail through the same runner images.
+            engine_json: "podman"
             dist: manylinux-s390x
             archs_linux: "s390x"
           - os: ubuntu-latest
             cibw: "cp39-manylinux_riscv64"
-            engine_json: "docker"
+            # PODMAN + binfmt: the docker-emulated legs froze twice
+            # at 4h42m/7h20m inside "Build wheels" on the 1.9.430.0
+            # publish (leptris-py#370) - the QEMU-tier docker path
+            # wedges on the current runner images. Podman with the
+            # host binfmt handlers registered (the armv7l fix) is
+            # the proven emulated path: the i686 and armv7l podman
+            # legs sail through the same runner images.
+            engine_json: "podman"
             dist: manylinux-riscv64
             archs_linux: "riscv64"
             # leptris-py#346's pattern: emulated leg, validated on the
             # next train
           - os: ubuntu-latest
             cibw: "cp39-musllinux_riscv64"
-            engine_json: "docker"
+            # PODMAN + binfmt (leptris-py#370, see the manylinux
+            # riscv64 entry above)
+            engine_json: "podman"
             dist: musllinux-riscv64
             archs_linux: "riscv64"
           - os: windows-latest
@@ -263,7 +286,7 @@ jobs:
         # "Exec format error" (leptris-py#370). 386 stays excluded
         # (the :latest handler broke the daemon's linux/386
         # resolution once; the i686 legs run natively anyway).
-        if: matrix.os == 'ubuntu-latest' && matrix.archs_linux == 'armv7l'
+        if: matrix.os == 'ubuntu-latest' && contains('armv7l ppc64le s390x riscv64', matrix.archs_linux)
         uses: docker/setup-qemu-action@v3
         with:
           # 386 EXCLUDED: the i686 legs run NATIVELY on the amd64
